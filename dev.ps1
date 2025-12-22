@@ -1,0 +1,8 @@
+$env:DIR_PROJ = $PWD
+
+$env:PATH += ";$env:DIR_PROJ\cmds"
+$env:GLFW_LIB = "$env:DIR_PROJ\fs\glfw"
+$env:PATH += ";$env:GLFW_LIB\bin"
+
+cd .\vkzig\examples
+zig build main
