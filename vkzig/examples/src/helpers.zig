@@ -34,7 +34,7 @@ pub const DescriptorPrep = struct {
         const _bind = vk.DescriptorSetLayoutBinding{
             .p_immutable_samplers = null, // for textures ?
             .stage_flags = using.shader_stage,
-            .descriptor_type = .uniform_buffer,
+            .descriptor_type = using.usage.descriptor_type,
             .descriptor_count = 1,
             .binding = with.location, // w sensie, że lokacja 0?
         };
@@ -52,7 +52,7 @@ pub const DescriptorPrep = struct {
             s.buff_arr.items[i] = try s._gc_ref.createBuffer(
                 using.memory_property,
                 with.size,
-                using.buffer_usage,
+                using.usage.usage_flag,
             );
         }
 
@@ -89,7 +89,7 @@ pub const DescriptorPrep = struct {
                 .dst_set = s.d_set_arr.items[i],
                 .dst_binding = with.location,
                 .dst_array_element = 0,
-                .descriptor_type = .uniform_buffer,
+                .descriptor_type = using.usage.descriptor_type,
                 .descriptor_count = 1,
                 .p_buffer_info = @ptrCast(&buf_info),
                 .p_image_info = &.{},

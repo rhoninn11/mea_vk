@@ -6,10 +6,12 @@ const vk = @import("third_party/vk.zig");
 const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
 const Swapchain = @import("swapchain.zig").Swapchain;
 const addons = @import("addons.zig");
-const before = @import("before.zig");
 const baked = @import("baked.zig");
 const helpers = @import("helpers.zig");
+const vertex = @import("vertex.zig");
 
+const Vertex = vertex.Vertex;
+const BufforingVert = Buffering(Vertex);
 const Allocator = std.mem.Allocator;
 
 const vert_spv align(@alignOf(u32)) = @embedFile("vertex_shader").*;
@@ -18,139 +20,35 @@ const frag_spv align(@alignOf(u32)) = @embedFile("fragment_shader").*;
 const app_name = "vulkan-zig triangle example";
 const future_app_name = "oct_calculator";
 
-const X = 0;
-const Y = 1;
-fn mul2D(a: [2]f32, times: f32) [2]f32 {
-    return .{ a[X] * times, a[Y] * times };
-}
+fn Buffering(Base: type) type {
+    return struct {
+        pub fn memSize(based_on: []const Base) usize {
+            std.debug.assert(based_on.len >= 1);
 
-fn add(a: [2]f32, b: [2]f32) [2]f32 {
-    return .{ a[X] + b[X], a[Y] + b[Y] };
-}
-
-const Vertex = struct {
-    const binding_description = vk.VertexInputBindingDescription{
-        .binding = 0,
-        .stride = @sizeOf(Vertex),
-        .input_rate = .vertex,
-    };
-
-    const attribute_description = [_]vk.VertexInputAttributeDescription{
-        .{
-            .binding = 0,
-            .location = 0,
-            .format = .r32g32_sfloat,
-            .offset = @offsetOf(Vertex, "pos"),
-        },
-        .{
-            .binding = 0,
-            .location = 1,
-            .format = .r32g32b32_sfloat,
-            .offset = @offsetOf(Vertex, "color"),
-        },
-    };
-    const Self = @This();
-    pub const GeoRaw = []Self;
-    pub const s_fields_num = before.structDeclNum(Self);
-
-    pos: [2]f32,
-    color: [3]f32,
-
-    pub fn Ring(alloc: std.mem.Allocator, len: u8) !std.ArrayList(Vertex) {
-        const vert_num: usize = @as(usize, len) * 2;
-
-        const PreStage = struct {
-            pos: [2]f32,
-            progres: f32,
-        };
-        var stage_arr: std.ArrayList(PreStage) = .empty;
-        try stage_arr.resize(alloc, vert_num);
-        defer stage_arr.deinit(alloc);
-
-        var stage_slice = stage_arr.items;
-        for (0..len) |i| {
-            const flen: f32 = @floatFromInt(len - 1);
-            const fi: f32 = @floatFromInt(i);
-            const progress = fi / flen;
-
-            const phi = std.math.tau * progress;
-            const stamp = PreStage{
-                .progres = progress,
-                .pos = .{
-                    std.math.cos(phi),
-                    std.math.sin(phi),
-                },
-            };
-            stage_slice[i * 2] = stamp;
-            stage_slice[i * 2 + 1] = stamp;
+            const unit_size = @sizeOf(@TypeOf(based_on[0]));
+            return unit_size * based_on.len;
         }
 
-        const r = 0.6;
-        const r_delta = 0.3;
-        for (0..len) |pre_i| {
-            const stage_i = pre_i * 2;
-            const base = stage_slice[stage_i].pos;
+        pub fn easyBuffer(dev: *const vk.DeviceProxy, based_on: []const Base, staging: bool) !vk.Buffer {
+            const buff_size = memSize(based_on);
 
-            stage_slice[stage_i].pos = mul2D(base, r);
-            stage_slice[stage_i + 1].pos = mul2D(base, r + r_delta);
-        }
-
-        const segments = len - 1;
-        const vert_size = @as(usize, segments) * 6;
-        var vert_arr: std.ArrayList(Vertex) = .empty;
-        try vert_arr.resize(alloc, vert_size);
-
-        var vert_here = vert_arr.items;
-        // const delta: [2]f32 = .{ 0.05, 0.07 };
-        // var off: [2]f32 = .{ 0, 0 };
-
-        for (0..segments) |pre_i| {
-            const tri_pair_i = pre_i * 6;
-            const pos_i = pre_i * 2;
-
-            const pos_offs = [_]u8{ 0, 1, 2, 2, 1, 3 };
-            for (pos_offs, 0..) |pos_off, jj| {
-                const stage = stage_slice[pos_i + pos_off];
-                vert_here[tri_pair_i + jj] = .{
-                    .pos = stage.pos,
-                    .color = .{ stage.progres, 0, 0 },
-                };
+            if (staging) {
+                return dev.createBuffer(&.{
+                    .size = buff_size,
+                    .usage = .{ .transfer_src_bit = true },
+                    .sharing_mode = .exclusive,
+                }, null);
             }
+
+            return dev.createBuffer(&.{
+                .size = buff_size,
+                .usage = .{ .transfer_dst_bit = true, .vertex_buffer_bit = true },
+                .sharing_mode = .exclusive,
+            }, null);
         }
-        return vert_arr;
-    }
-};
-
-fn memSize(based_on: []const Vertex) usize {
-    std.debug.assert(based_on.len >= 1);
-
-    const unit_size = @sizeOf(@TypeOf(based_on[0]));
-    return unit_size * based_on.len;
+    };
 }
 
-fn easyBuffer(dev: *const vk.DeviceProxy, based_on: []const Vertex, staging: bool) !vk.Buffer {
-    const buff_size = memSize(based_on);
-
-    if (staging) {
-        return dev.createBuffer(&.{
-            .size = buff_size,
-            .usage = .{ .transfer_src_bit = true },
-            .sharing_mode = .exclusive,
-        }, null);
-    }
-
-    return dev.createBuffer(&.{
-        .size = buff_size,
-        .usage = .{ .transfer_dst_bit = true, .vertex_buffer_bit = true },
-        .sharing_mode = .exclusive,
-    }, null);
-}
-
-const vertices = [_]Vertex{
-    .{ .pos = .{ -1, -0.5 }, .color = .{ 1, 0, 0 } },
-    .{ .pos = .{ 0.5, 0.5 }, .color = .{ 0, 1, 0 } },
-    .{ .pos = .{ -0.5, 0.5 }, .color = .{ 0, 0, 1 } },
-};
 fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
     _ = scancode;
     _ = mods;
@@ -160,19 +58,9 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
     }
 }
 
-var bind_memory: GraphicsContext.BufferData = undefined;
-var swapchain_len: u8 = undefined;
-
-const FpsStat = struct {
-    time: u64,
-    fps: u64,
-
-    pub fn init() FpsStat {
-        return FpsStat{ .time = std.time };
-    }
-};
-
 pub fn main() !void {
+    var swapchain_len: u8 = undefined;
+
     std.debug.print("+++ vertex info: {d}\n", .{Vertex.s_fields_num});
     try glfw.init();
     defer glfw.terminate();
@@ -231,26 +119,46 @@ pub fn main() !void {
     const UniformData = struct {
         data_2d: [16]f32 = undefined,
     };
-    const uniform_info: baked.UniformInfo = .{
-        .location = 0,
-        .size = @sizeOf(UniformData),
-    };
 
-    var dset_prep = try helpers.DescriptorPrep.init(
+    var uniform_dset = try helpers.DescriptorPrep.init(
         allocator,
         &gc,
         swapchain_len,
-        baked.u_frag_vert,
-        uniform_info,
+        baked.uniform_frag_vert,
+        .{
+            .location = 0,
+            .size = @sizeOf(UniformData),
+        },
     );
-    defer dset_prep.deinit(allocator);
+    defer uniform_dset.deinit(allocator);
+
+    const InstanceData = struct {
+        data_2d: [16]f32 = undefined,
+    };
+    const instance_num = 16;
+    var storage_dset = try helpers.DescriptorPrep.init(
+        allocator,
+        &gc,
+        swapchain_len,
+        baked.storage_frag_vert,
+        .{
+            .location = 0,
+            .size = @sizeOf(InstanceData) * instance_num,
+        },
+    );
+    defer storage_dset.deinit(allocator);
 
     // ||| quest to add uniform data for vertex rendering
 
+    const dsets = [_]vk.DescriptorSetLayout{
+        uniform_dset._d_set_layout.?,
+        storage_dset._d_set_layout.?,
+    };
+
     const pipeline_layout = try gc.dev.createPipelineLayout(&.{
         .flags = .{},
-        .p_set_layouts = @ptrCast(&dset_prep._d_set_layout.?),
-        .set_layout_count = 1,
+        .p_set_layouts = &dsets,
+        .set_layout_count = dsets.len,
         .p_push_constant_ranges = undefined,
         .push_constant_range_count = 0,
     }, null);
@@ -270,13 +178,14 @@ pub fn main() !void {
     }, null);
     defer gc.dev.destroyCommandPool(pool, null);
 
-    var geo = try Vertex.Ring(allocator, 32);
-    defer geo.deinit(allocator);
+    var shape = try Vertex.Ring(allocator, 32);
+    defer shape.deinit(allocator);
 
-    const as_slice: []const Vertex = geo.items;
+    const as_slice: []const Vertex = shape.items;
 
-    const buffer = try easyBuffer(&gc.dev, as_slice, false);
+    const buffer = try BufforingVert.easyBuffer(&gc.dev, as_slice, false);
     defer gc.dev.destroyBuffer(buffer, null);
+
     const mem_reqs = gc.dev.getBufferMemoryRequirements(buffer);
     const memory = try gc.allocate(mem_reqs, .{ .device_local_bit = true });
     defer gc.dev.freeMemory(memory, null);
@@ -284,6 +193,12 @@ pub fn main() !void {
 
     try uploadVertices(&gc, pool, buffer, as_slice);
 
+    const draw_instanced_attempt: ShaderRelated = .{
+        .instance_count = instance_num,
+        .pipeline_layout = pipeline_layout,
+        .uniform_dsets = uniform_dset.d_set_arr,
+        .storage_dsets = storage_dset.d_set_arr,
+    };
     var cmdbufs = try createCommandBuffers(
         &gc,
         pool,
@@ -294,8 +209,7 @@ pub fn main() !void {
         pipeline,
         framebuffers,
         as_slice,
-        pipeline_layout,
-        dset_prep.d_set_arr,
+        &draw_instanced_attempt,
     );
     defer destroyCommandBuffers(&gc, pool, allocator, cmdbufs);
 
@@ -304,6 +218,19 @@ pub fn main() !void {
     var timeline = addons.Timeline.init();
     var perf_stats = addons.PerfStats.init();
     var state: Swapchain.PresentState = .optimal;
+
+    const delta = 0.1;
+    for (storage_dset.buff_arr.items) |possible_buffer| {
+        const storage = possible_buffer.?;
+        const storagePtr: *[instance_num]InstanceData = @ptrCast(@alignCast(storage.mapping.?));
+        for (0..instance_num) |i| {
+            const i_f: f32 = @floatFromInt(i);
+            var empty: InstanceData = undefined;
+            empty.data_2d[0] = -1 + i_f * delta;
+            empty.data_2d[1] = 0;
+            storagePtr.*[i] = empty;
+        }
+    }
 
     while (!glfw.windowShouldClose(window)) {
         var w: c_int = undefined;
@@ -318,7 +245,7 @@ pub fn main() !void {
             continue;
         }
 
-        const this_frame_uniform = dset_prep.buff_arr.items[swapchain.image_index].?;
+        const this_frame_uniform = uniform_dset.buff_arr.items[swapchain.image_index].?;
         const typedPtr: *UniformData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
         typedPtr.*.data_2d[0] = std.math.cos(timeline.total_s) * 0.5;
         typedPtr.*.data_2d[1] = std.math.sin(timeline.total_s) * 0.5;
@@ -350,8 +277,7 @@ pub fn main() !void {
                 pipeline,
                 framebuffers,
                 as_slice,
-                pipeline_layout,
-                dset_prep.d_set_arr,
+                &draw_instanced_attempt,
             );
         }
         state = swapchain.present(cmdbuf) catch |err| switch (err) {
@@ -368,8 +294,8 @@ pub fn main() !void {
 
 // przykład przesyłania danych na gpu
 fn uploadVertices(gc: *const GraphicsContext, pool: vk.CommandPool, buffer: vk.Buffer, vert_slice: []const Vertex) !void {
-    const buff_size = memSize(vert_slice);
-    const staging_buffer = try easyBuffer(&gc.dev, vert_slice, true);
+    const buff_size = BufforingVert.memSize(vert_slice);
+    const staging_buffer = try BufforingVert.easyBuffer(&gc.dev, vert_slice, true);
 
     defer gc.dev.destroyBuffer(staging_buffer, null);
     const mem_reqs = gc.dev.getBufferMemoryRequirements(staging_buffer);
@@ -422,8 +348,26 @@ fn copyBuffer(gc: *const GraphicsContext, pool: vk.CommandPool, dst: vk.Buffer, 
     try gc.dev.queueWaitIdle(gc.graphics_queue.handle);
 }
 
+const ShaderRelated = struct {
+    instance_count: u32 = 1,
+    pipeline_layout: vk.PipelineLayout,
+    uniform_dsets: std.ArrayList(vk.DescriptorSet),
+    storage_dsets: std.ArrayList(vk.DescriptorSet),
+};
+
 // a tutaj odbywa się taka jakby prekompilacja renderingu ?...
-fn createCommandBuffers(gc: *const GraphicsContext, pool: vk.CommandPool, allocator: Allocator, buffer: vk.Buffer, extent: vk.Extent2D, render_pass: vk.RenderPass, pipeline: vk.Pipeline, framebuffers: []vk.Framebuffer, ojejoje: []const Vertex, ojejoje2: vk.PipelineLayout, ojejoje3: std.ArrayList(vk.DescriptorSet)) ![]vk.CommandBuffer {
+fn createCommandBuffers(
+    gc: *const GraphicsContext,
+    pool: vk.CommandPool,
+    allocator: Allocator,
+    buffer: vk.Buffer,
+    extent: vk.Extent2D,
+    render_pass: vk.RenderPass,
+    pipeline: vk.Pipeline,
+    framebuffers: []vk.Framebuffer,
+    ojejoje: []const Vertex,
+    shader_realted: *const ShaderRelated,
+) ![]vk.CommandBuffer {
     const cmdbufs = try allocator.alloc(vk.CommandBuffer, framebuffers.len);
     errdefer allocator.free(cmdbufs);
 
@@ -472,20 +416,42 @@ fn createCommandBuffers(gc: *const GraphicsContext, pool: vk.CommandPool, alloca
             .p_clear_values = @ptrCast(&clear),
         }, .@"inline");
 
-        gc.dev.cmdBindPipeline(cmdbuf, .graphics, pipeline);
         const offset = [_]vk.DeviceSize{0};
-        gc.dev.cmdBindVertexBuffers(cmdbuf, 0, 1, @ptrCast(&buffer), &offset);
+        gc.dev.cmdBindPipeline(cmdbuf, .graphics, pipeline);
+        gc.dev.cmdBindVertexBuffers(
+            cmdbuf,
+            0,
+            1,
+            @ptrCast(&buffer),
+            &offset,
+        );
         gc.dev.cmdBindDescriptorSets(
             cmdbuf,
             .graphics,
-            ojejoje2,
+            shader_realted.pipeline_layout,
             0,
             1,
-            @ptrCast(&ojejoje3.items[i]),
+            @ptrCast(&shader_realted.uniform_dsets.items[i]),
             0,
             null,
         );
-        gc.dev.cmdDraw(cmdbuf, @intCast(ojejoje.len), 1, 0, 0);
+        gc.dev.cmdBindDescriptorSets(
+            cmdbuf,
+            .graphics,
+            shader_realted.pipeline_layout,
+            1,
+            1,
+            @ptrCast(&shader_realted.storage_dsets.items[i]),
+            0,
+            null,
+        );
+        gc.dev.cmdDraw(
+            cmdbuf,
+            @intCast(ojejoje.len),
+            shader_realted.instance_count,
+            0,
+            0,
+        );
 
         gc.dev.cmdEndRenderPass(cmdbuf);
         try gc.dev.endCommandBuffer(cmdbuf);
