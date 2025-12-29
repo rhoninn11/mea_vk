@@ -14,21 +14,24 @@ layout(set = 0, binding = 0) uniform UniformData{
 } b_ubo;
 
 struct PerInstanceData {
+    vec2 offset_2d;
+    float phase_offset;
+    float spread_offset;
+    vec2 wave_offset;
     vec4 not_used_4d_0;
     vec4 not_used_4d_1;
     vec4 not_used_4d_2;
-    vec4 not_used_4d_3;
 };
 
 layout(set = 1, binding = 0) buffer InstanceData{
-    PerInstanceData hmm[];
+    PerInstanceData per_instance[];
 } storage;
 
 layout(location = 0) out vec4 f_color;
 
 void main() {
-    float progress = v_color.x;
-    float spread = b_ubo.frag_data.x;
+    float progress = v_color.r;
+    float spread = v_color.g;
     vec3 cos_in = vec3(progress-spread, progress, progress+spread) * TAU;
     vec3 emf_color_approx = (-cos(cos_in) + 1.0)*0.5-0.5; 
     f_color = vec4(emf_color_approx, 1.0);

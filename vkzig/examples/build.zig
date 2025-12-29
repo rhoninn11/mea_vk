@@ -27,11 +27,19 @@ pub fn build(b: *std.Build) !void {
     var include_path_mem: [1024]u8 = undefined;
     const glfw_path = try std.process.getEnvVarOwned(b.allocator, "GLFW_LIB");
     const include_path = try std.fmt.bufPrint(&include_path_mem, "{s}/include", .{glfw_path});
-    const lib_path = try std.fmt.bufPrint(&lib_path_mem, "{s}/bin", .{glfw_path});
+    // on linux
+    const lib_path = try std.fmt.bufPrint(&lib_path_mem, "{s}/lib", .{glfw_path});
+    // on windows
+    // const lib_path = try std.fmt.bufPrint(&lib_path_mem, "{s}/bin", .{glfw_path});
 
     triangle_exe.addIncludePath(.{ .cwd_relative = include_path });
     triangle_exe.addLibraryPath(.{ .cwd_relative = lib_path });
-    triangle_exe.linkSystemLibrary("glfw3");
+
+    // on windows
+    // triangle_exe.linkSystemLibrary("glfw3");
+    // on linux
+    triangle_exe.linkSystemLibrary("glfw");
+
     // const glfw_module = b.addModule("glwf", .{
     //     .root_source_file = "glfw.zig",
     //     .target = target,
@@ -111,6 +119,7 @@ pub fn build(b: *std.Build) !void {
 
     const triangle_run_cmd = b.addRunArtifact(triangle_exe);
     triangle_run_cmd.step.dependOn(b.getInstallStep());
+    // triangle_run_cmd.skip_foreign_checks = true;
 
     const triangle_run_step = b.step("main", "Run the triangle example");
     triangle_run_step.dependOn(&triangle_run_cmd.step);

@@ -60,6 +60,7 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
 
 pub fn main() !void {
     var swapchain_len: u8 = undefined;
+    vertex.probing();
 
     std.debug.print("+++ vertex info: {d}\n", .{Vertex.s_fields_num});
     try glfw.init();
@@ -135,7 +136,7 @@ pub fn main() !void {
     const InstanceData = struct {
         data_2d: [16]f32 = undefined,
     };
-    const instance_num = 16;
+    const instance_num = 64;
     var storage_dset = try helpers.DescriptorPrep.init(
         allocator,
         &gc,
@@ -219,15 +220,28 @@ pub fn main() !void {
     var perf_stats = addons.PerfStats.init();
     var state: Swapchain.PresentState = .optimal;
 
-    const delta = 0.1;
+    const spatial_base = -0.75;
+    const spatial_delta = 0.2;
+    const along = 1 / @as(f32, @floatFromInt(instance_num - 1));
+    const phase_delta = along * std.math.tau;
+    const spread_base = -0.2;
+    const spread_delta = along * 0.2;
+
     for (storage_dset.buff_arr.items) |possible_buffer| {
         const storage = possible_buffer.?;
         const storagePtr: *[instance_num]InstanceData = @ptrCast(@alignCast(storage.mapping.?));
         for (0..instance_num) |i| {
+            const xi = @mod(i, 8);
+            const yi = i / 8;
             const i_f: f32 = @floatFromInt(i);
+            const x_f: f32 = @floatFromInt(xi);
+            const y_f: f32 = @floatFromInt(yi);
+
             var empty: InstanceData = undefined;
-            empty.data_2d[0] = -1 + i_f * delta;
-            empty.data_2d[1] = 0;
+            empty.data_2d[0] = spatial_base + x_f * spatial_delta;
+            empty.data_2d[1] = spatial_base + y_f * spatial_delta;
+            empty.data_2d[2] = i_f * phase_delta;
+            empty.data_2d[3] = spread_base + i_f * spread_delta;
             storagePtr.*[i] = empty;
         }
     }
@@ -247,12 +261,14 @@ pub fn main() !void {
 
         const this_frame_uniform = uniform_dset.buff_arr.items[swapchain.image_index].?;
         const typedPtr: *UniformData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
-        typedPtr.*.data_2d[0] = std.math.cos(timeline.total_s) * 0.5;
-        typedPtr.*.data_2d[1] = std.math.sin(timeline.total_s) * 0.5;
-        const scale = 0.2 + std.math.sin(timeline.total_s) * 0.1;
+        typedPtr.*.data_2d[0] = 0.1;
+        typedPtr.*.data_2d[1] = 0.1;
+        const scale = 0.1;
         typedPtr.*.data_2d[2] = scale;
         typedPtr.*.data_2d[3] = scale;
+
         typedPtr.*.data_2d[4] = 0.05 + std.math.sin(timeline.total_s * 4) * 0.05;
+        typedPtr.*.data_2d[8] = timeline.total_s;
 
         const cmdbuf = cmdbufs[swapchain.image_index];
         // std.debug.print("+++ img_idx {d}\n", .{swapchain.image_index});

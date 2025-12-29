@@ -1,8 +1,8 @@
-find_program(ZIG_CC zigcc.cmd REQUIRED)
-find_program(ZIG_CXX zigcpp.cmd REQUIRED)
-find_program(ZIG_AR zigar.cmd REQUIRED)
-find_program(ZIG_RANLIB zigranlib.cmd REQUIRED)
-find_program(ZIG_RC zigrc.cmd REQUIRED)
+find_program(ZIG_CC zigcc.sh REQUIRED)
+find_program(ZIG_CXX zigcpp.sh REQUIRED)
+find_program(ZIG_AR zigar.sh REQUIRED)
+find_program(ZIG_RANLIB zigranlib.sh REQUIRED)
+find_program(ZIG_RC zigrc.sh REQUIRED)
 
 set(CMAKE_C_COMPILER "${ZIG_CC}" CACHE FILEPATH "" FORCE)
 set(CMAKE_CXX_COMPILER "${ZIG_CXX}" CACHE FILEPATH "" FORCE)

@@ -55,6 +55,7 @@ pub const GraphicsContext = struct {
         self.allocator = allocator;
         self.vkb = BaseWrapper.load(c.glfwGetInstanceProcAddress);
 
+        std.debug.print("whats the problem?\n", .{});
         if (try checkLayerSupport(&self.vkb, self.allocator) == false) {
             return error.MissingLayer;
         }
@@ -229,16 +230,23 @@ pub const GraphicsContext = struct {
 fn checkLayerSupport(vkb: *const BaseWrapper, alloc: Allocator) !bool {
     const available_layers = try vkb.enumerateInstanceLayerPropertiesAlloc(alloc);
     defer alloc.free(available_layers);
+    std.debug.print(
+        "our instance has {d} layers\n we require {d} layers\n",
+        .{ available_layers.len, required_layer_names.len },
+    );
+
+    var result = true;
     for (required_layer_names) |required_layer| {
         for (available_layers) |layer| {
             if (std.mem.eql(u8, std.mem.span(required_layer), std.mem.sliceTo(&layer.layer_name, 0))) {
                 break;
             }
         } else {
-            return false;
+            std.debug.print("_ Layer | {s} | is missing in vulkan\n", .{required_layer});
+            result = false;
         }
     }
-    return true;
+    return result;
 }
 
 pub const Queue = struct {

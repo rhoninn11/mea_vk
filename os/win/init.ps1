@@ -4,13 +4,13 @@ $GLFW_REPO = "https://github.com/glfw/glfw.git"
 $GLFW_VER = 3.4
 $GLFW_DIR = "fs\_glfw"
 $GLFW_INSTALL_DIR = "fs\glfw"
-
+$CMAKE_ADDON = "os\win\zig.cmake"
 
 mkdir fs
 git clone $GLFW_REPO -b $GLFW_VER $GLFW_DIR
 mkdir $GLFW_DIR\build
 cmake $GLFW_DIR -B $GLFW_DIR\build `
-    -C zig.cmake -GNinja `
+    -C $CMAKE_ADDON -GNinja `
     -DBUILD_SHARED_LIBS=ON `
     -DGLFW_BUILD_EXAMPLES=OFF `
     -DGLFW_BUILD_TESTS=OFF `

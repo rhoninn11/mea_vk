@@ -32,6 +32,7 @@ pub const Swapchain = struct {
             return error.InvalidSurfaceDimensions;
         }
 
+        std.debug.print("swapchain res: {d}x{d}\n", .{ actual_extent.width, actual_extent.height });
         const surface_format = try findSurfaceFormat(gc, allocator);
         const present_mode = try findPresentMode(gc, allocator);
 
@@ -77,6 +78,9 @@ pub const Swapchain = struct {
             for (swap_images) |si| si.deinit(gc);
             allocator.free(swap_images);
         }
+        const depth_image = DepthImage.init(gc);
+        _ = depth_image;
+        // init depth atachment?
 
         var next_image_acquired = try gc.dev.createSemaphore(&.{}, null);
         errdefer gc.dev.destroySemaphore(next_image_acquired, null);
@@ -329,3 +333,30 @@ fn findActualExtent(caps: vk.SurfaceCapabilitiesKHR, extent: vk.Extent2D) vk.Ext
         };
     }
 }
+
+fn findSupportedFormat(
+    gc: *const GraphicsContext,
+    candidates: []const vk.Format,
+    tileing: vk.ImageTiling,
+) void {
+    _ = tileing;
+    for (candidates) |format| {
+        const props = gc.instance.getPhysicalDeviceFormatProperties(gc.pdev, format);
+        _ = props;
+    }
+}
+
+const DepthImage = struct {
+    img: ?vk.Image = null,
+    dev_mem: ?vk.DeviceMemory = null,
+    img_view: ?vk.ImageView = null,
+
+    pub fn init(gc: *const GraphicsContext) DepthImage {
+        findSupportedFormat(
+            gc,
+            &.{ vk.Format.d32_sfloat, vk.Format.d32_sfloat_s8_uint, vk.Format.d24_unorm_s8_uint },
+            vk.ImageTiling.optimal,
+        );
+        return .{};
+    }
+};

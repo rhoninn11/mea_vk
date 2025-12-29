@@ -104,3 +104,19 @@ pub const Vertex = struct {
         return vert_arr;
     }
 };
+
+pub const VertexAlt1 = struct {
+    pos: [3]f32,
+};
+
+pub const VertexAlt2 = struct {
+    pos: [5]f32,
+};
+
+fn tinkering(ToProbe: type) void {
+    std.debug.print("{s} | size {d}, aligments {d}\n", .{ @typeName(ToProbe), @sizeOf(ToProbe), @alignOf(ToProbe) });
+}
+pub fn probing() void {
+    tinkering(VertexAlt1);
+    tinkering(VertexAlt2);
+}
