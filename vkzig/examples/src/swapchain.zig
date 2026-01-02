@@ -78,7 +78,7 @@ pub const Swapchain = struct {
             for (swap_images) |si| si.deinit(gc);
             allocator.free(swap_images);
         }
-        const depth_image = DepthImage.init(gc);
+        const depth_image = try DepthImage.init(gc);
         _ = depth_image;
         // init depth atachment?
 
@@ -334,29 +334,82 @@ fn findActualExtent(caps: vk.SurfaceCapabilitiesKHR, extent: vk.Extent2D) vk.Ext
     }
 }
 
+const LocalErrorSet = error{ThereIsNoFormat};
+
 fn findSupportedFormat(
     gc: *const GraphicsContext,
     candidates: []const vk.Format,
     tileing: vk.ImageTiling,
-) void {
-    _ = tileing;
+    features: vk.FormatFeatureFlags,
+) !vk.Format {
     for (candidates) |format| {
         const props = gc.instance.getPhysicalDeviceFormatProperties(gc.pdev, format);
-        _ = props;
+
+        const linear_cond = props.linear_tiling_features.intersect(features) == features;
+        const optimal_cond = props.optimal_tiling_features.intersect(features) == features;
+
+        if (tileing == .linear and linear_cond) {
+            return format;
+        }
+        if (tileing == .optimal and optimal_cond) {
+            return format;
+        }
     }
+    return LocalErrorSet.ThereIsNoFormat;
 }
 
 const DepthImage = struct {
+    const Self = @This();
     img: ?vk.Image = null,
     dev_mem: ?vk.DeviceMemory = null,
     img_view: ?vk.ImageView = null,
 
-    pub fn init(gc: *const GraphicsContext) DepthImage {
-        findSupportedFormat(
+    fn getFormat(gc: *const GraphicsContext) !vk.Format {
+        return findSupportedFormat(
             gc,
             &.{ vk.Format.d32_sfloat, vk.Format.d32_sfloat_s8_uint, vk.Format.d24_unorm_s8_uint },
             vk.ImageTiling.optimal,
+            .{ .depth_stencil_attachment_bit = true },
         );
-        return .{};
+    }
+    fn hasSetncilComponent(format: vk.Format) bool {
+        return format == .d32_sfloat_s8_uint or format == .d24_unorm_s8_uint;
+    }
+
+    pub fn init(gc: *const GraphicsContext) !Self {
+        const fmt = try Self.getFormat(gc);
+        _ = hasSetncilComponent(fmt);
+
+        // const depth_aspect_flag: vk.ImageAspectFlags = .{
+        //     .depth_bit = true,
+        // };
+        // const no_swizzle_mapping: vk.ComponentMapping = .{
+        //     .r = .identity,
+        //     .g = .identity,
+        //     .b = .identity,
+        //     .a = .identity,
+        // };
+
+        // const img_viu_info: vk.ImageViewCreateInfo = .{
+        //     .s_type = .image_view_create_info,
+        //     .view_type = .@"2d",
+        //     .format = fmt,
+        //     .subresource_range = .{
+        //         .aspect_mask = depth_aspect_flag,
+        //         .base_mip_level = 0,
+        //         .level_count = 1,
+        //         .base_array_layer = 0,
+        //         .layer_count = 1,
+        //     },
+        //     .image = .null_handle,
+        //     .components = no_swizzle_mapping,
+        // };
+
+        // const img_viu = try gc.dev.createImageView(&img_viu_info, null);
+
+        // return Self{
+        //     .img_view = img_viu,
+        // };
+        return Self{};
     }
 };
