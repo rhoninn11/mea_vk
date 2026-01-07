@@ -1,6 +1,8 @@
 const std = @import("std");
 const vk = @import("third_party/vk.zig");
+const gfctx = @import("graphics_context.zig");
 const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
+
 const Allocator = std.mem.Allocator;
 
 pub const Swapchain = struct {
@@ -357,6 +359,56 @@ fn findSupportedFormat(
     }
     return LocalErrorSet.ThereIsNoFormat;
 }
+
+const RGBImage = struct {
+    const Self = @This();
+
+    gc: ?*const GraphicsContext = null,
+    img: ?vk.Image = null,
+    devmem: ?vk.DeviceMemory = null,
+
+    fn init(x: u8, y: u8, gc: *const GraphicsContext) Self {
+        var self: Self = .{};
+        const devk = gc.dev;
+        self.gc = devk;
+
+        const img_create_info: vk.ImageCreateInfo = .{
+            .image_type = .@"2d",
+            .format = .a8b8g8r8_uint_pack32,
+            .extent = .{ .height = y, .width = x, .depth = 1 },
+            .mip_levels = 1,
+            .array_layers = 1,
+            .samples = .{ .@"1_bit" = true },
+            .tiling = .optimal,
+            .usage = .{ .sampled_bit = true },
+            .sharing_mode = .exclusive,
+        };
+        self.img = try devk.createImage(img_create_info, null);
+        errdefer devk.destroyImage(self.img, null);
+
+        self.devmem = try gc.allocate(
+            devk.getImageMemoryRequirements(self.img),
+            gfctx.baked.cpu_accesible_memory,
+        );
+        errdefer devk.freeMemory(self.devmem, null);
+
+        try devk.bindImageMemory(self.img, self.devmem, 0);
+
+        return self;
+    }
+
+    fn deinit(self: *Self) void {
+        const devk = self.gc.?.dev;
+
+        if (self.devmem) |_devmem| {
+            devk.freeMemory(_devmem, null);
+        }
+
+        if (self.img) |_img| {
+            devk.destroyImage(_img, null);
+        }
+    }
+};
 
 const DepthImage = struct {
     const Self = @This();

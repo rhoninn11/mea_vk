@@ -32,6 +32,99 @@ const DeviceWrapper = vk.DeviceWrapper;
 const Instance = vk.InstanceProxy;
 const Device = vk.DeviceProxy;
 
+pub const baked = struct {
+    pub const DSetInit = struct {
+        usage: UsageType,
+        memory_property: vk.MemoryPropertyFlags,
+        shader_stage: vk.ShaderStageFlags,
+    };
+
+    pub const UsageType = struct {
+        usage_flag: vk.BufferUsageFlags,
+        descriptor_type: vk.DescriptorType,
+    };
+
+    const uniform_usage: UsageType = .{
+        .usage_flag = .{
+            .uniform_buffer_bit = true,
+        },
+        .descriptor_type = .uniform_buffer,
+    };
+    const storage_usage: UsageType = .{
+        .usage_flag = .{
+            .storage_buffer_bit = true,
+        },
+        .descriptor_type = .storage_buffer,
+    };
+
+    pub const cpu_accesible_memory: vk.MemoryPropertyFlags = .{
+        .host_visible_bit = true,
+        .host_coherent_bit = true,
+    };
+
+    pub const uniform_frag_vert = DSetInit{
+        .usage = uniform_usage,
+        .memory_property = cpu_accesible_memory,
+        .shader_stage = .{
+            .vertex_bit = true,
+            .fragment_bit = true,
+        },
+    };
+    pub const storage_frag_vert = DSetInit{
+        .usage = storage_usage,
+        .memory_property = cpu_accesible_memory,
+        .shader_stage = .{
+            .vertex_bit = true,
+            .fragment_bit = true,
+        },
+    };
+
+    pub const UniformInfo = struct {
+        location: u32,
+        size: u32,
+    };
+};
+
+pub const BufferData = struct {
+    buffer: vk.Buffer,
+    memory: vk.DeviceMemory,
+    mapping: ?*anyopaque,
+
+    pub fn deinit(self: BufferData, dev: vk.DeviceProxy) void {
+        dev.destroyBuffer(self.buffer, null);
+        dev.freeMemory(self.memory, null);
+    }
+};
+pub fn createBuffer(
+    gc: *const GraphicsContext,
+    mem_flags: vk.MemoryPropertyFlags,
+    bsize: u64,
+    usage: vk.BufferUsageFlags,
+) !BufferData {
+    const devk = gc.dev;
+    const default_size = bsize;
+
+    const bfr = try devk.createBuffer(&vk.BufferCreateInfo{
+        .s_type = .buffer_create_info,
+        .size = default_size,
+        .sharing_mode = .exclusive,
+        .usage = usage,
+    }, null);
+
+    const r = devk.getBufferMemoryRequirements(bfr);
+    if (r.size != default_size) {
+        std.debug.print("??? requested low amount of memory: requested - {d}, resulted - {d}\n", .{ default_size, r.size });
+    }
+
+    const memory = try gc.allocate(r, mem_flags);
+    try gc.dev.bindBufferMemory(bfr, memory, 0);
+
+    return BufferData{
+        .buffer = bfr,
+        .memory = memory,
+        .mapping = try devk.mapMemory(memory, 0, r.size, .{}),
+    };
+}
 pub const GraphicsContext = struct {
     pub const CommandBuffer = vk.CommandBufferProxy;
 
@@ -136,6 +229,8 @@ pub const GraphicsContext = struct {
         self.graphics_queue = Queue.init(self.dev, candidate.queues.graphics_family);
         self.present_queue = Queue.init(self.dev, candidate.queues.present_family);
 
+        // ---- explore area -----
+
         self.mem_props = self.instance.getPhysicalDeviceMemoryProperties(self.pdev);
         const mem_t_count = self.mem_props.memory_type_count;
         const mem_h_count = self.mem_props.memory_heap_count;
@@ -149,7 +244,7 @@ pub const GraphicsContext = struct {
         const usage = vk.BufferUsageFlags{
             .transfer_src_bit = true,
         };
-        const test_buffer = try self.createBuffer(default_memory_flags, 4, usage);
+        const test_buffer = try createBuffer(&self, default_memory_flags, 4, usage);
         std.debug.print("+++ test buffor created\n", .{});
         self.dev.destroyBuffer(test_buffer.buffer, null);
         self.dev.freeMemory(test_buffer.memory, null);
@@ -188,42 +283,6 @@ pub const GraphicsContext = struct {
             .allocation_size = requirements.size,
             .memory_type_index = try self.findMemoryTypeIndex(requirements.memory_type_bits, flags),
         }, null);
-    }
-
-    pub const BufferData = struct {
-        buffer: vk.Buffer,
-        memory: vk.DeviceMemory,
-        mapping: ?*anyopaque,
-
-        pub fn deinit(self: BufferData, dev: vk.DeviceProxy) void {
-            dev.destroyBuffer(self.buffer, null);
-            dev.freeMemory(self.memory, null);
-        }
-    };
-
-    pub fn createBuffer(self: GraphicsContext, mem_flags: vk.MemoryPropertyFlags, bsize: u64, usage: vk.BufferUsageFlags) !BufferData {
-        const default_size = bsize;
-
-        const bfr = try self.dev.createBuffer(&vk.BufferCreateInfo{
-            .s_type = .buffer_create_info,
-            .size = default_size,
-            .sharing_mode = .exclusive,
-            .usage = usage,
-        }, null);
-
-        const r = self.dev.getBufferMemoryRequirements(bfr);
-        if (r.size != default_size) {
-            std.debug.print("??? requested low amount of memory: requested - {d}, resulted - {d}\n", .{ default_size, r.size });
-        }
-
-        const memory = try self.allocate(r, mem_flags);
-        try self.dev.bindBufferMemory(bfr, memory, 0);
-
-        return BufferData{
-            .buffer = bfr,
-            .memory = memory,
-            .mapping = try self.dev.mapMemory(memory, 0, r.size, .{}),
-        };
     }
 };
 

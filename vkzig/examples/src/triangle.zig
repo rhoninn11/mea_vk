@@ -2,6 +2,7 @@ const std = @import("std");
 
 const glfw = @import("third_party/glfw.zig");
 const vk = @import("third_party/vk.zig");
+const gfxctx = @import("graphics_context.zig");
 
 const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
 const Swapchain = @import("swapchain.zig").Swapchain;
@@ -58,6 +59,11 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
     }
 }
 
+const EasyAcces = struct {
+    window: ?*c_long,
+    vkctx: ?*const GraphicsContext = null,
+};
+
 pub fn main() !void {
     var swapchain_len: u8 = undefined;
     vertex.probing();
@@ -82,6 +88,10 @@ pub fn main() !void {
         null,
     );
     defer glfw.destroyWindow(window);
+    var access = EasyAcces{
+        .window = window,
+    };
+    access.vkctx = null;
 
     // According to the GLFW docs:
     //
@@ -121,11 +131,11 @@ pub fn main() !void {
         data_2d: [16]f32 = undefined,
     };
 
-    var uniform_dset = try helpers.DescriptorPrep.init(
+    var uniform_dset = try addons.DescriptorPrep.init(
         allocator,
         &gc,
         swapchain_len,
-        baked.uniform_frag_vert,
+        gfxctx.baked.uniform_frag_vert,
         .{
             .location = 0,
             .size = @sizeOf(UniformData),
@@ -137,11 +147,11 @@ pub fn main() !void {
         data_2d: [16]f32 = undefined,
     };
     const instance_num = 64;
-    var storage_dset = try helpers.DescriptorPrep.init(
+    var storage_dset = try addons.DescriptorPrep.init(
         allocator,
         &gc,
         swapchain_len,
-        baked.storage_frag_vert,
+        gfxctx.baked.storage_frag_vert,
         .{
             .location = 0,
             .size = @sizeOf(InstanceData) * instance_num,
@@ -315,7 +325,10 @@ fn uploadVertices(gc: *const GraphicsContext, pool: vk.CommandPool, buffer: vk.B
 
     defer gc.dev.destroyBuffer(staging_buffer, null);
     const mem_reqs = gc.dev.getBufferMemoryRequirements(staging_buffer);
-    const staging_memory = try gc.allocate(mem_reqs, .{ .host_visible_bit = true, .host_coherent_bit = true });
+    const staging_memory = try gc.allocate(
+        mem_reqs,
+        .{ .host_visible_bit = true, .host_coherent_bit = true },
+    );
     defer gc.dev.freeMemory(staging_memory, null);
     try gc.dev.bindBufferMemory(staging_buffer, staging_memory, 0);
 

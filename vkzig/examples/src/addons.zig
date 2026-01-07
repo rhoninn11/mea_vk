@@ -1,4 +1,8 @@
 const std = @import("std");
+const vk = @import("third_party/vk.zig");
+const gc = @import("graphics_context.zig");
+
+const Allocator = std.mem.Allocator;
 
 pub const PerfStats = struct {
     t0: i64,
@@ -64,5 +68,126 @@ pub const Timeline = struct {
         self._t_last = now;
         self.total_s = total / 1000000;
         self.delta_s = delta / 1000000;
+    }
+};
+
+pub const DescriptorPrep = struct {
+    const Self = @This();
+    d_set_layout_arr: std.ArrayList(vk.DescriptorSetLayout) = .empty,
+    d_set_arr: std.ArrayList(vk.DescriptorSet) = .empty,
+    buff_arr: std.ArrayList(?gc.BufferData) = .empty,
+
+    gctx: *const gc.GraphicsContext,
+    _d_set_layout: ?vk.DescriptorSetLayout = null,
+    _d_pool: ?vk.DescriptorPool = null,
+
+    pub fn init(
+        alloc: Allocator,
+        _gc: *const gc.GraphicsContext,
+        len: usize,
+        using: gc.baked.DSetInit,
+        with: gc.baked.UniformInfo,
+    ) !Self {
+        const len_u32: u32 = @intCast(len);
+
+        var self: Self = .{
+            .gctx = _gc,
+        };
+
+        const devk = self.gctx.dev;
+        errdefer self.deinit(alloc);
+        try self.d_set_layout_arr.resize(alloc, len);
+        try self.buff_arr.resize(alloc, len);
+        try self.d_set_arr.resize(alloc, len);
+
+        const _bind = vk.DescriptorSetLayoutBinding{
+            .p_immutable_samplers = null, // for textures ?
+            .stage_flags = using.shader_stage,
+            .descriptor_type = using.usage.descriptor_type,
+            .descriptor_count = 1,
+            .binding = with.location, // w sensie, że lokacja 0?
+        };
+
+        // first important element needed later
+        self._d_set_layout = try devk.createDescriptorSetLayout(&.{
+            .s_type = .descriptor_set_layout_create_info,
+            .p_bindings = @ptrCast(&_bind),
+            .binding_count = 1,
+        }, null);
+
+        for (0..len) |i| {
+            self.d_set_layout_arr.items[i] = self._d_set_layout.?;
+            self.buff_arr.items[i] = null;
+            self.buff_arr.items[i] = try gc.createBuffer(
+                self.gctx,
+                using.memory_property,
+                with.size,
+                using.usage.usage_flag,
+            );
+        }
+
+        const p_size = vk.DescriptorPoolSize{
+            .type = .uniform_buffer,
+            .descriptor_count = len_u32,
+        };
+
+        self._d_pool = try self.gctx.dev.createDescriptorPool(&vk.DescriptorPoolCreateInfo{
+            .s_type = .descriptor_pool_create_info,
+            .p_pool_sizes = @ptrCast(&p_size),
+            .pool_size_count = 1,
+            .max_sets = len_u32,
+        }, null);
+
+        // allocation destroyed with pool
+        try self.gctx.dev.allocateDescriptorSets(
+            &vk.DescriptorSetAllocateInfo{
+                .s_type = .descriptor_set_allocate_info,
+                .descriptor_pool = self._d_pool.?,
+                .descriptor_set_count = len_u32,
+                .p_set_layouts = self.d_set_layout_arr.items.ptr,
+            },
+            self.d_set_arr.items.ptr,
+        );
+        for (0..len) |i| {
+            const buf_info = vk.DescriptorBufferInfo{
+                .buffer = self.buff_arr.items[i].?.buffer,
+                .range = with.size,
+                .offset = 0,
+            };
+            const w_dsc_set = vk.WriteDescriptorSet{
+                .s_type = .write_descriptor_set,
+                .dst_set = self.d_set_arr.items[i],
+                .dst_binding = with.location,
+                .dst_array_element = 0,
+                .descriptor_type = using.usage.descriptor_type,
+                .descriptor_count = 1,
+                .p_buffer_info = @ptrCast(&buf_info),
+                .p_image_info = &.{},
+                .p_texel_buffer_view = &.{},
+            };
+            self.gctx.dev.updateDescriptorSets(1, @ptrCast(&w_dsc_set), 0, null);
+        }
+
+        return self;
+    }
+
+    pub fn deinit(self: *Self, alloc: Allocator) void {
+        if (self._d_pool) |d_pool| {
+            self.gctx.dev.destroyDescriptorPool(d_pool, null);
+        }
+
+        for (self.buff_arr.items) |possible_buff| {
+            if (possible_buff) |buff| {
+                buff.deinit(self.gctx.dev);
+            }
+        }
+
+        if (self._d_set_layout) |layout| {
+            self.gctx.dev.destroyDescriptorSetLayout(layout, null);
+        }
+
+        self.d_set_arr.deinit(alloc);
+        self.buff_arr.deinit(alloc);
+        self.d_set_layout_arr.deinit(alloc);
     }
 };
