@@ -11,6 +11,7 @@ pub const rgb_tex = blk: {
     var lut: [spot_num * pixel_size]u8 = undefined;
     const pixel_a: [pixel_size]u8 = .{ 255, 0, 0, 255 };
     const pixel_b: [pixel_size]u8 = .{ 0, 255, 0, 255 };
+    @setEvalBranchQuota(spot_num);
     for (0..spot_num) |i| {
         const at = i * pixel_size;
         var pixel: [pixel_size]u8 = pixel_b;

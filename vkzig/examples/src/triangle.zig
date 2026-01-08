@@ -211,7 +211,40 @@ pub fn main() !void {
         .storage_dsets = storage_dset.d_set_arr,
     };
 
+    var test_img = try gftx.RGBImage.init(&gc, 64, 64);
+    defer test_img.deinit();
+
+    const buff_size = test_img.dvk_size;
+    const src_buff = try gftx.createBuffer(
+        &gc,
+        gftx.baked.cpu_accesible_memory,
+        buff_size,
+        .{ .transfer_src_bit = true },
+    );
+    defer src_buff.deinit(gc.dev);
+    const dst_buff = try gftx.createBuffer(
+        &gc,
+        gftx.baked.cpu_accesible_memory,
+        buff_size,
+        .{ .transfer_dst_bit = true },
+    );
+    defer dst_buff.deinit(gc.dev);
+
+    // TODO: copy comptime texture to buffer
+    // @memcpy(src_data.mapping.?, &baked.rgb_tex);
+
     const transfer_cmd = try gftx.beginSingleCmd(&gc, pool_cmd);
+    gc.dev.cmdCopyBuffer(
+        transfer_cmd,
+        src_buff.buffer,
+        dst_buff.buffer,
+        1,
+        @ptrCast(&vk.BufferCopy{
+            .dst_offset = 0,
+            .src_offset = 0,
+            .size = test_img.dvk_size,
+        }),
+    );
     try gftx.endSingleCmd(&gc, transfer_cmd);
 
     var cmdbufs = try createCommandBuffers(

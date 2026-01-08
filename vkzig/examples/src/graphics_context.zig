@@ -6,6 +6,8 @@ const vk = @import("third_party/vk.zig");
 const c = @import("c.zig");
 const Allocator = std.mem.Allocator;
 
+const swpchn = @import("swapchain.zig");
+
 const required_layer_names = [_][*:0]const u8{"VK_LAYER_KHRONOS_validation"};
 
 const required_device_extensions = [_][*:0]const u8{vk.extensions.khr_swapchain.name};
@@ -83,6 +85,114 @@ pub const baked = struct {
         location: u32,
         size: u32,
     };
+};
+
+// imgs
+pub const RGBImage = struct {
+    const Self = @This();
+
+    gc: *const GraphicsContext,
+    dvk_img: vk.Image,
+    dvk_mem: vk.DeviceMemory,
+    dvk_size: usize,
+
+    pub fn init(gc: *const GraphicsContext, x: u8, y: u8) !Self {
+        const devk = gc.dev;
+
+        const img_create_info: vk.ImageCreateInfo = .{
+            .image_type = .@"2d",
+            .format = .a8b8g8r8_uint_pack32,
+            .extent = .{ .height = y, .width = x, .depth = 1 },
+            .mip_levels = 1,
+            .array_layers = 1,
+            .samples = .{ .@"1_bit" = true },
+            .tiling = .optimal,
+            .usage = .{ .sampled_bit = true },
+            .sharing_mode = .exclusive,
+            .initial_layout = .general,
+        };
+        const vk_img = try devk.createImage(&img_create_info, null);
+        errdefer devk.destroyImage(vk_img, null);
+
+        const mem_req = devk.getImageMemoryRequirements(vk_img);
+        const vk_mem = try gc.allocate(
+            mem_req,
+            baked.cpu_accesible_memory,
+        );
+        errdefer devk.freeMemory(vk_mem, null);
+
+        try devk.bindImageMemory(vk_img, vk_mem, 0);
+
+        // gfctx.createBuffer(gc, gfctx.baked.cpu_accesible_memory, mem_req.size , .{ .transfer_src_bit = true });
+        return Self{
+            .gc = gc,
+            .dvk_img = vk_img,
+            .dvk_mem = vk_mem,
+            .dvk_size = mem_req.size,
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        const devk = self.gc.dev;
+        devk.freeMemory(self.dvk_mem, null);
+        devk.destroyImage(self.dvk_img, null);
+    }
+};
+
+const DepthImage = struct {
+    const Self = @This();
+    img: ?vk.Image = null,
+    dev_mem: ?vk.DeviceMemory = null,
+    img_view: ?vk.ImageView = null,
+
+    fn getFormat(gc: *const GraphicsContext) !vk.Format {
+        return swpchn.findSupportedFormat(
+            gc,
+            &.{ vk.Format.d32_sfloat, vk.Format.d32_sfloat_s8_uint, vk.Format.d24_unorm_s8_uint },
+            vk.ImageTiling.optimal,
+            .{ .depth_stencil_attachment_bit = true },
+        );
+    }
+    fn hasSetncilComponent(format: vk.Format) bool {
+        return format == .d32_sfloat_s8_uint or format == .d24_unorm_s8_uint;
+    }
+
+    pub fn init(gc: *const GraphicsContext) !Self {
+        const fmt = try Self.getFormat(gc);
+        _ = hasSetncilComponent(fmt);
+
+        // const depth_aspect_flag: vk.ImageAspectFlags = .{
+        //     .depth_bit = true,
+        // };
+        // const no_swizzle_mapping: vk.ComponentMapping = .{
+        //     .r = .identity,
+        //     .g = .identity,
+        //     .b = .identity,
+        //     .a = .identity,
+        // };
+
+        // const img_viu_info: vk.ImageViewCreateInfo = .{
+        //     .s_type = .image_view_create_info,
+        //     .view_type = .@"2d",
+        //     .format = fmt,
+        //     .subresource_range = .{
+        //         .aspect_mask = depth_aspect_flag,
+        //         .base_mip_level = 0,
+        //         .level_count = 1,
+        //         .base_array_layer = 0,
+        //         .layer_count = 1,
+        //     },
+        //     .image = .null_handle,
+        //     .components = no_swizzle_mapping,
+        // };
+
+        // const img_viu = try gc.dev.createImageView(&img_viu_info, null);
+
+        // return Self{
+        //     .img_view = img_viu,
+        // };
+        return Self{};
+    }
 };
 
 pub fn beginSingleCmd(gc: *const GraphicsContext, cmd_pool: vk.CommandPool) !vk.CommandBuffer {

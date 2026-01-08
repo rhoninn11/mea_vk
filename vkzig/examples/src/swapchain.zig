@@ -80,9 +80,9 @@ pub const Swapchain = struct {
             for (swap_images) |si| si.deinit(gc);
             allocator.free(swap_images);
         }
-        const depth_image = try DepthImage.init(gc);
-        _ = depth_image;
-        // init depth atachment?
+        // const depth_image = try DepthImage.init(gc);
+        // _ = depth_image;
+        // TODO: init depth atachment?
 
         var next_image_acquired = try gc.dev.createSemaphore(&.{}, null);
         errdefer gc.dev.destroySemaphore(next_image_acquired, null);
@@ -338,7 +338,7 @@ fn findActualExtent(caps: vk.SurfaceCapabilitiesKHR, extent: vk.Extent2D) vk.Ext
 
 const LocalErrorSet = error{ThereIsNoFormat};
 
-fn findSupportedFormat(
+pub fn findSupportedFormat(
     gc: *const GraphicsContext,
     candidates: []const vk.Format,
     tileing: vk.ImageTiling,
@@ -359,111 +359,3 @@ fn findSupportedFormat(
     }
     return LocalErrorSet.ThereIsNoFormat;
 }
-
-const RGBImage = struct {
-    const Self = @This();
-
-    gc: ?*const GraphicsContext = null,
-    img: ?vk.Image = null,
-    devmem: ?vk.DeviceMemory = null,
-
-    fn init(x: u8, y: u8, gc: *const GraphicsContext) Self {
-        var self: Self = .{};
-        const devk = gc.dev;
-        self.gc = devk;
-
-        const img_create_info: vk.ImageCreateInfo = .{
-            .image_type = .@"2d",
-            .format = .a8b8g8r8_uint_pack32,
-            .extent = .{ .height = y, .width = x, .depth = 1 },
-            .mip_levels = 1,
-            .array_layers = 1,
-            .samples = .{ .@"1_bit" = true },
-            .tiling = .optimal,
-            .usage = .{ .sampled_bit = true },
-            .sharing_mode = .exclusive,
-        };
-        self.img = try devk.createImage(img_create_info, null);
-        errdefer devk.destroyImage(self.img, null);
-
-        const mem_req = devk.getImageMemoryRequirements(self.img);
-        self.devmem = try gc.allocate(
-            mem_req,
-            gfctx.baked.cpu_accesible_memory,
-        );
-        errdefer devk.freeMemory(self.devmem, null);
-
-        try devk.bindImageMemory(self.img, self.devmem, 0);
-
-        // gfctx.createBuffer(gc, gfctx.baked.cpu_accesible_memory, mem_req.size , .{ .transfer_src_bit = true });
-        return self;
-    }
-
-    fn deinit(self: *Self) void {
-        const devk = self.gc.?.dev;
-
-        if (self.devmem) |_devmem| {
-            devk.freeMemory(_devmem, null);
-        }
-
-        if (self.img) |_img| {
-            devk.destroyImage(_img, null);
-        }
-    }
-};
-
-const DepthImage = struct {
-    const Self = @This();
-    img: ?vk.Image = null,
-    dev_mem: ?vk.DeviceMemory = null,
-    img_view: ?vk.ImageView = null,
-
-    fn getFormat(gc: *const GraphicsContext) !vk.Format {
-        return findSupportedFormat(
-            gc,
-            &.{ vk.Format.d32_sfloat, vk.Format.d32_sfloat_s8_uint, vk.Format.d24_unorm_s8_uint },
-            vk.ImageTiling.optimal,
-            .{ .depth_stencil_attachment_bit = true },
-        );
-    }
-    fn hasSetncilComponent(format: vk.Format) bool {
-        return format == .d32_sfloat_s8_uint or format == .d24_unorm_s8_uint;
-    }
-
-    pub fn init(gc: *const GraphicsContext) !Self {
-        const fmt = try Self.getFormat(gc);
-        _ = hasSetncilComponent(fmt);
-
-        // const depth_aspect_flag: vk.ImageAspectFlags = .{
-        //     .depth_bit = true,
-        // };
-        // const no_swizzle_mapping: vk.ComponentMapping = .{
-        //     .r = .identity,
-        //     .g = .identity,
-        //     .b = .identity,
-        //     .a = .identity,
-        // };
-
-        // const img_viu_info: vk.ImageViewCreateInfo = .{
-        //     .s_type = .image_view_create_info,
-        //     .view_type = .@"2d",
-        //     .format = fmt,
-        //     .subresource_range = .{
-        //         .aspect_mask = depth_aspect_flag,
-        //         .base_mip_level = 0,
-        //         .level_count = 1,
-        //         .base_array_layer = 0,
-        //         .layer_count = 1,
-        //     },
-        //     .image = .null_handle,
-        //     .components = no_swizzle_mapping,
-        // };
-
-        // const img_viu = try gc.dev.createImageView(&img_viu_info, null);
-
-        // return Self{
-        //     .img_view = img_viu,
-        // };
-        return Self{};
-    }
-};
