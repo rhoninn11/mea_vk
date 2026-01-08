@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const vkgen = @import("vulkan_zig");
 
@@ -23,22 +24,19 @@ pub fn build(b: *std.Build) !void {
     });
     b.installArtifact(triangle_exe);
 
+    const glfw_lib_fmt: []const u8 = if (builtin.target.os.tag == .windows) "{s}/bin" else "{s}/lib";
+    const glfw_name: []const u8 = if (builtin.target.os.tag == .windows) "glfw3" else "glfw";
+
     var lib_path_mem: [1024]u8 = undefined;
     var include_path_mem: [1024]u8 = undefined;
     const glfw_path = try std.process.getEnvVarOwned(b.allocator, "GLFW_LIB");
     const include_path = try std.fmt.bufPrint(&include_path_mem, "{s}/include", .{glfw_path});
-    // on linux
-    const lib_path = try std.fmt.bufPrint(&lib_path_mem, "{s}/lib", .{glfw_path});
-    // on windows
-    // const lib_path = try std.fmt.bufPrint(&lib_path_mem, "{s}/bin", .{glfw_path});
+    const lib_path = try std.fmt.bufPrint(&lib_path_mem, glfw_lib_fmt, .{glfw_path});
 
     triangle_exe.addIncludePath(.{ .cwd_relative = include_path });
     triangle_exe.addLibraryPath(.{ .cwd_relative = lib_path });
 
-    // on windows
-    // triangle_exe.linkSystemLibrary("glfw3");
-    // on linux
-    triangle_exe.linkSystemLibrary("glfw");
+    triangle_exe.linkSystemLibrary(glfw_name);
 
     // const glfw_module = b.addModule("glwf", .{
     //     .root_source_file = "glfw.zig",

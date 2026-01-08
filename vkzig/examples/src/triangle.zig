@@ -2,7 +2,7 @@ const std = @import("std");
 
 const glfw = @import("third_party/glfw.zig");
 const vk = @import("third_party/vk.zig");
-const gfxctx = @import("graphics_context.zig");
+const gftx = @import("graphics_context.zig");
 
 const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
 const Swapchain = @import("swapchain.zig").Swapchain;
@@ -135,7 +135,7 @@ pub fn main() !void {
         allocator,
         &gc,
         swapchain_len,
-        gfxctx.baked.uniform_frag_vert,
+        gftx.baked.uniform_frag_vert,
         .{
             .location = 0,
             .size = @sizeOf(UniformData),
@@ -151,7 +151,7 @@ pub fn main() !void {
         allocator,
         &gc,
         swapchain_len,
-        gfxctx.baked.storage_frag_vert,
+        gftx.baked.storage_frag_vert,
         .{
             .location = 0,
             .size = @sizeOf(InstanceData) * instance_num,
@@ -184,10 +184,10 @@ pub fn main() !void {
     var framebuffers = try createFramebuffers(&gc, allocator, render_pass, swapchain);
     defer destroyFramebuffers(&gc, allocator, framebuffers);
 
-    const pool = try gc.dev.createCommandPool(&.{
+    const pool_cmd = try gc.dev.createCommandPool(&.{
         .queue_family_index = gc.graphics_queue.family,
     }, null);
-    defer gc.dev.destroyCommandPool(pool, null);
+    defer gc.dev.destroyCommandPool(pool_cmd, null);
 
     var shape = try Vertex.Ring(allocator, 32);
     defer shape.deinit(allocator);
@@ -202,7 +202,7 @@ pub fn main() !void {
     defer gc.dev.freeMemory(memory, null);
     try gc.dev.bindBufferMemory(buffer, memory, 0);
 
-    try uploadVertices(&gc, pool, buffer, as_slice);
+    try uploadVertices(&gc, pool_cmd, buffer, as_slice);
 
     const draw_instanced_attempt: ShaderRelated = .{
         .instance_count = instance_num,
@@ -210,9 +210,13 @@ pub fn main() !void {
         .uniform_dsets = uniform_dset.d_set_arr,
         .storage_dsets = storage_dset.d_set_arr,
     };
+
+    const transfer_cmd = try gftx.beginSingleCmd(&gc, pool_cmd);
+    try gftx.endSingleCmd(&gc, transfer_cmd);
+
     var cmdbufs = try createCommandBuffers(
         &gc,
-        pool,
+        pool_cmd,
         allocator,
         buffer,
         swapchain.extent,
@@ -222,7 +226,7 @@ pub fn main() !void {
         as_slice,
         &draw_instanced_attempt,
     );
-    defer destroyCommandBuffers(&gc, pool, allocator, cmdbufs);
+    defer destroyCommandBuffers(&gc, pool_cmd, allocator, cmdbufs);
 
     _ = glfw.setKeyCallback(window, key_callback);
 
@@ -292,10 +296,10 @@ pub fn main() !void {
             destroyFramebuffers(&gc, allocator, framebuffers);
             framebuffers = try createFramebuffers(&gc, allocator, render_pass, swapchain);
 
-            destroyCommandBuffers(&gc, pool, allocator, cmdbufs);
+            destroyCommandBuffers(&gc, pool_cmd, allocator, cmdbufs);
             cmdbufs = try createCommandBuffers(
                 &gc,
-                pool,
+                pool_cmd,
                 allocator,
                 buffer,
                 swapchain.extent,

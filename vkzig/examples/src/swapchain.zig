@@ -386,14 +386,16 @@ const RGBImage = struct {
         self.img = try devk.createImage(img_create_info, null);
         errdefer devk.destroyImage(self.img, null);
 
+        const mem_req = devk.getImageMemoryRequirements(self.img);
         self.devmem = try gc.allocate(
-            devk.getImageMemoryRequirements(self.img),
+            mem_req,
             gfctx.baked.cpu_accesible_memory,
         );
         errdefer devk.freeMemory(self.devmem, null);
 
         try devk.bindImageMemory(self.img, self.devmem, 0);
 
+        // gfctx.createBuffer(gc, gfctx.baked.cpu_accesible_memory, mem_req.size , .{ .transfer_src_bit = true });
         return self;
     }
 

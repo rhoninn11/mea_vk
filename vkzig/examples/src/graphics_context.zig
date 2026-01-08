@@ -85,6 +85,36 @@ pub const baked = struct {
     };
 };
 
+pub fn beginSingleCmd(gc: *const GraphicsContext, cmd_pool: vk.CommandPool) !vk.CommandBuffer {
+    const devk = gc.dev;
+    const cb_alloc_info: vk.CommandBufferAllocateInfo = .{
+        .s_type = .command_buffer_allocate_info,
+        .command_pool = cmd_pool,
+        .level = .primary,
+        .command_buffer_count = 1,
+    };
+
+    var cmd_buff: vk.CommandBuffer = undefined;
+    try devk.allocateCommandBuffers(
+        &cb_alloc_info,
+        @ptrCast(&cmd_buff),
+    );
+    return cmd_buff;
+}
+
+pub fn endSingleCmd(gc: *const GraphicsContext, cmd_buff: vk.CommandBuffer) !void {
+    const devk = gc.dev;
+    try devk.endCommandBuffer(cmd_buff);
+
+    const submmit_info: vk.SubmitInfo = .{
+        .command_buffer_count = 1,
+        .p_command_buffers = @ptrCast(&cmd_buff),
+    };
+    const vkq = gc.graphics_queue.handle;
+    try devk.queueSubmit(vkq, 1, @ptrCast(&submmit_info), .null_handle);
+    try devk.queueWaitIdle(vkq);
+}
+
 pub const BufferData = struct {
     buffer: vk.Buffer,
     memory: vk.DeviceMemory,
