@@ -85,6 +85,36 @@ pub const baked = struct {
         location: u32,
         size: u32,
     };
+
+    const depth_flag: vk.ImageAspectFlags = .{
+        .depth_bit = true,
+    };
+    const color_flag: vk.ImageAspectFlags = .{
+        .color_bit = true,
+    };
+
+    pub const depth_img_subrng: vk.ImageSubresourceRange = .{
+        .aspect_mask = depth_flag,
+        .base_mip_level = 0,
+        .level_count = 1,
+        .base_array_layer = 0,
+        .layer_count = 1,
+    };
+
+    pub const color_img_subrng: vk.ImageSubresourceRange = .{
+        .aspect_mask = color_flag,
+        .base_mip_level = 0,
+        .level_count = 1,
+        .base_array_layer = 0,
+        .layer_count = 1,
+    };
+
+    pub const color_bfr2img_subrng: vk.ImageSubresourceLayers = .{
+        .aspect_mask = color_flag,
+        .mip_level = 0,
+        .base_array_layer = 0,
+        .layer_count = 1,
+    };
 };
 
 // imgs
@@ -109,7 +139,7 @@ pub const RGBImage = struct {
             .tiling = .optimal,
             .usage = .{ .sampled_bit = true },
             .sharing_mode = .exclusive,
-            .initial_layout = .general,
+            .initial_layout = .undefined,
         };
         const vk_img = try devk.createImage(&img_create_info, null);
         errdefer devk.destroyImage(vk_img, null);
@@ -195,21 +225,27 @@ const DepthImage = struct {
     }
 };
 
-pub fn beginSingleCmd(gc: *const GraphicsContext, cmd_pool: vk.CommandPool) !vk.CommandBuffer {
+pub fn beginSingleCmd(gc: *const GraphicsContext, pool: vk.CommandPool) !vk.CommandBuffer {
     const devk = gc.dev;
+    var bfr: vk.CommandBuffer = undefined;
+
     const cb_alloc_info: vk.CommandBufferAllocateInfo = .{
         .s_type = .command_buffer_allocate_info,
-        .command_pool = cmd_pool,
+        .command_pool = pool,
         .level = .primary,
         .command_buffer_count = 1,
     };
-
-    var cmd_buff: vk.CommandBuffer = undefined;
     try devk.allocateCommandBuffers(
         &cb_alloc_info,
-        @ptrCast(&cmd_buff),
+        @ptrCast(&bfr),
     );
-    return cmd_buff;
+
+    const begin_info: vk.CommandBufferBeginInfo = .{
+        .flags = .{ .one_time_submit_bit = true },
+    };
+    try devk.beginCommandBuffer(bfr, &begin_info);
+
+    return bfr;
 }
 
 pub fn endSingleCmd(gc: *const GraphicsContext, cmd_buff: vk.CommandBuffer) !void {

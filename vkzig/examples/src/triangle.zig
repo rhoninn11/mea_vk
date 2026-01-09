@@ -210,42 +210,8 @@ pub fn main() !void {
         .uniform_dsets = uniform_dset.d_set_arr,
         .storage_dsets = storage_dset.d_set_arr,
     };
-
-    var test_img = try gftx.RGBImage.init(&gc, 64, 64);
-    defer test_img.deinit();
-
-    const buff_size = test_img.dvk_size;
-    const src_buff = try gftx.createBuffer(
-        &gc,
-        gftx.baked.cpu_accesible_memory,
-        buff_size,
-        .{ .transfer_src_bit = true },
-    );
-    defer src_buff.deinit(gc.dev);
-    const dst_buff = try gftx.createBuffer(
-        &gc,
-        gftx.baked.cpu_accesible_memory,
-        buff_size,
-        .{ .transfer_dst_bit = true },
-    );
-    defer dst_buff.deinit(gc.dev);
-
-    // TODO: copy comptime texture to buffer
-    // @memcpy(src_data.mapping.?, &baked.rgb_tex);
-
-    const transfer_cmd = try gftx.beginSingleCmd(&gc, pool_cmd);
-    gc.dev.cmdCopyBuffer(
-        transfer_cmd,
-        src_buff.buffer,
-        dst_buff.buffer,
-        1,
-        @ptrCast(&vk.BufferCopy{
-            .dst_offset = 0,
-            .src_offset = 0,
-            .size = test_img.dvk_size,
-        }),
-    );
-    try gftx.endSingleCmd(&gc, transfer_cmd);
+    // image transfer attemtp
+    try image_attempt(&gc, pool_cmd);
 
     var cmdbufs = try createCommandBuffers(
         &gc,
@@ -353,6 +319,87 @@ pub fn main() !void {
 
     try swapchain.waitForAllFences();
     try gc.dev.deviceWaitIdle();
+}
+
+fn image_attempt(gc: *const GraphicsContext, pool_cmds: vk.CommandPool) !void {
+    const devk = gc.dev;
+
+    var test_img = try gftx.RGBImage.init(gc, 64, 64);
+    defer test_img.deinit();
+
+    const buff_size = test_img.dvk_size;
+    const src_buff = try gftx.createBuffer(
+        gc,
+        gftx.baked.cpu_accesible_memory,
+        buff_size,
+        .{ .transfer_src_bit = true },
+    );
+    defer src_buff.deinit(devk);
+    const dst_buff = try gftx.createBuffer(
+        gc,
+        gftx.baked.cpu_accesible_memory,
+        buff_size,
+        .{ .transfer_dst_bit = true },
+    );
+    defer dst_buff.deinit(gc.dev);
+
+    const src_data = baked.rgb_tex;
+    const src_mapping: [*]u8 = @ptrCast(@alignCast(src_buff.mapping));
+    @memcpy(src_mapping[0..src_data.len], src_data[0..src_data.len]);
+
+    {
+        const transfer_once: vk.CommandBuffer = try gftx.beginSingleCmd(gc, pool_cmds);
+
+        // transfer_once.
+        const to_dst: vk.ImageLayout = .transfer_dst_optimal;
+        const bfr_img_cpy: vk.BufferImageCopy = .{
+            .buffer_offset = 0,
+            .buffer_row_length = 0,
+            .buffer_image_height = 0,
+            .image_extent = .{
+                .width = baked.img_side,
+                .height = baked.img_side,
+                .depth = 1,
+            },
+            .image_subresource = gftx.baked.color_bfr2img_subrng,
+            .image_offset = .{ .x = 0, .y = 0, .z = 0 },
+        };
+        devk.cmdCopyBufferToImage(
+            transfer_once,
+            src_buff.buffer,
+            test_img.dvk_img,
+            to_dst,
+            1,
+            @ptrCast(&bfr_img_cpy),
+        );
+        try gftx.endSingleCmd(gc, transfer_once);
+    }
+
+    // const transfer_cmd = try gftx.beginSingleCmd(&gc, pool_cmd);
+    // gc.dev.cmdCopyBuffer(
+    //     transfer_cmd,
+    //     src_buff.buffer,
+    //     dst_buff.buffer,
+    //     1,
+    //     @ptrCast(&vk.BufferCopy{
+    //         .dst_offset = 0,
+    //         .src_offset = 0,
+    //         .size = test_img.dvk_size,
+    //     }),
+    // );
+    // try gftx.endSingleCmd(&gc, transfer_cmd);
+
+    const img_mem_barr: vk.ImageMemoryBarrier = .{
+        .subresource_range = gftx.baked.depth_img_subrng,
+        .old_layout = .undefined,
+        .new_layout = .transfer_dst_optimal,
+        .image = test_img.dvk_img,
+        .dst_queue_family_index = gc.graphics_queue.family,
+        .src_queue_family_index = gc.graphics_queue.family,
+        .src_access_mask = .{},
+        .dst_access_mask = .{ .transfer_write_bit = true },
+    };
+    _ = img_mem_barr;
 }
 
 // przykład przesyłania danych na gpu

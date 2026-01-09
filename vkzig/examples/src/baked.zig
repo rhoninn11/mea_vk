@@ -3,9 +3,9 @@ const vk = @import("third_party/vk.zig");
 // ----------
 
 const pixel_size = 4;
-const img_side = 64;
 const field_side = 4;
 
+pub const img_side = 64;
 pub const rgb_tex = blk: {
     const spot_num = img_side * img_side;
     var lut: [spot_num * pixel_size]u8 = undefined;
