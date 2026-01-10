@@ -150,7 +150,7 @@ pub const DescriptorPrep = struct {
         );
         for (0..len) |i| {
             const buf_info = vk.DescriptorBufferInfo{
-                .buffer = self.buff_arr.items[i].?.buffer,
+                .buffer = self.buff_arr.items[i].?.dvk_bfr,
                 .range = with.size,
                 .offset = 0,
             };

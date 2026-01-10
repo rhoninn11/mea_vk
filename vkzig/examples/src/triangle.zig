@@ -321,6 +321,85 @@ pub fn main() !void {
     try gc.dev.deviceWaitIdle();
 }
 
+const ImgLTranConfig = struct {
+    image: vk.Image,
+    old_layout: vk.ImageLayout,
+    new_layout: vk.ImageLayout,
+    format: ?vk.Format = null,
+    flags: gftx.LTransRelated,
+};
+
+fn imgLTrans(gc: *const GraphicsContext, pool: vk.CommandPool, cfg: ImgLTranConfig) !void {
+    const devk = gc.dev;
+    const family_ignored: u32 = 0;
+    // const zero_mask: u32 = 0;
+
+    const step: vk.CommandBuffer = try gftx.beginSingleCmd(gc, pool);
+
+    const il_barriers: []const vk.ImageMemoryBarrier = &.{
+        vk.ImageMemoryBarrier{
+            .s_type = .image_memory_barrier,
+            .old_layout = cfg.old_layout,
+            .new_layout = cfg.new_layout,
+            .src_queue_family_index = family_ignored,
+            .dst_queue_family_index = family_ignored,
+            .image = cfg.image,
+            .subresource_range = gftx.baked.color_img_subrng,
+            .src_access_mask = cfg.flags.accesses.src,
+            .dst_access_mask = cfg.flags.accesses.dst,
+        },
+    };
+    devk.cmdPipelineBarrier(
+        step,
+        cfg.flags.stages.src,
+        cfg.flags.stages.dst,
+        .{},
+        0,
+        null,
+        0,
+        null,
+        @intCast(il_barriers.len),
+        il_barriers.ptr,
+    );
+
+    try gftx.endSingleCmd(gc, step);
+}
+
+const BfrToImgCpyCfg = struct {
+    image: vk.Image,
+    buffer: vk.Buffer,
+    layout: vk.ImageLayout,
+};
+
+fn bfr2ImgCopy(gc: *const GraphicsContext, pool: vk.CommandPool, cfg: BfrToImgCpyCfg) !void {
+    const devk = gc.dev;
+
+    const step: vk.CommandBuffer = try gftx.beginSingleCmd(gc, pool);
+
+    const bfr_img_cpy: vk.BufferImageCopy = .{
+        .buffer_offset = 0,
+        .buffer_row_length = 0,
+        .buffer_image_height = 0,
+        .image_extent = .{
+            .width = baked.img_side,
+            .height = baked.img_side,
+            .depth = 1,
+        },
+        .image_subresource = gftx.baked.color_bfr2img_sublyr,
+        .image_offset = .{ .x = 0, .y = 0, .z = 0 },
+    };
+    devk.cmdCopyBufferToImage(
+        step,
+        cfg.buffer,
+        cfg.image,
+        cfg.layout,
+        1,
+        @ptrCast(&bfr_img_cpy),
+    );
+
+    try gftx.endSingleCmd(gc, step);
+}
+
 fn image_attempt(gc: *const GraphicsContext, pool_cmds: vk.CommandPool) !void {
     const devk = gc.dev;
 
@@ -335,71 +414,35 @@ fn image_attempt(gc: *const GraphicsContext, pool_cmds: vk.CommandPool) !void {
         .{ .transfer_src_bit = true },
     );
     defer src_buff.deinit(devk);
-    const dst_buff = try gftx.createBuffer(
-        gc,
-        gftx.baked.cpu_accesible_memory,
-        buff_size,
-        .{ .transfer_dst_bit = true },
-    );
-    defer dst_buff.deinit(gc.dev);
 
     const src_data = baked.rgb_tex;
     const src_mapping: [*]u8 = @ptrCast(@alignCast(src_buff.mapping));
     @memcpy(src_mapping[0..src_data.len], src_data[0..src_data.len]);
 
-    {
-        const transfer_once: vk.CommandBuffer = try gftx.beginSingleCmd(gc, pool_cmds);
+    const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
+    const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
 
-        // transfer_once.
-        const to_dst: vk.ImageLayout = .transfer_dst_optimal;
-        const bfr_img_cpy: vk.BufferImageCopy = .{
-            .buffer_offset = 0,
-            .buffer_row_length = 0,
-            .buffer_image_height = 0,
-            .image_extent = .{
-                .width = baked.img_side,
-                .height = baked.img_side,
-                .depth = 1,
-            },
-            .image_subresource = gftx.baked.color_bfr2img_subrng,
-            .image_offset = .{ .x = 0, .y = 0, .z = 0 },
-        };
-        devk.cmdCopyBufferToImage(
-            transfer_once,
-            src_buff.buffer,
-            test_img.dvk_img,
-            to_dst,
-            1,
-            @ptrCast(&bfr_img_cpy),
-        );
-        try gftx.endSingleCmd(gc, transfer_once);
-    }
-
-    // const transfer_cmd = try gftx.beginSingleCmd(&gc, pool_cmd);
-    // gc.dev.cmdCopyBuffer(
-    //     transfer_cmd,
-    //     src_buff.buffer,
-    //     dst_buff.buffer,
-    //     1,
-    //     @ptrCast(&vk.BufferCopy{
-    //         .dst_offset = 0,
-    //         .src_offset = 0,
-    //         .size = test_img.dvk_size,
-    //     }),
-    // );
-    // try gftx.endSingleCmd(&gc, transfer_cmd);
-
-    const img_mem_barr: vk.ImageMemoryBarrier = .{
-        .subresource_range = gftx.baked.depth_img_subrng,
+    try imgLTrans(gc, pool_cmds, .{
         .old_layout = .undefined,
-        .new_layout = .transfer_dst_optimal,
+        .new_layout = dst_layout,
         .image = test_img.dvk_img,
-        .dst_queue_family_index = gc.graphics_queue.family,
-        .src_queue_family_index = gc.graphics_queue.family,
-        .src_access_mask = .{},
-        .dst_access_mask = .{ .transfer_write_bit = true },
-    };
-    _ = img_mem_barr;
+        .format = .r8g8b8a8_srgb,
+        .flags = gftx.baked.undefined_to_transfered,
+    });
+
+    try bfr2ImgCopy(gc, pool_cmds, .{
+        .buffer = src_buff.dvk_bfr,
+        .image = test_img.dvk_img,
+        .layout = dst_layout,
+    });
+
+    try imgLTrans(gc, pool_cmds, .{
+        .old_layout = dst_layout,
+        .new_layout = shader_read_layout,
+        .image = test_img.dvk_img,
+        .format = .r8g8b8a8_srgb,
+        .flags = gftx.baked.transfered_to_fragment_readed,
+    });
 }
 
 // przykład przesyłania danych na gpu

@@ -34,6 +34,20 @@ const DeviceWrapper = vk.DeviceWrapper;
 const Instance = vk.InstanceProxy;
 const Device = vk.DeviceProxy;
 
+pub const LTransRelated = struct {
+    const Stages = struct {
+        src: vk.PipelineStageFlags,
+        dst: vk.PipelineStageFlags,
+    };
+    const Accesses = struct {
+        src: vk.AccessFlags,
+        dst: vk.AccessFlags,
+    };
+
+    stages: Stages,
+    accesses: Accesses,
+};
+
 pub const baked = struct {
     pub const DSetInit = struct {
         usage: UsageType,
@@ -109,11 +123,47 @@ pub const baked = struct {
         .layer_count = 1,
     };
 
-    pub const color_bfr2img_subrng: vk.ImageSubresourceLayers = .{
+    pub const color_bfr2img_sublyr: vk.ImageSubresourceLayers = .{
         .aspect_mask = color_flag,
         .mip_level = 0,
         .base_array_layer = 0,
         .layer_count = 1,
+    };
+
+    pub const undefined_to_transfered: LTransRelated = .{
+        .accesses = .{
+            .src = .{},
+            .dst = .{
+                .transfer_write_bit = true,
+            },
+        },
+        .stages = .{
+            .src = .{
+                .top_of_pipe_bit = true,
+            },
+            .dst = .{
+                .transfer_bit = true,
+            },
+        },
+    };
+
+    pub const transfered_to_fragment_readed: LTransRelated = .{
+        .accesses = .{
+            .src = .{
+                .transfer_write_bit = true,
+            },
+            .dst = .{
+                .shader_read_bit = true,
+            },
+        },
+        .stages = .{
+            .src = .{
+                .transfer_bit = true,
+            },
+            .dst = .{
+                .fragment_shader_bit = true,
+            },
+        },
     };
 };
 
@@ -137,7 +187,10 @@ pub const RGBImage = struct {
             .array_layers = 1,
             .samples = .{ .@"1_bit" = true },
             .tiling = .optimal,
-            .usage = .{ .sampled_bit = true },
+            .usage = .{
+                .sampled_bit = true,
+                .transfer_dst_bit = true,
+            },
             .sharing_mode = .exclusive,
             .initial_layout = .undefined,
         };
@@ -262,13 +315,13 @@ pub fn endSingleCmd(gc: *const GraphicsContext, cmd_buff: vk.CommandBuffer) !voi
 }
 
 pub const BufferData = struct {
-    buffer: vk.Buffer,
-    memory: vk.DeviceMemory,
+    dvk_bfr: vk.Buffer,
+    dvk_mem: vk.DeviceMemory,
     mapping: ?*anyopaque,
 
     pub fn deinit(self: BufferData, dev: vk.DeviceProxy) void {
-        dev.destroyBuffer(self.buffer, null);
-        dev.freeMemory(self.memory, null);
+        dev.destroyBuffer(self.dvk_bfr, null);
+        dev.freeMemory(self.dvk_mem, null);
     }
 };
 pub fn createBuffer(
@@ -296,8 +349,8 @@ pub fn createBuffer(
     try gc.dev.bindBufferMemory(bfr, memory, 0);
 
     return BufferData{
-        .buffer = bfr,
-        .memory = memory,
+        .dvk_bfr = bfr,
+        .dvk_mem = memory,
         .mapping = try devk.mapMemory(memory, 0, r.size, .{}),
     };
 }
@@ -422,8 +475,8 @@ pub const GraphicsContext = struct {
         };
         const test_buffer = try createBuffer(&self, default_memory_flags, 4, usage);
         std.debug.print("+++ test buffor created\n", .{});
-        self.dev.destroyBuffer(test_buffer.buffer, null);
-        self.dev.freeMemory(test_buffer.memory, null);
+        self.dev.destroyBuffer(test_buffer.dvk_bfr, null);
+        self.dev.freeMemory(test_buffer.dvk_mem, null);
 
         return self;
     }
