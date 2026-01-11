@@ -165,6 +165,13 @@ pub const baked = struct {
             },
         },
     };
+
+    pub const identity_mapping: vk.ComponentMapping = .{
+        .a = .identity,
+        .b = .identity,
+        .g = .identity,
+        .r = .identity,
+    };
 };
 
 // imgs
@@ -175,13 +182,16 @@ pub const RGBImage = struct {
     dvk_img: vk.Image,
     dvk_mem: vk.DeviceMemory,
     dvk_size: usize,
+    vk_format: vk.Format,
+    vk_img_view: ?vk.ImageView = null,
 
     pub fn init(gc: *const GraphicsContext, x: u8, y: u8) !Self {
         const devk = gc.dev;
+        const format: vk.Format = .a8b8g8r8_uint_pack32;
 
         const img_create_info: vk.ImageCreateInfo = .{
             .image_type = .@"2d",
-            .format = .a8b8g8r8_uint_pack32,
+            .format = format,
             .extent = .{ .height = y, .width = x, .depth = 1 },
             .mip_levels = 1,
             .array_layers = 1,
@@ -212,11 +222,29 @@ pub const RGBImage = struct {
             .dvk_img = vk_img,
             .dvk_mem = vk_mem,
             .dvk_size = mem_req.size,
+            .vk_format = format,
         };
+    }
+
+    pub fn createImageView(self: *Self, gc: *const GraphicsContext) !void {
+        const devk = gc.dev;
+        const image_view_create_info: vk.ImageViewCreateInfo = .{
+            .image = self.dvk_img,
+            .format = self.vk_format,
+            .view_type = .@"2d",
+            .subresource_range = baked.color_img_subrng,
+            .components = baked.identity_mapping,
+        };
+
+        self.vk_img_view = try devk.createImageView(&image_view_create_info, null);
     }
 
     pub fn deinit(self: *Self) void {
         const devk = self.gc.dev;
+        if (self.vk_img_view) |_img_view| {
+            devk.destroyImageView(_img_view, null);
+        }
+
         devk.freeMemory(self.dvk_mem, null);
         devk.destroyImage(self.dvk_img, null);
     }

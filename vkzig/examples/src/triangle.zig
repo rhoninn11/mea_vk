@@ -426,7 +426,7 @@ fn image_attempt(gc: *const GraphicsContext, pool_cmds: vk.CommandPool) !void {
         .old_layout = .undefined,
         .new_layout = dst_layout,
         .image = test_img.dvk_img,
-        .format = .r8g8b8a8_srgb,
+        .format = test_img.vk_format,
         .flags = gftx.baked.undefined_to_transfered,
     });
 
@@ -440,9 +440,20 @@ fn image_attempt(gc: *const GraphicsContext, pool_cmds: vk.CommandPool) !void {
         .old_layout = dst_layout,
         .new_layout = shader_read_layout,
         .image = test_img.dvk_img,
-        .format = .r8g8b8a8_srgb,
+        .format = test_img.vk_format,
         .flags = gftx.baked.transfered_to_fragment_readed,
     });
+
+    const image_view_create_info: vk.ImageViewCreateInfo = .{
+        .image = test_img.dvk_img,
+        .format = test_img.vk_format,
+        .view_type = .@"2d",
+        .subresource_range = gftx.baked.color_img_subrng,
+        .components = gftx.baked.identity_mapping,
+    };
+
+    const view: vk.ImageView = try devk.createImageView(&image_view_create_info, null);
+    _ = view;
 }
 
 // przykład przesyłania danych na gpu
