@@ -239,7 +239,7 @@ pub const RGBImage = struct {
 
         self.vk_img_view = try devk.createImageView(&image_view_create_info, null);
     }
-    pub fn createSample(self: *Self, gc: *const GraphicsContext) !void {
+    pub fn createSampler(self: *Self, gc: *const GraphicsContext) !void {
         const props = gc.instance.getPhysicalDeviceProperties(gc.pdev);
         const sample_create_info: vk.SamplerCreateInfo = .{
             .mag_filter = .linear,
@@ -695,6 +695,13 @@ fn checkSuitable(
 
     if (try allocateQueues(instance, pdev, allocator, surface)) |allocation| {
         const props = instance.getPhysicalDeviceProperties(pdev);
+        const suppoted_features = instance.getPhysicalDeviceFeatures(pdev);
+
+        const choose_cond = suppoted_features.sampler_anisotropy == .true;
+        if (!choose_cond) {
+            return null;
+        }
+
         return DeviceCandidate{
             .pdev = pdev,
             .props = props,
