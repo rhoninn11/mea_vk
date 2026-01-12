@@ -444,16 +444,8 @@ fn image_attempt(gc: *const GraphicsContext, pool_cmds: vk.CommandPool) !void {
         .flags = gftx.baked.transfered_to_fragment_readed,
     });
 
-    const image_view_create_info: vk.ImageViewCreateInfo = .{
-        .image = test_img.dvk_img,
-        .format = test_img.vk_format,
-        .view_type = .@"2d",
-        .subresource_range = gftx.baked.color_img_subrng,
-        .components = gftx.baked.identity_mapping,
-    };
-
-    const view: vk.ImageView = try devk.createImageView(&image_view_create_info, null);
-    _ = view;
+    try test_img.createImageView(gc);
+    try test_img.createSample(gc);
 }
 
 // przykład przesyłania danych na gpu

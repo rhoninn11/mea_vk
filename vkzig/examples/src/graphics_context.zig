@@ -184,6 +184,7 @@ pub const RGBImage = struct {
     dvk_size: usize,
     vk_format: vk.Format,
     vk_img_view: ?vk.ImageView = null,
+    vk_sampler: ?vk.Sampler = null,
 
     pub fn init(gc: *const GraphicsContext, x: u8, y: u8) !Self {
         const devk = gc.dev;
@@ -238,9 +239,33 @@ pub const RGBImage = struct {
 
         self.vk_img_view = try devk.createImageView(&image_view_create_info, null);
     }
+    pub fn createSample(self: *Self, gc: *const GraphicsContext) !void {
+        const props = gc.instance.getPhysicalDeviceProperties(gc.pdev);
+        const sample_create_info: vk.SamplerCreateInfo = .{
+            .mag_filter = .linear,
+            .min_filter = .linear,
+            .address_mode_u = .repeat,
+            .address_mode_v = .repeat,
+            .address_mode_w = .repeat,
+            .anisotropy_enable = .true,
+            .max_anisotropy = props.limits.max_sampler_anisotropy,
+            .border_color = .int_opaque_black,
+            .unnormalized_coordinates = .false,
+            .compare_enable = .false,
+            .compare_op = .always,
+            .mipmap_mode = .linear,
+            .mip_lod_bias = 0.0,
+            .min_lod = 0.0,
+            .max_lod = 0.0,
+        };
+        self.vk_sampler = try gc.dev.createSampler(&sample_create_info, null);
+    }
 
     pub fn deinit(self: *Self) void {
         const devk = self.gc.dev;
+        if (self.vk_sampler) |_sampler| {
+            devk.destroySampler(_sampler, null);
+        }
         if (self.vk_img_view) |_img_view| {
             devk.destroyImageView(_img_view, null);
         }
