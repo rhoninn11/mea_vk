@@ -72,6 +72,12 @@ pub const baked = struct {
         },
         .descriptor_type = .storage_buffer,
     };
+    const texture_usage: UsageType = .{
+        .usage_flag = .{
+            .storage_buffer_bit = true,
+        },
+        .descriptor_type = .storage_texel_buffer,
+    };
 
     pub const cpu_accesible_memory: vk.MemoryPropertyFlags = .{
         .host_visible_bit = true,
@@ -91,6 +97,13 @@ pub const baked = struct {
         .memory_property = cpu_accesible_memory,
         .shader_stage = .{
             .vertex_bit = true,
+            .fragment_bit = true,
+        },
+    };
+    pub const texture_frag = DSetInit{
+        .usage = texture_usage,
+        .memory_property = cpu_accesible_memory,
+        .shader_stage = .{
             .fragment_bit = true,
         },
     };
@@ -247,7 +260,7 @@ pub const RGBImage = struct {
             .address_mode_u = .repeat,
             .address_mode_v = .repeat,
             .address_mode_w = .repeat,
-            .anisotropy_enable = .true,
+            .anisotropy_enable = .false, // TODO: temprly disabled
             .max_anisotropy = props.limits.max_sampler_anisotropy,
             .border_color = .int_opaque_black,
             .unnormalized_coordinates = .false,

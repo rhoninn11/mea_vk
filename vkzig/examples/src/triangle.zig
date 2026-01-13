@@ -159,6 +159,26 @@ pub fn main() !void {
     );
     defer storage_dset.deinit(allocator);
 
+    // image transfer attemtp
+    const pool_cmd = try gc.dev.createCommandPool(&.{
+        .queue_family_index = gc.graphics_queue.family,
+    }, null);
+    defer gc.dev.destroyCommandPool(pool_cmd, null);
+
+    var image = try first_texture(&gc, pool_cmd);
+    defer image.deinit();
+    var texture_dset = try addons.DescriptorPrep.init(
+        allocator,
+        &gc,
+        swapchain_len,
+        gftx.baked.storage_frag_vert,
+        .{
+            .location = 0,
+            .size = @as(u32, @intCast(image.dvk_size)),
+        },
+    );
+    defer texture_dset.deinit(allocator);
+
     // ||| quest to add uniform data for vertex rendering
 
     const dsets = [_]vk.DescriptorSetLayout{
@@ -184,11 +204,6 @@ pub fn main() !void {
     var framebuffers = try createFramebuffers(&gc, allocator, render_pass, swapchain);
     defer destroyFramebuffers(&gc, allocator, framebuffers);
 
-    const pool_cmd = try gc.dev.createCommandPool(&.{
-        .queue_family_index = gc.graphics_queue.family,
-    }, null);
-    defer gc.dev.destroyCommandPool(pool_cmd, null);
-
     var shape = try Vertex.Ring(allocator, 32);
     defer shape.deinit(allocator);
 
@@ -210,8 +225,6 @@ pub fn main() !void {
         .uniform_dsets = uniform_dset.d_set_arr,
         .storage_dsets = storage_dset.d_set_arr,
     };
-    // image transfer attemtp
-    try image_attempt(&gc, pool_cmd);
 
     var cmdbufs = try createCommandBuffers(
         &gc,
@@ -400,11 +413,10 @@ fn bfr2ImgCopy(gc: *const GraphicsContext, pool: vk.CommandPool, cfg: BfrToImgCp
     try gftx.endSingleCmd(gc, step);
 }
 
-fn image_attempt(gc: *const GraphicsContext, pool_cmds: vk.CommandPool) !void {
+fn first_texture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gftx.RGBImage {
     const devk = gc.dev;
 
     var test_img = try gftx.RGBImage.init(gc, 64, 64);
-    defer test_img.deinit();
 
     const buff_size = test_img.dvk_size;
     const src_buff = try gftx.createBuffer(
@@ -422,7 +434,7 @@ fn image_attempt(gc: *const GraphicsContext, pool_cmds: vk.CommandPool) !void {
     const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
     const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
 
-    try imgLTrans(gc, pool_cmds, .{
+    try imgLTrans(gc, with_pool, .{
         .old_layout = .undefined,
         .new_layout = dst_layout,
         .image = test_img.dvk_img,
@@ -430,13 +442,13 @@ fn image_attempt(gc: *const GraphicsContext, pool_cmds: vk.CommandPool) !void {
         .flags = gftx.baked.undefined_to_transfered,
     });
 
-    try bfr2ImgCopy(gc, pool_cmds, .{
+    try bfr2ImgCopy(gc, with_pool, .{
         .buffer = src_buff.dvk_bfr,
         .image = test_img.dvk_img,
         .layout = dst_layout,
     });
 
-    try imgLTrans(gc, pool_cmds, .{
+    try imgLTrans(gc, with_pool, .{
         .old_layout = dst_layout,
         .new_layout = shader_read_layout,
         .image = test_img.dvk_img,
@@ -445,7 +457,9 @@ fn image_attempt(gc: *const GraphicsContext, pool_cmds: vk.CommandPool) !void {
     });
 
     try test_img.createImageView(gc);
-    try test_img.createSample(gc);
+    try test_img.createSampler(gc);
+
+    return test_img;
 }
 
 // przykład przesyłania danych na gpu
