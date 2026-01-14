@@ -26,13 +26,19 @@ struct PerInstanceData {
 layout(set = 1, binding = 0) buffer InstanceData{
     PerInstanceData per_instance[];
 } storage;
+layout(set = 2, binding = 0) uniform sampler2D firstSampler;
 
 layout(location = 0) out vec4 f_color;
 
 void main() {
     float progress = v_color.r;
-    float spread = v_color.g;
+    vec2 uv = v_color.rg;
+    float spread = v_color.b;
+    vec4 tex_color = texture(firstSampler, uv);
     vec3 cos_in = vec3(progress-spread, progress, progress+spread) * TAU;
     vec3 emf_color_approx = (-cos(cos_in) + 1.0)*0.5-0.5; 
+    
+    //vec3 mixed = emf_color_approx*tex_color.rgb;
+
     f_color = vec4(emf_color_approx, 1.0);
 }

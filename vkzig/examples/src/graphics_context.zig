@@ -73,10 +73,11 @@ pub const baked = struct {
         .descriptor_type = .storage_buffer,
     };
     const texture_usage: UsageType = .{
+        // buffer in descriptor is not used by texture btw.
         .usage_flag = .{
             .storage_buffer_bit = true,
         },
-        .descriptor_type = .storage_texel_buffer,
+        .descriptor_type = .combined_image_sampler,
     };
 
     pub const cpu_accesible_memory: vk.MemoryPropertyFlags = .{

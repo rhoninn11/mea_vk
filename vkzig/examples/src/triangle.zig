@@ -171,7 +171,7 @@ pub fn main() !void {
         allocator,
         &gc,
         swapchain_len,
-        gftx.baked.storage_frag_vert,
+        gftx.baked.texture_frag,
         .{
             .location = 0,
             .size = @as(u32, @intCast(image.dvk_size)),
@@ -184,6 +184,7 @@ pub fn main() !void {
     const dsets = [_]vk.DescriptorSetLayout{
         uniform_dset._d_set_layout.?,
         storage_dset._d_set_layout.?,
+        texture_dset._d_set_layout.?,
     };
 
     const pipeline_layout = try gc.dev.createPipelineLayout(&.{

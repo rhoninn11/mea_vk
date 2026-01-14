@@ -41,50 +41,54 @@ pub const Vertex = struct {
     color: [3]f32,
 
     pub fn Ring(alloc: std.mem.Allocator, len: u8) !std.ArrayList(Vertex) {
-        const vert_num: usize = @as(usize, len) * 2;
-
         const PreStage = struct {
             pos: [2]f32,
-            progres: f32,
+            progress: f32,
+            v: f32,
         };
+
+        const vert_num: usize = @as(usize, len) * 2;
+
         var stage_arr: std.ArrayList(PreStage) = .empty;
         try stage_arr.resize(alloc, vert_num);
-        defer stage_arr.deinit(alloc);
+        defer stage_arr.deinit(alloc); //intermediate cals
 
-        var stage_slice = stage_arr.items;
+        var stage_0 = stage_arr.items;
         for (0..len) |i| {
             const flen: f32 = @floatFromInt(len - 1);
             const fi: f32 = @floatFromInt(i);
             const progress = fi / flen;
 
             const phi = std.math.tau * progress;
-            const stamp = PreStage{
-                .progres = progress,
+            var stamp = PreStage{
+                .progress = progress,
                 .pos = .{
                     std.math.cos(phi),
                     std.math.sin(phi),
                 },
+                .v = 0.0,
             };
-            stage_slice[i * 2] = stamp;
-            stage_slice[i * 2 + 1] = stamp;
+            stage_0[i * 2] = stamp;
+            stamp.v = 1.0;
+            stage_0[i * 2 + 1] = stamp;
         }
 
         const r = 0.6;
         const r_delta = 0.3;
         for (0..len) |pre_i| {
             const stage_i = pre_i * 2;
-            const base = stage_slice[stage_i].pos;
+            const base = stage_0[stage_i].pos;
 
-            stage_slice[stage_i].pos = mul2D(base, r);
-            stage_slice[stage_i + 1].pos = mul2D(base, r + r_delta);
+            stage_0[stage_i].pos = mul2D(base, r);
+            stage_0[stage_i + 1].pos = mul2D(base, r + r_delta);
         }
 
         const segments = len - 1;
         const vert_size = @as(usize, segments) * 6;
-        var vert_arr: std.ArrayList(Vertex) = .empty;
-        try vert_arr.resize(alloc, vert_size);
 
-        var vert_here = vert_arr.items;
+        var stage_vert_arr: std.ArrayList(Vertex) = .empty;
+        try stage_vert_arr.resize(alloc, vert_size);
+        var stage_vert = stage_vert_arr.items;
         // const delta: [2]f32 = .{ 0.05, 0.07 };
         // var off: [2]f32 = .{ 0, 0 };
 
@@ -94,14 +98,14 @@ pub const Vertex = struct {
 
             const pos_offs = [_]u8{ 0, 1, 2, 2, 1, 3 };
             for (pos_offs, 0..) |pos_off, jj| {
-                const stage = stage_slice[pos_i + pos_off];
-                vert_here[tri_pair_i + jj] = .{
+                const stage = stage_0[pos_i + pos_off];
+                stage_vert[tri_pair_i + jj] = .{
                     .pos = stage.pos,
-                    .color = .{ stage.progres, 0, 0 },
+                    .color = .{ stage.progress, stage.v, 0 },
                 };
             }
         }
-        return vert_arr;
+        return stage_vert_arr;
     }
 };
 

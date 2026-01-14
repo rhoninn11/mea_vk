@@ -175,8 +175,8 @@ pub const DescriptorPrep = struct {
             };
             const img_info = vk.DescriptorImageInfo{
                 .image_layout = .shader_read_only_optimal,
-                .image_view = .null_handle,
-                .sampler = .null_handle,
+                .image_view = .null_handle, // aaaa
+                .sampler = .null_handle, // aaaa
             };
             const write_image_dsc_set = vk.WriteDescriptorSet{
                 .s_type = .write_descriptor_set,

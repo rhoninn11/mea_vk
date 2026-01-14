@@ -1,5 +1,12 @@
 #version 450
 
+struct PerInstanceData {
+    vec2 offset_2d;
+    vec2 wave_offset;
+    vec4 not_used_4d_0;
+    vec4 not_used_4d_1;
+    vec4 not_used_4d_2;
+};
 
 // whole data has is 16 x f32
 layout(set = 0, binding = 0) uniform UniformData{
@@ -9,15 +16,6 @@ layout(set = 0, binding = 0) uniform UniformData{
     vec4 temporal;
     vec4 not_used_4d_2;
 } b_ubo;
-
-struct PerInstanceData {
-    vec2 offset_2d;
-    vec2 wave_offset;
-    vec4 not_used_4d_0;
-    vec4 not_used_4d_1;
-    vec4 not_used_4d_2;
-};
-
 layout(set = 1, binding = 0) buffer readonly InstanceData{
     PerInstanceData per_instance[];
 } storage;
@@ -40,5 +38,6 @@ void main() {
 
     gl_Position = vec4(prescaled_pos + instance_offset + osc_offset, 0, 1.0);
     v_color.r = a_color.r;
-    v_color.g = spread_offset;
+    v_color.g = a_color.g;
+    v_color.b = spread_offset;
 }
