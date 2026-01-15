@@ -20,7 +20,7 @@ layout(set = 1, binding = 0) buffer readonly InstanceData{
     PerInstanceData per_instance[];
 } storage;
 
-layout(location = 0) in vec2 a_pos;
+layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_color;
 layout(location = 0) out vec3 v_color;
 
@@ -28,7 +28,7 @@ void main() {
     PerInstanceData per_inst = storage.per_instance[gl_InstanceIndex];
 
     vec2 instance_offset = per_inst.offset_2d;
-    vec2 prescaled_pos = a_pos * b_ubo.scale_2d;
+    vec2 prescaled_pos = a_pos.xy * b_ubo.scale_2d;
 
     float phase_offset = per_inst.wave_offset.x;
     float spread_offset = per_inst.wave_offset.y;

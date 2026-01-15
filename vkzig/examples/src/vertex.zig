@@ -23,7 +23,7 @@ pub const Vertex = struct {
         .{
             .binding = 0,
             .location = 0,
-            .format = .r32g32_sfloat,
+            .format = .r32g32b32_sfloat,
             .offset = @offsetOf(Vertex, "pos"),
         },
         .{
@@ -37,7 +37,7 @@ pub const Vertex = struct {
     pub const GeoRaw = []Self;
     pub const s_fields_num = before.structDeclNum(Self);
 
-    pos: [2]f32,
+    pos: [3]f32,
     color: [3]f32,
 
     pub fn Ring(alloc: std.mem.Allocator, len: u8) !std.ArrayList(Vertex) {
@@ -100,7 +100,7 @@ pub const Vertex = struct {
             for (pos_offs, 0..) |pos_off, jj| {
                 const stage = stage_0[pos_i + pos_off];
                 stage_vert[tri_pair_i + jj] = .{
-                    .pos = stage.pos,
+                    .pos = .{ stage.pos[0], stage.pos[1], 0 },
                     .color = .{ stage.progress, stage.v, 0 },
                 };
             }
