@@ -1,6 +1,6 @@
 const std = @import("std");
 const vk = @import("third_party/vk.zig");
-const gc = @import("graphics_context.zig");
+const gftx = @import("graphics_context.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -75,27 +75,28 @@ pub const DescriptorPrep = struct {
     const Self = @This();
     d_set_layout_arr: std.ArrayList(vk.DescriptorSetLayout) = .empty,
     d_set_arr: std.ArrayList(vk.DescriptorSet) = .empty,
-    buff_arr: std.ArrayList(?gc.BufferData) = .empty,
+    buff_arr: std.ArrayList(?gftx.BufferData) = .empty,
 
-    gctx: *const gc.GraphicsContext,
+    gc: *const gftx.GraphicsContext,
     _d_set_layout: ?vk.DescriptorSetLayout = null,
     _d_pool: ?vk.DescriptorPool = null,
 
     pub fn init(
         alloc: Allocator,
-        _gc: *const gc.GraphicsContext,
+        gc: *const gftx.GraphicsContext,
         len: usize,
-        using: gc.baked.DSetInit,
-        with: gc.baked.UniformInfo,
+        using: gftx.baked.DSetInit,
+        with: gftx.baked.UniformInfo,
+        img: ?gftx.RGBImage,
     ) !Self {
         const len_u32: u32 = @intCast(len);
 
         var self: Self = .{
-            .gctx = _gc,
+            .gc = gc,
         };
 
         //dynamic arrays alloc
-        const devk = self.gctx.dev;
+        const devk = self.gc.dev;
         errdefer self.deinit(alloc);
         try self.d_set_layout_arr.resize(alloc, len);
         try self.buff_arr.resize(alloc, len);
@@ -120,8 +121,8 @@ pub const DescriptorPrep = struct {
         for (0..len) |i| {
             self.d_set_layout_arr.items[i] = self._d_set_layout.?;
             self.buff_arr.items[i] = null;
-            self.buff_arr.items[i] = try gc.createBuffer(
-                self.gctx,
+            self.buff_arr.items[i] = try gftx.createBuffer(
+                self.gc,
                 using.memory_property,
                 with.size,
                 using.usage.usage_flag,
@@ -136,14 +137,14 @@ pub const DescriptorPrep = struct {
 
         // std.debug.print("+++ pool is {s}\n", .{@tagName(p_size.type)});
 
-        self._d_pool = try self.gctx.dev.createDescriptorPool(&vk.DescriptorPoolCreateInfo{
+        self._d_pool = try self.gc.dev.createDescriptorPool(&vk.DescriptorPoolCreateInfo{
             .s_type = .descriptor_pool_create_info,
             .p_pool_sizes = p_size.ptr,
             .pool_size_count = @intCast(p_size.len),
             .max_sets = len_u32,
         }, null);
 
-        try self.gctx.dev.allocateDescriptorSets(
+        try self.gc.dev.allocateDescriptorSets(
             &vk.DescriptorSetAllocateInfo{
                 .s_type = .descriptor_set_allocate_info,
                 .descriptor_pool = self._d_pool.?,
@@ -157,43 +158,42 @@ pub const DescriptorPrep = struct {
         // var hmm: std.ArrayList(vk.WriteDescriptorSet) = .empty;
 
         for (0..len) |i| {
-            const buf_info = vk.DescriptorBufferInfo{
-                .buffer = self.buff_arr.items[i].?.dvk_bfr,
-                .range = with.size,
-                .offset = 0,
-            };
-            const write_buffer_dsc_set = vk.WriteDescriptorSet{
-                .s_type = .write_descriptor_set,
-                .dst_set = self.d_set_arr.items[i],
-                .dst_binding = with.location,
-                .dst_array_element = 0,
-                .descriptor_type = using.usage.descriptor_type,
-                .descriptor_count = 1,
-                .p_buffer_info = @ptrCast(&buf_info),
-                .p_image_info = &.{},
-                .p_texel_buffer_view = &.{},
-            };
-            const img_info = vk.DescriptorImageInfo{
-                .image_layout = .shader_read_only_optimal,
-                .image_view = .null_handle, // aaaa
-                .sampler = .null_handle, // aaaa
-            };
-            const write_image_dsc_set = vk.WriteDescriptorSet{
-                .s_type = .write_descriptor_set,
-                .dst_set = self.d_set_arr.items[i],
-                .dst_binding = with.location,
-                .dst_array_element = 0,
-                .descriptor_type = using.usage.descriptor_type,
-                .descriptor_count = 1,
-                .p_buffer_info = &.{},
-                .p_image_info = @ptrCast(&img_info),
-                .p_texel_buffer_view = &.{},
-            };
-
             if (using.usage.descriptor_type == .combined_image_sampler) {
-                self.gctx.dev.updateDescriptorSets(1, @ptrCast(&write_image_dsc_set), 0, null);
+                const img_info = vk.DescriptorImageInfo{
+                    .image_layout = .shader_read_only_optimal,
+                    .image_view = img.?.vk_img_view.?,
+                    .sampler = img.?.vk_sampler.?,
+                };
+                const write_image_dsc_set = vk.WriteDescriptorSet{
+                    .s_type = .write_descriptor_set,
+                    .dst_set = self.d_set_arr.items[i],
+                    .dst_binding = with.location,
+                    .dst_array_element = 0,
+                    .descriptor_type = using.usage.descriptor_type,
+                    .descriptor_count = 1,
+                    .p_buffer_info = &.{},
+                    .p_image_info = @ptrCast(&img_info),
+                    .p_texel_buffer_view = &.{},
+                };
+                self.gc.dev.updateDescriptorSets(1, @ptrCast(&write_image_dsc_set), 0, null);
             } else {
-                self.gctx.dev.updateDescriptorSets(1, @ptrCast(&write_buffer_dsc_set), 0, null);
+                const buf_info = vk.DescriptorBufferInfo{
+                    .buffer = self.buff_arr.items[i].?.dvk_bfr,
+                    .range = with.size,
+                    .offset = 0,
+                };
+                const write_buffer_dsc_set = vk.WriteDescriptorSet{
+                    .s_type = .write_descriptor_set,
+                    .dst_set = self.d_set_arr.items[i],
+                    .dst_binding = with.location,
+                    .dst_array_element = 0,
+                    .descriptor_type = using.usage.descriptor_type,
+                    .descriptor_count = 1,
+                    .p_buffer_info = @ptrCast(&buf_info),
+                    .p_image_info = &.{},
+                    .p_texel_buffer_view = &.{},
+                };
+                self.gc.dev.updateDescriptorSets(1, @ptrCast(&write_buffer_dsc_set), 0, null);
             }
         }
 
@@ -202,17 +202,17 @@ pub const DescriptorPrep = struct {
 
     pub fn deinit(self: *Self, alloc: Allocator) void {
         if (self._d_pool) |d_pool| {
-            self.gctx.dev.destroyDescriptorPool(d_pool, null);
+            self.gc.dev.destroyDescriptorPool(d_pool, null);
         }
 
         for (self.buff_arr.items) |possible_buff| {
             if (possible_buff) |buff| {
-                buff.deinit(self.gctx.dev);
+                buff.deinit(self.gc.dev);
             }
         }
 
         if (self._d_set_layout) |layout| {
-            self.gctx.dev.destroyDescriptorSetLayout(layout, null);
+            self.gc.dev.destroyDescriptorSetLayout(layout, null);
         }
 
         self.d_set_arr.deinit(alloc);

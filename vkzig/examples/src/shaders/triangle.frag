@@ -41,4 +41,5 @@ void main() {
     //vec3 mixed = emf_color_approx*tex_color.rgb;
 
     f_color = vec4(emf_color_approx, 1.0);
+    f_color = f_color*tex_color;
 }

@@ -202,7 +202,7 @@ pub const RGBImage = struct {
 
     pub fn init(gc: *const GraphicsContext, x: u8, y: u8) !Self {
         const devk = gc.dev;
-        const format: vk.Format = .a8b8g8r8_uint_pack32;
+        const format: vk.Format = .a8b8g8r8_srgb_pack32;
 
         const img_create_info: vk.ImageCreateInfo = .{
             .image_type = .@"2d",

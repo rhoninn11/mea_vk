@@ -140,6 +140,7 @@ pub fn main() !void {
             .location = 0,
             .size = @sizeOf(UniformData),
         },
+        null,
     );
     defer uniform_dset.deinit(allocator);
 
@@ -156,6 +157,7 @@ pub fn main() !void {
             .location = 0,
             .size = @sizeOf(InstanceData) * instance_num,
         },
+        null,
     );
     defer storage_dset.deinit(allocator);
 
@@ -176,6 +178,7 @@ pub fn main() !void {
             .location = 0,
             .size = @as(u32, @intCast(image.dvk_size)),
         },
+        image,
     );
     defer texture_dset.deinit(allocator);
 
@@ -225,6 +228,7 @@ pub fn main() !void {
         .pipeline_layout = pipeline_layout,
         .uniform_dsets = uniform_dset.d_set_arr,
         .storage_dsets = storage_dset.d_set_arr,
+        .texture_dset = texture_dset.d_set_arr.items[0],
     };
 
     var cmdbufs = try createCommandBuffers(
@@ -527,6 +531,7 @@ const ShaderRelated = struct {
     pipeline_layout: vk.PipelineLayout,
     uniform_dsets: std.ArrayList(vk.DescriptorSet),
     storage_dsets: std.ArrayList(vk.DescriptorSet),
+    texture_dset: vk.DescriptorSet,
 };
 
 // a tutaj odbywa się taka jakby prekompilacja renderingu ?...
@@ -599,26 +604,32 @@ fn createCommandBuffers(
             @ptrCast(&buffer),
             &offset,
         );
+        const hmm: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
+            shader_realted.uniform_dsets.items[i],
+            shader_realted.storage_dsets.items[i],
+            shader_realted.texture_dset,
+        };
+
         gc.dev.cmdBindDescriptorSets(
             cmdbuf,
             .graphics,
             shader_realted.pipeline_layout,
             0,
-            1,
-            @ptrCast(&shader_realted.uniform_dsets.items[i]),
+            @intCast(hmm.len),
+            hmm.ptr,
             0,
             null,
         );
-        gc.dev.cmdBindDescriptorSets(
-            cmdbuf,
-            .graphics,
-            shader_realted.pipeline_layout,
-            1,
-            1,
-            @ptrCast(&shader_realted.storage_dsets.items[i]),
-            0,
-            null,
-        );
+        // gc.dev.cmdBindDescriptorSets(
+        //     cmdbuf,
+        //     .graphics,
+        //     shader_realted.pipeline_layout,
+        //     1,
+        //     1,
+        //     @ptrCast(&shader_realted.storage_dsets.items[i]),
+        //     0,
+        //     null,
+        // );
         gc.dev.cmdDraw(
             cmdbuf,
             @intCast(ojejoje.len),
