@@ -40,12 +40,23 @@ pub const Vertex = struct {
     pos: [3]f32,
     color: [3]f32,
 
+    const Multipler = struct {
+        times_one: u32,
+        times_vert: u32,
+    };
+
     pub fn Ring(alloc: std.mem.Allocator, len: u8) !std.ArrayList(Vertex) {
         const PreStage = struct {
             pos: [2]f32,
             progress: f32,
             v: f32,
         };
+
+        const group = Multipler{
+            .times_one = @intCast(len),
+            .times_vert = @intCast(len * 2),
+        };
+        _ = group;
 
         const vert_num: usize = @as(usize, len) * 2;
 
@@ -55,9 +66,9 @@ pub const Vertex = struct {
 
         var stage_0 = stage_arr.items;
         for (0..len) |i| {
-            const flen: f32 = @floatFromInt(len - 1);
-            const fi: f32 = @floatFromInt(i);
-            const progress = fi / flen;
+            // const flen: f32 = @floatFromInt(len - 1);
+            // const fi: f32 = @floatFromInt(i);
+            const progress = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(len - 1));
 
             const phi = std.math.tau * progress;
             var stamp = PreStage{

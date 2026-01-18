@@ -7,11 +7,14 @@ const gftx = @import("graphics_context.zig");
 const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
 const Swapchain = @import("swapchain.zig").Swapchain;
 const addons = @import("addons.zig");
+
 const baked = @import("baked.zig");
+
 const helpers = @import("helpers.zig");
 const vertex = @import("vertex.zig");
 
 const Vertex = vertex.Vertex;
+
 const BufforingVert = Buffering(Vertex);
 const Allocator = std.mem.Allocator;
 
@@ -88,10 +91,6 @@ pub fn main() !void {
         null,
     );
     defer glfw.destroyWindow(window);
-    var access = EasyAcces{
-        .window = window,
-    };
-    access.vkctx = null;
 
     // According to the GLFW docs:
     //
@@ -118,6 +117,11 @@ pub fn main() !void {
     defer gc.deinit();
 
     std.log.debug("Using device: {s}", .{gc.deviceName()});
+    const access = EasyAcces{
+        .window = window,
+        .vkctx = &gc,
+    };
+    _ = access;
 
     var swapchain = try Swapchain.init(&gc, allocator, extent);
     defer swapchain.deinit();
@@ -144,9 +148,15 @@ pub fn main() !void {
     );
     defer uniform_dset.deinit(allocator);
 
-    const InstanceData = struct {
-        data_2d: [16]f32 = undefined,
+    const InstanceData2 = struct {
+        offset_2d: [2]f32 = undefined,
+        other_offsets: [2]f32 = undefined,
+        new_usage: [4]f32 = undefined,
+        empty_rest: [8]f32 = undefined,
     };
+    const fake: InstanceData2 = undefined;
+    _ = fake;
+
     const instance_num = 64;
     var storage_dset = try addons.DescriptorPrep.init(
         allocator,
@@ -155,7 +165,7 @@ pub fn main() !void {
         gftx.baked.storage_frag_vert,
         .{
             .location = 0,
-            .size = @sizeOf(InstanceData) * instance_num,
+            .size = @sizeOf(InstanceData2) * instance_num,
         },
         null,
     );
@@ -258,22 +268,37 @@ pub fn main() !void {
     const spread_base = -0.2;
     const spread_delta = along * 0.2;
 
-    for (storage_dset.buff_arr.items) |possible_buffer| {
-        const storage = possible_buffer.?;
-        const storagePtr: *[instance_num]InstanceData = @ptrCast(@alignCast(storage.mapping.?));
-        for (0..instance_num) |i| {
-            const xi = @mod(i, 8);
-            const yi = i / 8;
-            const i_f: f32 = @floatFromInt(i);
-            const x_f: f32 = @floatFromInt(xi);
-            const y_f: f32 = @floatFromInt(yi);
+    const seed: u64 = @intCast(std.time.timestamp()); // more random
+    // const seed: u64 = 42; // deterministic?
+    var rng = std.Random.DefaultPrng.init(seed);
+    var rnd_gen = rng.random();
 
-            var empty: InstanceData = undefined;
-            empty.data_2d[0] = spatial_base + x_f * spatial_delta;
-            empty.data_2d[1] = spatial_base + y_f * spatial_delta;
-            empty.data_2d[2] = i_f * phase_delta;
-            empty.data_2d[3] = spread_base + i_f * spread_delta;
-            storagePtr.*[i] = empty;
+    // const hmm = rnd_gen.float(f32);
+    var bakers: std.ArrayList(f32) = .empty;
+    try bakers.resize(allocator, instance_num);
+    for (0..bakers.items.len) |i| bakers.items[i] = rnd_gen.float(f32);
+    for (bakers.items) |val| std.debug.print("val: {d}\n", .{val});
+
+    {
+        defer bakers.deinit(allocator);
+        for (storage_dset.buff_arr.items) |possible_buffer| {
+            const storage = possible_buffer.?;
+            const storagePtr: *[instance_num]InstanceData2 = @ptrCast(@alignCast(storage.mapping.?));
+            for (0..instance_num) |i| {
+                const xi = @mod(i, 8);
+                const yi = i / 8;
+                const i_f: f32 = @floatFromInt(i);
+                const x_f: f32 = @floatFromInt(xi);
+                const y_f: f32 = @floatFromInt(yi);
+
+                var fresh_one: InstanceData2 = undefined;
+                fresh_one.offset_2d[0] = spatial_base + x_f * spatial_delta;
+                fresh_one.offset_2d[1] = spatial_base + y_f * spatial_delta;
+                fresh_one.other_offsets[0] = i_f * phase_delta;
+                fresh_one.other_offsets[1] = spread_base + i_f * spread_delta;
+                fresh_one.new_usage[0] = bakers.items[i]; //random here
+                storagePtr.*[i] = fresh_one;
+            }
         }
     }
 
