@@ -12,7 +12,7 @@ layout(set = 0, binding = 0) uniform UniformData{
     vec4 not_used_4d_2;
 } b_ubo;
 
-layout(set = 2, binding = 0) uniform sampler2D firstSampler;
+layout(set = 2, binding = 0) uniform sampler2D texSampler;
 
 layout(location = 0) in vec3 v_color;
 layout(location = 1) in float v_progress;
@@ -23,7 +23,7 @@ void main() {
     float progress = v_progress;
     vec2 uv = v_color.rg;
     float spread = v_color.b;
-    vec4 tex_color = texture(firstSampler, uv);
+    vec4 tex_color = texture(texSampler, uv);
     vec3 cos_in = vec3(progress-spread, progress, progress+spread) * TAU;
     vec3 emf_color_approx = (-cos(cos_in) + 1.0)*0.5-0.5; 
     

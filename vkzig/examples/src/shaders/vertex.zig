@@ -14,7 +14,7 @@ const UniformData = extern struct {
     not_used_4d_1: [4]f32,
 };
 
-const PerInstanceData = struct {
+const PerInstanceData = extern struct {
     offset_2d: [2]f32,
     other_offsets: [2]f32,
     new_usage: [4]f32,

@@ -129,11 +129,34 @@ pub fn main() !void {
     swapchain_len = @intCast(swapchain.swap_images.len);
     std.debug.print("+++ {d} buffered video frames\n", .{swapchain_len});
 
-    // * swapchain_len
-    // ||| quest to add uniform data for vertex rendering
+    // texture image
+    const pool_cmd = try gc.dev.createCommandPool(&.{
+        .queue_family_index = gc.graphics_queue.family,
+    }, null);
+    defer gc.dev.destroyCommandPool(pool_cmd, null);
+
+    var image = try first_texture(&gc, pool_cmd);
+    defer image.deinit();
+
+    // ||| added uniform, storage and texture
+    const GroupData = struct {
+        osc_scale: [2]f32 = undefined,
+        scale_2d: [2]f32 = undefined,
+        not_used_4d_0: [4]f32 = undefined,
+        termoral: [4]f32 = undefined,
+        not_used_4d_1: [4]f32 = undefined,
+    };
     const UniformData = struct {
         data_2d: [16]f32 = undefined,
     };
+
+    const PerInstance = struct {
+        offset_2d: [2]f32 = undefined,
+        other_offsets: [2]f32 = undefined,
+        new_usage: [4]f32 = undefined,
+        empty_rest: [8]f32 = undefined,
+    };
+    _ = GroupData;
 
     var uniform_dset = try addons.DescriptorPrep.init(
         allocator,
@@ -148,15 +171,6 @@ pub fn main() !void {
     );
     defer uniform_dset.deinit(allocator);
 
-    const InstanceData2 = struct {
-        offset_2d: [2]f32 = undefined,
-        other_offsets: [2]f32 = undefined,
-        new_usage: [4]f32 = undefined,
-        empty_rest: [8]f32 = undefined,
-    };
-    const fake: InstanceData2 = undefined;
-    _ = fake;
-
     const instance_num = 64;
     var storage_dset = try addons.DescriptorPrep.init(
         allocator,
@@ -165,20 +179,12 @@ pub fn main() !void {
         gftx.baked.storage_frag_vert,
         .{
             .location = 0,
-            .size = @sizeOf(InstanceData2) * instance_num,
+            .size = @sizeOf(PerInstance) * instance_num,
         },
         null,
     );
     defer storage_dset.deinit(allocator);
 
-    // image transfer attemtp
-    const pool_cmd = try gc.dev.createCommandPool(&.{
-        .queue_family_index = gc.graphics_queue.family,
-    }, null);
-    defer gc.dev.destroyCommandPool(pool_cmd, null);
-
-    var image = try first_texture(&gc, pool_cmd);
-    defer image.deinit();
     var texture_dset = try addons.DescriptorPrep.init(
         allocator,
         &gc,
@@ -274,16 +280,24 @@ pub fn main() !void {
     var rnd_gen = rng.random();
 
     // const hmm = rnd_gen.float(f32);
-    var bakers: std.ArrayList(f32) = .empty;
-    try bakers.resize(allocator, instance_num);
-    for (0..bakers.items.len) |i| bakers.items[i] = rnd_gen.float(f32);
-    for (bakers.items) |val| std.debug.print("val: {d}\n", .{val});
+    var storage_baker: std.ArrayList(f32) = .empty;
+    try storage_baker.resize(allocator, instance_num);
+
+    for (0..instance_num) |i| {
+        //random
+        storage_baker.items[i] = rnd_gen.float(f32);
+        //progression
+        const progress = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(instance_num - 1));
+        storage_baker.items[i] = progress;
+        //constant wins
+        storage_baker.items[i] = -0.125;
+    }
 
     {
-        defer bakers.deinit(allocator);
+        defer storage_baker.deinit(allocator);
         for (storage_dset.buff_arr.items) |possible_buffer| {
             const storage = possible_buffer.?;
-            const storagePtr: *[instance_num]InstanceData2 = @ptrCast(@alignCast(storage.mapping.?));
+            const storagePtr: *[instance_num]PerInstance = @ptrCast(@alignCast(storage.mapping.?));
             for (0..instance_num) |i| {
                 const xi = @mod(i, 8);
                 const yi = i / 8;
@@ -291,12 +305,21 @@ pub fn main() !void {
                 const x_f: f32 = @floatFromInt(xi);
                 const y_f: f32 = @floatFromInt(yi);
 
-                var fresh_one: InstanceData2 = undefined;
+                const x_center: f32 = (8 - 1) / 2;
+                const y_center: f32 = (8 - 1) / 2;
+
+                const x_d = (x_center - x_f) / 3.5;
+                const y_d = (y_center - y_f) / 3.5;
+
+                const dist = std.math.sqrt(x_d * x_d + y_d * y_d);
+
+                var fresh_one: PerInstance = undefined;
                 fresh_one.offset_2d[0] = spatial_base + x_f * spatial_delta;
                 fresh_one.offset_2d[1] = spatial_base + y_f * spatial_delta;
                 fresh_one.other_offsets[0] = i_f * phase_delta;
                 fresh_one.other_offsets[1] = spread_base + i_f * spread_delta;
-                fresh_one.new_usage[0] = bakers.items[i]; //random here
+                fresh_one.new_usage[0] = storage_baker.items[i]; //offset on ring
+                fresh_one.new_usage[1] = dist;
                 storagePtr.*[i] = fresh_one;
             }
         }
