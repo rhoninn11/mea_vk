@@ -40,7 +40,8 @@ void main() {
     float phase = m_group.temporal.x + phase_offset;
     vec2 osc_offset = vec2(cos(phase), sin(phase)) * m_group.osc_scale;
 
-    gl_Position = vec4(prescaled_pos + instance_offset + osc_offset, 0, 1.0);
+    float depth_osc = sin(m_group.temporal.x + m_inst.new_usage.y)*0.6 + 0.5;
+    gl_Position = vec4(prescaled_pos + instance_offset + osc_offset, depth_osc, 1.0);
     v_color.rg = a_color.rg;
     v_color.b = spread_offset;
     v_progress = a_color.r + m_inst.new_usage.x;

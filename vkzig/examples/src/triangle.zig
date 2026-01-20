@@ -281,20 +281,23 @@ pub fn main() !void {
 
     // const hmm = rnd_gen.float(f32);
     var storage_baker: std.ArrayList(f32) = .empty;
+    var storage_baker2: std.ArrayList(f32) = .empty;
     try storage_baker.resize(allocator, instance_num);
+    try storage_baker2.resize(allocator, instance_num);
 
     for (0..instance_num) |i| {
         //random
         storage_baker.items[i] = rnd_gen.float(f32);
         //progression
         const progress = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(instance_num - 1));
-        storage_baker.items[i] = progress;
+        storage_baker2.items[i] = progress;
         //constant wins
         storage_baker.items[i] = -0.125;
     }
 
     {
         defer storage_baker.deinit(allocator);
+        defer storage_baker2.deinit(allocator);
         for (storage_dset.buff_arr.items) |possible_buffer| {
             const storage = possible_buffer.?;
             const storagePtr: *[instance_num]PerInstance = @ptrCast(@alignCast(storage.mapping.?));
@@ -305,8 +308,8 @@ pub fn main() !void {
                 const x_f: f32 = @floatFromInt(xi);
                 const y_f: f32 = @floatFromInt(yi);
 
-                const x_center: f32 = (8 - 1) / 2;
-                const y_center: f32 = (8 - 1) / 2;
+                const x_center: f32 = (@as(f32, 8) - 1) / 2;
+                const y_center: f32 = (@as(f32, 8) - 1) / 2;
 
                 const x_d = (x_center - x_f) / 3.5;
                 const y_d = (y_center - y_f) / 3.5;
@@ -320,8 +323,16 @@ pub fn main() !void {
                 fresh_one.other_offsets[1] = spread_base + i_f * spread_delta;
                 fresh_one.new_usage[0] = storage_baker.items[i]; //offset on ring
                 fresh_one.new_usage[1] = dist;
+                fresh_one.new_usage[2] = x_f;
+                fresh_one.new_usage[3] = x_d;
                 storagePtr.*[i] = fresh_one;
             }
+        }
+        const hey = storage_dset.buff_arr.items[0].?.mapping.?;
+        const storagePtr: *[instance_num]PerInstance = @ptrCast(@alignCast(hey));
+
+        for (0..instance_num) |i| {
+            std.debug.print("i: {d} x_f: {d}, x_d: {d}\n", .{ i, storagePtr[i].new_usage[2], storagePtr[i].new_usage[3] });
         }
     }
 
