@@ -81,11 +81,11 @@ pub fn main() !void {
     }
 
     // czym się różni vk.Rect2D od vk.Extend2D?
-    var extent = vk.Extent2D{ .width = 800, .height = 600 };
+    var resolution_extent = vk.Extent2D{ .width = 800, .height = 600 };
     glfw.windowHint(glfw.ClientAPI, glfw.NoAPI);
     const window = try glfw.createWindow(
-        @intCast(extent.width),
-        @intCast(extent.height),
+        @intCast(resolution_extent.width),
+        @intCast(resolution_extent.height),
         app_name,
         null,
         null,
@@ -102,7 +102,7 @@ pub fn main() !void {
     // divisor of the initial window size (see https://github.com/Snektron/vulkan-zig/pull/192).
     // To fix it, just fetch the actual size here, after the windowing system has had the time to
     // update the window.
-    extent.width, extent.height = blk: {
+    resolution_extent.width, resolution_extent.height = blk: {
         var w: c_int = undefined;
         var h: c_int = undefined;
         glfw.getFramebufferSize(window, &w, &h);
@@ -123,7 +123,10 @@ pub fn main() !void {
     };
     _ = access;
 
-    var swapchain = try Swapchain.init(&gc, allocator, extent);
+    const for_depth_attachment = try gftx.DepthImage.init(&gc, resolution_extent);
+    defer for_depth_attachment.deinit(&gc);
+
+    var swapchain = try Swapchain.init(&gc, allocator, resolution_extent);
     defer swapchain.deinit();
 
     swapchain_len = @intCast(swapchain.swap_images.len);
@@ -328,12 +331,11 @@ pub fn main() !void {
                 storagePtr.*[i] = fresh_one;
             }
         }
-        const hey = storage_dset.buff_arr.items[0].?.mapping.?;
-        const storagePtr: *[instance_num]PerInstance = @ptrCast(@alignCast(hey));
-
-        for (0..instance_num) |i| {
-            std.debug.print("i: {d} x_f: {d}, x_d: {d}\n", .{ i, storagePtr[i].new_usage[2], storagePtr[i].new_usage[3] });
-        }
+        // const hey = storage_dset.buff_arr.items[0].?.mapping.?;
+        // const storagePtr: *[instance_num]PerInstance = @ptrCast(@alignCast(hey));
+        // for (0..instance_num) |i| {
+        //     std.debug.print("i: {d} x_f: {d}, x_d: {d}\n", .{ i, storagePtr[i].new_usage[2], storagePtr[i].new_usage[3] });
+        // }
     }
 
     while (!glfw.windowShouldClose(window)) {
@@ -363,11 +365,11 @@ pub fn main() !void {
         const cmdbuf = cmdbufs[swapchain.image_index];
         // std.debug.print("+++ img_idx {d}\n", .{swapchain.image_index});
 
-        if (state == .suboptimal or extent.width != @as(u32, @intCast(w)) or extent.height != @as(u32, @intCast(h))) {
+        if (state == .suboptimal or resolution_extent.width != @as(u32, @intCast(w)) or resolution_extent.height != @as(u32, @intCast(h))) {
             std.debug.print("??? after resize?\n", .{});
-            extent.width = @intCast(w);
-            extent.height = @intCast(h);
-            try swapchain.recreate(extent);
+            resolution_extent.width = @intCast(w);
+            resolution_extent.height = @intCast(h);
+            try swapchain.recreate(resolution_extent);
 
             destroyFramebuffers(&gc, allocator, framebuffers);
             framebuffers = try createFramebuffers(&gc, allocator, render_pass, swapchain);

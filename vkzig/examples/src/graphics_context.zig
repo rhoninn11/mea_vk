@@ -85,6 +85,10 @@ pub const baked = struct {
         .host_coherent_bit = true,
     };
 
+    pub const dev_local_memory: vk.MemoryPropertyFlags = .{
+        .device_local_bit = true,
+    };
+
     pub const uniform_frag_vert = DSetInit{
         .usage = uniform_usage,
         .memory_property = cpu_accesible_memory,
@@ -289,13 +293,13 @@ pub const RGBImage = struct {
     }
 };
 
-const DepthImage = struct {
+pub const DepthImage = struct {
     const Self = @This();
-    img: ?vk.Image = null,
-    dev_mem: ?vk.DeviceMemory = null,
-    img_view: ?vk.ImageView = null,
+    dvk_img: vk.Image,
+    dvk_mem: vk.DeviceMemory,
+    dvk_img_view: vk.ImageView,
 
-    fn getFormat(gc: *const GraphicsContext) !vk.Format {
+    fn getDepthFormat(gc: *const GraphicsContext) !vk.Format {
         return swpchn.findSupportedFormat(
             gc,
             &.{ vk.Format.d32_sfloat, vk.Format.d32_sfloat_s8_uint, vk.Format.d24_unorm_s8_uint },
@@ -307,41 +311,63 @@ const DepthImage = struct {
         return format == .d32_sfloat_s8_uint or format == .d24_unorm_s8_uint;
     }
 
-    pub fn init(gc: *const GraphicsContext) !Self {
-        const fmt = try Self.getFormat(gc);
-        _ = hasSetncilComponent(fmt);
+    pub fn init(gc: *const GraphicsContext, extent: vk.Extent2D) !Self {
+        const devk = gc.dev;
+        const depth_format = try Self.getDepthFormat(gc);
+        _ = hasSetncilComponent(depth_format);
 
-        // const depth_aspect_flag: vk.ImageAspectFlags = .{
-        //     .depth_bit = true,
-        // };
-        // const no_swizzle_mapping: vk.ComponentMapping = .{
-        //     .r = .identity,
-        //     .g = .identity,
-        //     .b = .identity,
-        //     .a = .identity,
-        // };
+        const d_img_create_info: vk.ImageCreateInfo = .{
+            .image_type = .@"2d",
+            .format = depth_format,
+            .extent = .{
+                .height = extent.height,
+                .width = extent.width,
+                .depth = 1,
+            },
+            .tiling = .optimal,
+            .mip_levels = 1,
+            .array_layers = 1,
+            .samples = .{ .@"1_bit" = true },
+            .usage = .{
+                .depth_stencil_attachment_bit = true,
+            },
+            .sharing_mode = .exclusive,
+            .initial_layout = .undefined,
+        };
 
-        // const img_viu_info: vk.ImageViewCreateInfo = .{
-        //     .s_type = .image_view_create_info,
-        //     .view_type = .@"2d",
-        //     .format = fmt,
-        //     .subresource_range = .{
-        //         .aspect_mask = depth_aspect_flag,
-        //         .base_mip_level = 0,
-        //         .level_count = 1,
-        //         .base_array_layer = 0,
-        //         .layer_count = 1,
-        //     },
-        //     .image = .null_handle,
-        //     .components = no_swizzle_mapping,
-        // };
+        const d_img = try devk.createImage(&d_img_create_info, null);
+        errdefer devk.destroyImage(d_img, null);
 
-        // const img_viu = try gc.dev.createImageView(&img_viu_info, null);
+        const mem_req = devk.getImageMemoryRequirements(d_img);
+        const vk_mem = try gc.allocate(
+            mem_req,
+            baked.dev_local_memory,
+        );
+        errdefer devk.freeMemory(vk_mem, null);
 
-        // return Self{
-        //     .img_view = img_viu,
-        // };
-        return Self{};
+        try devk.bindImageMemory(d_img, vk_mem, 0);
+
+        const img_viu_info: vk.ImageViewCreateInfo = .{
+            .view_type = .@"2d",
+            .format = depth_format,
+            .subresource_range = baked.depth_img_subrng,
+            .image = d_img,
+            .components = baked.identity_mapping,
+        };
+
+        const img_viu = try gc.dev.createImageView(&img_viu_info, null);
+
+        return Self{
+            .dvk_img_view = img_viu,
+            .dvk_mem = vk_mem,
+            .dvk_img = d_img,
+        };
+    }
+    pub fn deinit(self: Self, gc: *const GraphicsContext) void {
+        const devk = gc.dev;
+        devk.destroyImageView(self.dvk_img_view, null);
+        devk.destroyImage(self.dvk_img, null);
+        devk.freeMemory(self.dvk_mem, null);
     }
 };
 
