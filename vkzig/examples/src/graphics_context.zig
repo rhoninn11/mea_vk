@@ -295,6 +295,7 @@ pub const RGBImage = struct {
 
 pub const DepthImage = struct {
     const Self = @This();
+    vk_format: vk.Format,
     dvk_img: vk.Image,
     dvk_mem: vk.DeviceMemory,
     dvk_img_view: vk.ImageView,
@@ -361,6 +362,7 @@ pub const DepthImage = struct {
             .dvk_img_view = img_viu,
             .dvk_mem = vk_mem,
             .dvk_img = d_img,
+            .vk_format = depth_format,
         };
     }
     pub fn deinit(self: Self, gc: *const GraphicsContext) void {

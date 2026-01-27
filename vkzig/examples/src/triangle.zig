@@ -123,8 +123,8 @@ pub fn main() !void {
     };
     _ = access;
 
-    const for_depth_attachment = try gftx.DepthImage.init(&gc, resolution_extent);
-    defer for_depth_attachment.deinit(&gc);
+    const scene_depth = try gftx.DepthImage.init(&gc, resolution_extent);
+    defer scene_depth.deinit(&gc);
 
     var swapchain = try Swapchain.init(&gc, allocator, resolution_extent);
     defer swapchain.deinit();
@@ -214,13 +214,19 @@ pub fn main() !void {
     }, null);
     defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
 
-    const render_pass = try createRenderPass(&gc, swapchain, for_depth_attachment);
+    const render_pass = try createRenderPass(&gc, swapchain, scene_depth);
     defer gc.dev.destroyRenderPass(render_pass, null);
 
     const pipeline = try createPipeline(&gc, pipeline_layout, render_pass);
     defer gc.dev.destroyPipeline(pipeline, null);
 
-    var framebuffers = try createFramebuffers(&gc, allocator, render_pass, swapchain);
+    var framebuffers = try createFramebuffers(
+        &gc,
+        allocator,
+        render_pass,
+        swapchain,
+        scene_depth,
+    );
     defer destroyFramebuffers(&gc, allocator, framebuffers);
 
     var shape = try Vertex.Ring(allocator, 32);
@@ -368,7 +374,13 @@ pub fn main() !void {
             try swapchain.recreate(resolution_extent);
 
             destroyFramebuffers(&gc, allocator, framebuffers);
-            framebuffers = try createFramebuffers(&gc, allocator, render_pass, swapchain);
+            framebuffers = try createFramebuffers(
+                &gc,
+                allocator,
+                render_pass,
+                swapchain,
+                scene_depth,
+            );
 
             destroyCommandBuffers(&gc, pool_cmd, allocator, cmdbufs);
             cmdbufs = try createCommandBuffers(
@@ -614,8 +626,13 @@ fn createCommandBuffers(
     }, cmdbufs.ptr);
     errdefer gc.dev.freeCommandBuffers(pool, @intCast(cmdbufs.len), cmdbufs.ptr);
 
-    const clear = vk.ClearValue{
-        .color = .{ .float_32 = .{ 0.1, 0, 0, 1 } },
+    const clear_arr: []const vk.ClearValue = &.{
+        vk.ClearValue{
+            .color = .{ .float_32 = .{ 0.1, 0, 0, 1 } },
+        },
+        vk.ClearValue{
+            .depth_stencil = .{ .depth = 1.0, .stencil = 0 },
+        },
     };
 
     const viewport = vk.Viewport{
@@ -647,8 +664,8 @@ fn createCommandBuffers(
             .render_pass = render_pass,
             .framebuffer = framebuffer,
             .render_area = render_area,
-            .clear_value_count = 1,
-            .p_clear_values = @ptrCast(&clear),
+            .clear_value_count = @intCast(clear_arr.len),
+            .p_clear_values = clear_arr.ptr,
         }, .@"inline");
         {
             defer gc.dev.cmdEndRenderPass(cmdbuf);
@@ -696,7 +713,7 @@ fn destroyCommandBuffers(gc: *const GraphicsContext, pool: vk.CommandPool, alloc
     allocator.free(cmdbufs);
 }
 
-fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_pass: vk.RenderPass, swapchain: Swapchain) ![]vk.Framebuffer {
+fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_pass: vk.RenderPass, swapchain: Swapchain, depth_img: ?gftx.DepthImage) ![]vk.Framebuffer {
     const framebuffers = try allocator.alloc(vk.Framebuffer, swapchain.swap_images.len);
     errdefer allocator.free(framebuffers);
 
@@ -704,10 +721,15 @@ fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_p
     errdefer for (framebuffers[0..i]) |fb| gc.dev.destroyFramebuffer(fb, null);
 
     for (framebuffers) |*fb| {
+        const att_arr: []const vk.ImageView = &.{
+            swapchain.swap_images[i].view,
+            depth_img.?.dvk_img_view,
+        };
+
         fb.* = try gc.dev.createFramebuffer(&.{
             .render_pass = render_pass,
-            .attachment_count = 1,
-            .p_attachments = @ptrCast(&swapchain.swap_images[i].view),
+            .attachment_count = @intCast(att_arr.len),
+            .p_attachments = att_arr.ptr,
             .width = swapchain.extent.width,
             .height = swapchain.extent.height,
             .layers = 1,
@@ -723,7 +745,7 @@ fn destroyFramebuffers(gc: *const GraphicsContext, allocator: Allocator, framebu
     allocator.free(framebuffers);
 }
 
-fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain, _: ?gftx.DepthImage) !vk.RenderPass {
+fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain, depth_img: ?gftx.DepthImage) !vk.RenderPass {
     const color_attachment = vk.AttachmentDescription{
         .format = swapchain.surface_format.format,
         .samples = .{ .@"1_bit" = true },
@@ -735,24 +757,56 @@ fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain, _: ?gftx.D
         .final_layout = .present_src_khr,
     };
     // const depth_attachment = vk.AttachmentDescription{};
+    const depth_attachment = vk.AttachmentDescription{
+        .format = depth_img.?.vk_format,
+        .samples = .{ .@"1_bit" = true },
+        .load_op = .clear,
+        .store_op = .dont_care,
+        .stencil_load_op = .dont_care,
+        .stencil_store_op = .dont_care,
+        .initial_layout = .undefined,
+        .final_layout = .depth_stencil_attachment_optimal,
+    };
 
     const color_attachment_ref = vk.AttachmentReference{
         .attachment = 0,
         .layout = .color_attachment_optimal,
+    };
+    const depth_attachment_ref = vk.AttachmentReference{
+        .attachment = 1,
+        .layout = .depth_stencil_attachment_optimal,
     };
 
     const subpass = vk.SubpassDescription{
         .pipeline_bind_point = .graphics,
         .color_attachment_count = 1,
         .p_color_attachments = @ptrCast(&color_attachment_ref),
+        .p_depth_stencil_attachment = &depth_attachment_ref,
     };
 
-    return try gc.dev.createRenderPass(&.{
-        .attachment_count = 1,
-        .p_attachments = @ptrCast(&color_attachment),
+    const subpass_dependency = vk.SubpassDependency{ .dst_subpass = 0, .src_subpass = vk.SUBPASS_EXTERNAL, .src_stage_mask = .{
+        .color_attachment_output_bit = true,
+        .late_fragment_tests_bit = true,
+    }, .src_access_mask = .{
+        .depth_stencil_attachment_write_bit = true,
+    }, .dst_stage_mask = .{
+        .color_attachment_output_bit = true,
+        .early_fragment_tests_bit = true,
+    }, .dst_access_mask = .{
+        .color_attachment_write_bit = true,
+        .depth_stencil_attachment_write_bit = true,
+    } };
+
+    const att_arr: []const vk.AttachmentDescription = &.{ color_attachment, depth_attachment };
+    const render_pass_create_info = vk.RenderPassCreateInfo{
+        .attachment_count = @intCast(att_arr.len),
+        .p_attachments = att_arr.ptr,
         .subpass_count = 1,
         .p_subpasses = @ptrCast(&subpass),
-    }, null);
+        .p_dependencies = @ptrCast(&subpass_dependency),
+    };
+
+    return try gc.dev.createRenderPass(&render_pass_create_info, null);
 }
 
 // tu mamy długą fuckję, która inicjalizuej pipeline graficzny, czyli co?
@@ -853,6 +907,18 @@ fn createPipeline(
         .p_dynamic_states = &dynstate,
     };
 
+    const depth_stencil_state = vk.PipelineDepthStencilStateCreateInfo{
+        .depth_test_enable = .true,
+        .depth_write_enable = .true,
+        .depth_compare_op = .less,
+        .depth_bounds_test_enable = .false,
+        .min_depth_bounds = 0.0,
+        .max_depth_bounds = 1.0,
+        .stencil_test_enable = .false,
+        .front = undefined,
+        .back = undefined,
+    };
+
     const gpci = vk.GraphicsPipelineCreateInfo{
         .flags = .{},
         .stage_count = 2,
@@ -863,7 +929,7 @@ fn createPipeline(
         .p_viewport_state = &pvsci,
         .p_rasterization_state = &prsci,
         .p_multisample_state = &pmsci,
-        .p_depth_stencil_state = null,
+        .p_depth_stencil_state = &depth_stencil_state,
         .p_color_blend_state = &pcbsci,
         .p_dynamic_state = &pdsci,
         .layout = layout,
