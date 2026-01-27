@@ -149,9 +149,6 @@ pub fn main() !void {
         termoral: [4]f32 = undefined,
         not_used_4d_1: [4]f32 = undefined,
     };
-    const UniformData = struct {
-        data_2d: [16]f32 = undefined,
-    };
 
     const PerInstance = struct {
         offset_2d: [2]f32 = undefined,
@@ -159,7 +156,6 @@ pub fn main() !void {
         new_usage: [4]f32 = undefined,
         empty_rest: [8]f32 = undefined,
     };
-    _ = GroupData;
 
     var uniform_dset = try addons.DescriptorPrep.init(
         allocator,
@@ -168,7 +164,7 @@ pub fn main() !void {
         gftx.baked.uniform_frag_vert,
         .{
             .location = 0,
-            .size = @sizeOf(UniformData),
+            .size = @sizeOf(GroupData),
         },
         null,
     );
@@ -218,7 +214,7 @@ pub fn main() !void {
     }, null);
     defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
 
-    const render_pass = try createRenderPass(&gc, swapchain);
+    const render_pass = try createRenderPass(&gc, swapchain, for_depth_attachment);
     defer gc.dev.destroyRenderPass(render_pass, null);
 
     const pipeline = try createPipeline(&gc, pipeline_layout, render_pass);
@@ -351,16 +347,16 @@ pub fn main() !void {
             continue;
         }
 
-        const this_frame_uniform = uniform_dset.buff_arr.items[swapchain.image_index].?;
-        const typedPtr: *UniformData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
-        typedPtr.*.data_2d[0] = 0.1;
-        typedPtr.*.data_2d[1] = 0.1;
-        const scale = 0.1;
-        typedPtr.*.data_2d[2] = scale;
-        typedPtr.*.data_2d[3] = scale;
+        const particle_scale = 0.1;
 
-        typedPtr.*.data_2d[4] = 0.05 + std.math.sin(timeline.total_s * 4) * 0.05;
-        typedPtr.*.data_2d[8] = timeline.total_s;
+        const this_frame_uniform = uniform_dset.buff_arr.items[swapchain.image_index].?;
+        const as_group_data: *GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
+
+        as_group_data.*.osc_scale = .{ 0.1, 0.1 };
+        as_group_data.*.scale_2d = .{ particle_scale, particle_scale };
+        as_group_data.*.termoral = .{ timeline.total_s, 0, 1, 2 };
+
+        // typedPtr.*.data_2d[4] = 0.05 + std.math.sin(timeline.total_s * 4) * 0.05;
 
         const cmdbuf = cmdbufs[swapchain.image_index];
         // std.debug.print("+++ img_idx {d}\n", .{swapchain.image_index});
@@ -647,7 +643,6 @@ fn createCommandBuffers(
             .offset = .{ .x = 0, .y = 0 },
             .extent = extent,
         };
-
         gc.dev.cmdBeginRenderPass(cmdbuf, &.{
             .render_pass = render_pass,
             .framebuffer = framebuffer,
@@ -655,51 +650,41 @@ fn createCommandBuffers(
             .clear_value_count = 1,
             .p_clear_values = @ptrCast(&clear),
         }, .@"inline");
+        {
+            defer gc.dev.cmdEndRenderPass(cmdbuf);
+            const offset = [_]vk.DeviceSize{0};
+            gc.dev.cmdBindPipeline(cmdbuf, .graphics, pipeline);
+            gc.dev.cmdBindVertexBuffers(
+                cmdbuf,
+                0,
+                1,
+                @ptrCast(&buffer),
+                &offset,
+            );
+            const hmm: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
+                shader_realted.uniform_dsets.items[i],
+                shader_realted.storage_dsets.items[i],
+                shader_realted.texture_dset,
+            };
 
-        const offset = [_]vk.DeviceSize{0};
-        gc.dev.cmdBindPipeline(cmdbuf, .graphics, pipeline);
-        gc.dev.cmdBindVertexBuffers(
-            cmdbuf,
-            0,
-            1,
-            @ptrCast(&buffer),
-            &offset,
-        );
-        const hmm: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
-            shader_realted.uniform_dsets.items[i],
-            shader_realted.storage_dsets.items[i],
-            shader_realted.texture_dset,
-        };
-
-        gc.dev.cmdBindDescriptorSets(
-            cmdbuf,
-            .graphics,
-            shader_realted.pipeline_layout,
-            0,
-            @intCast(hmm.len),
-            hmm.ptr,
-            0,
-            null,
-        );
-        // gc.dev.cmdBindDescriptorSets(
-        //     cmdbuf,
-        //     .graphics,
-        //     shader_realted.pipeline_layout,
-        //     1,
-        //     1,
-        //     @ptrCast(&shader_realted.storage_dsets.items[i]),
-        //     0,
-        //     null,
-        // );
-        gc.dev.cmdDraw(
-            cmdbuf,
-            @intCast(ojejoje.len),
-            shader_realted.instance_count,
-            0,
-            0,
-        );
-
-        gc.dev.cmdEndRenderPass(cmdbuf);
+            gc.dev.cmdBindDescriptorSets(
+                cmdbuf,
+                .graphics,
+                shader_realted.pipeline_layout,
+                0,
+                @intCast(hmm.len),
+                hmm.ptr,
+                0,
+                null,
+            );
+            gc.dev.cmdDraw(
+                cmdbuf,
+                @intCast(ojejoje.len),
+                shader_realted.instance_count,
+                0,
+                0,
+            );
+        }
         try gc.dev.endCommandBuffer(cmdbuf);
     }
 
@@ -738,7 +723,7 @@ fn destroyFramebuffers(gc: *const GraphicsContext, allocator: Allocator, framebu
     allocator.free(framebuffers);
 }
 
-fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain) !vk.RenderPass {
+fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain, _: ?gftx.DepthImage) !vk.RenderPass {
     const color_attachment = vk.AttachmentDescription{
         .format = swapchain.surface_format.format,
         .samples = .{ .@"1_bit" = true },
@@ -749,6 +734,7 @@ fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain) !vk.Render
         .initial_layout = .undefined,
         .final_layout = .present_src_khr,
     };
+    // const depth_attachment = vk.AttachmentDescription{};
 
     const color_attachment_ref = vk.AttachmentReference{
         .attachment = 0,

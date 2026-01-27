@@ -229,7 +229,7 @@ pub const RGBImage = struct {
         const mem_req = devk.getImageMemoryRequirements(vk_img);
         const vk_mem = try gc.allocate(
             mem_req,
-            baked.cpu_accesible_memory,
+            baked.dev_local_memory,
         );
         errdefer devk.freeMemory(vk_mem, null);
 
