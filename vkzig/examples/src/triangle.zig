@@ -353,7 +353,7 @@ pub fn main() !void {
             continue;
         }
 
-        const particle_scale = 0.1;
+        const particle_scale = 0.2;
 
         const this_frame_uniform = uniform_dset.buff_arr.items[swapchain.image_index].?;
         const as_group_data: *GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
