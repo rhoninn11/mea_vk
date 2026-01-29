@@ -351,10 +351,18 @@ pub fn main() !void {
     }
 
     // static preset of matrices
+    const static_mats = MatPack{
+        .proj = m.mat_ortho(),
+        .view = m.mat_look_at(
+            .{ 1, 1, 0 },
+            m.zero3(),
+            .{ 0, 1, 0 },
+        ),
+    };
     for (0..swapchain_len) |i| {
         const this_frame_uniform = uniform_dset.buff_arr.items[i].?;
         const as_group_data: *GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
-        as_group_data.*.mtrices = MatPack{};
+        as_group_data.*.mtrices = static_mats;
     }
 
     while (!glfw.windowShouldClose(window)) {
