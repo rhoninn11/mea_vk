@@ -1,16 +1,11 @@
 const std = @import("std");
 const vk = @import("third_party/vk.zig");
 const before = @import("before.zig");
+const m = @import("math.zig");
 
 const X = 0;
 const Y = 1;
-fn mul2D(a: [2]f32, times: f32) [2]f32 {
-    return .{ a[X] * times, a[Y] * times };
-}
-
-fn add(a: [2]f32, b: [2]f32) [2]f32 {
-    return .{ a[X] + b[X], a[Y] + b[Y] };
-}
+const Z = 2;
 
 pub const Vertex = struct {
     pub const binding_description = vk.VertexInputBindingDescription{
@@ -45,13 +40,13 @@ pub const Vertex = struct {
         times_vert: u32,
     };
 
-    pub fn Ring(alloc: std.mem.Allocator, len: u8) !std.ArrayList(Vertex) {
-        const PreStage = struct {
-            pos: [2]f32,
-            progress: f32,
-            v: f32,
-        };
+    pub const Stamp = struct {
+        pos: [3]f32,
+        progress: f32,
+        v: f32,
+    };
 
+    pub fn Ring(alloc: std.mem.Allocator, len: u8) !std.ArrayList(Vertex) {
         const group = Multipler{
             .times_one = @intCast(len),
             .times_vert = @intCast(len * 2),
@@ -60,38 +55,42 @@ pub const Vertex = struct {
 
         const vert_num: usize = @as(usize, len) * 2;
 
-        var stage_arr: std.ArrayList(PreStage) = .empty;
+        var stage_arr: std.ArrayList(Stamp) = .empty;
         try stage_arr.resize(alloc, vert_num);
         defer stage_arr.deinit(alloc); //intermediate cals
 
-        var stage_0 = stage_arr.items;
+        var staged_stamps = stage_arr.items;
         for (0..len) |i| {
             // const flen: f32 = @floatFromInt(len - 1);
             // const fi: f32 = @floatFromInt(i);
             const progress = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(len - 1));
 
             const phi = std.math.tau * progress;
-            var stamp = PreStage{
+            const stamp_a = Stamp{
                 .progress = progress,
                 .pos = .{
                     std.math.cos(phi),
                     std.math.sin(phi),
+                    0,
                 },
                 .v = 0.0,
             };
-            stage_0[i * 2] = stamp;
-            stamp.v = 1.0;
-            stage_0[i * 2 + 1] = stamp;
+            var stamp_b = stamp_a;
+            stamp_b.v = 1.0;
+            stamp_b.pos[Z] = 0.75;
+
+            staged_stamps[i * 2] = stamp_a;
+            staged_stamps[i * 2 + 1] = stamp_b;
         }
 
         const r = 0.6;
         const r_delta = 0.3;
         for (0..len) |pre_i| {
             const stage_i = pre_i * 2;
-            const base = stage_0[stage_i].pos;
+            const base: [2]f32 = staged_stamps[stage_i].pos[0..2].*;
 
-            stage_0[stage_i].pos = mul2D(base, r);
-            stage_0[stage_i + 1].pos = mul2D(base, r + r_delta);
+            staged_stamps[stage_i].pos = m.stack(m.mul2D(base, r), 0.75);
+            staged_stamps[stage_i + 1].pos = m.stack(m.mul2D(base, r + r_delta), 0);
         }
 
         const segments = len - 1;
@@ -109,9 +108,13 @@ pub const Vertex = struct {
 
             const pos_offs = [_]u8{ 0, 1, 2, 2, 1, 3 };
             for (pos_offs, 0..) |pos_off, jj| {
-                const stage = stage_0[pos_i + pos_off];
+                const stage = staged_stamps[pos_i + pos_off];
                 stage_vert[tri_pair_i + jj] = .{
-                    .pos = .{ stage.pos[0], stage.pos[1], 0 },
+                    .pos = .{
+                        stage.pos[X],
+                        stage.pos[Y],
+                        stage.pos[Z],
+                    },
                     .color = .{ stage.progress, stage.v, 0 },
                 };
             }

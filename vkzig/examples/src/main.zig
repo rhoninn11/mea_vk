@@ -12,6 +12,7 @@ const baked = @import("baked.zig");
 
 const helpers = @import("helpers.zig");
 const vertex = @import("vertex.zig");
+const m = @import("math.zig");
 
 const Vertex = vertex.Vertex;
 
@@ -141,13 +142,22 @@ pub fn main() !void {
     var image = try first_texture(&gc, pool_cmd);
     defer image.deinit();
 
-    // ||| added uniform, storage and texture
+    // gpu mat4 alignment is 16B
+    const MatPack = struct {
+        model: [16]f32 = m.mat_identity(),
+        view: [16]f32 = m.mat_identity(),
+        proj: [16]f32 = m.mat_identity(),
+    };
+
     const GroupData = struct {
+        // ||| added uniform, storage and texture
         osc_scale: [2]f32 = undefined,
         scale_2d: [2]f32 = undefined,
         not_used_4d_0: [4]f32 = undefined,
         termoral: [4]f32 = undefined,
         not_used_4d_1: [4]f32 = undefined,
+        // 16B alignment
+        mtrices: MatPack = undefined,
     };
 
     const PerInstance = struct {
@@ -338,6 +348,13 @@ pub fn main() !void {
         // for (0..instance_num) |i| {
         //     std.debug.print("i: {d} x_f: {d}, x_d: {d}\n", .{ i, storagePtr[i].new_usage[2], storagePtr[i].new_usage[3] });
         // }
+    }
+
+    // static preset of matrices
+    for (0..swapchain_len) |i| {
+        const this_frame_uniform = uniform_dset.buff_arr.items[i].?;
+        const as_group_data: *GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
+        as_group_data.*.mtrices = MatPack{};
     }
 
     while (!glfw.windowShouldClose(window)) {

@@ -12,9 +12,9 @@ pub fn build(b: *std.Build) !void {
     const registry = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
 
     const triangle_exe = b.addExecutable(.{
-        .name = "triangle",
+        .name = "vk_exp",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/triangle.zig"),
+            .root_source_file = b.path("src/main.zig"),
             .target = target,
             .link_libc = true,
             .optimize = optimize,

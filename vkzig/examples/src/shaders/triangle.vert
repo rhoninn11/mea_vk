@@ -1,6 +1,12 @@
 #version 450
 
 
+struct MatPack {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+};
+
 // whole data has is 16 x f32
 layout(set = 0, binding = 0) uniform GroupData{
     vec2 osc_scale; 
@@ -8,6 +14,7 @@ layout(set = 0, binding = 0) uniform GroupData{
     vec4 not_used_4d_0;
     vec4 temporal;
     vec4 not_used_4d_2;
+    MatPack matrices;
 } m_group;
 
 struct Instance{
@@ -42,7 +49,8 @@ void main() {
 
 //  should be visible after depth testing
     float depth_osc = sin(m_group.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
-    gl_Position = vec4(prescaled_pos + instance_offset + osc_offset, depth_osc, 1.0);
+    vec4 before_transform = vec4(prescaled_pos + instance_offset + osc_offset, depth_osc, 1.0);
+    gl_Position = before_transform * m_group.matrices.model; 
     v_color.rg = a_color.rg;
     v_color.b = spread_offset;
     v_progress = a_color.r + m_inst.new_usage.x;
