@@ -50,7 +50,7 @@ void main() {
 //  should be visible after depth testing
     float depth_osc = sin(m_group.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
     vec4 before_transform = vec4(prescaled_pos + instance_offset + osc_offset, depth_osc, 1.0);
-    gl_Position = before_transform * m_group.matrices.model; 
+    gl_Position = m_group.matrices.proj * m_group.matrices.view * before_transform; 
     v_color.rg = a_color.rg;
     v_color.b = spread_offset;
     v_progress = a_color.r + m_inst.new_usage.x;

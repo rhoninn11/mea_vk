@@ -24,6 +24,15 @@ pub fn build(b: *std.Build) !void {
     });
     b.installArtifact(triangle_exe);
 
+    const tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/test.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .use_llvm = true,
+    });
+
     const glfw_lib_fmt: []const u8 = if (builtin.target.os.tag == .windows) "{s}/bin" else "{s}/lib";
     const glfw_name: []const u8 = if (builtin.target.os.tag == .windows) "glfw3" else "glfw";
 
@@ -121,6 +130,11 @@ pub fn build(b: *std.Build) !void {
 
     const triangle_run_step = b.step("main", "Run the triangle example");
     triangle_run_step.dependOn(&triangle_run_cmd.step);
+
+    const test_run_cmd = b.addRunArtifact(tests);
+    test_run_cmd.has_side_effects = true;
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&test_run_cmd.step);
 }
 
 // const shaders: []const []const u8 = .{.{

@@ -353,12 +353,15 @@ pub fn main() !void {
     // static preset of matrices
     const static_mats = MatPack{
         .proj = m.mat_ortho(),
-        .view = m.mat_look_at(
-            .{ 1, 1, 0 },
-            m.zero3(),
+        .view = try m.mat_look_at(
+            .{ 0, 0.1, 0 },
+            .{ 0, 0, 0.1 },
             .{ 0, 1, 0 },
         ),
     };
+
+    m.mat_print(.{ .arr = static_mats.proj }, "projection");
+    m.mat_print(.{ .arr = static_mats.view }, "view");
     for (0..swapchain_len) |i| {
         const this_frame_uniform = uniform_dset.buff_arr.items[i].?;
         const as_group_data: *GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
@@ -973,4 +976,8 @@ fn createPipeline(
         @ptrCast(&pipeline),
     );
     return pipeline;
+}
+
+test "do it even testing" {
+    try std.testing.expect(true);
 }
