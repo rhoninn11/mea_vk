@@ -46,9 +46,11 @@ void main() {
     
     float phase = m_group.temporal.x + phase_offset;
     vec2 osc_offset = vec2(cos(phase), sin(phase)) * m_group.osc_scale;
+    osc_offset = vec2(0,0);
 
 //  should be visible after depth testing
     float depth_osc = sin(m_group.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
+    depth_osc += gl_InstanceIndex*0.001;
     vec4 before_transform = vec4(prescaled_pos + instance_offset + osc_offset, depth_osc, 1.0);
     gl_Position = m_group.matrices.proj * m_group.matrices.view * before_transform; 
     v_color.rg = a_color.rg;

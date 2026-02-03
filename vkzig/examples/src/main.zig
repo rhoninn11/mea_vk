@@ -13,6 +13,7 @@ const baked = @import("baked.zig");
 const helpers = @import("helpers.zig");
 const vertex = @import("vertex.zig");
 const m = @import("math.zig");
+const t = @import("types.zig");
 
 const Vertex = vertex.Vertex;
 
@@ -61,12 +62,21 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
         std.debug.print("key down\n", .{});
         glfw.setWindowShouldClose(win, true);
     }
+    if (action == glfw.Press and key == glfw.KeySpace) {
+        if (time_glob) |hey| {
+            std.debug.print("timeline toggled", .{});
+            hey.time_passage = !hey.time_passage;
+        }
+        // TODO
+    }
 }
 
 const EasyAcces = struct {
     window: ?*c_long,
     vkctx: ?*const GraphicsContext = null,
 };
+
+var time_glob: ?*addons.Timeline = null;
 
 pub fn main() !void {
     var swapchain_len: u8 = undefined;
@@ -143,29 +153,6 @@ pub fn main() !void {
     defer image.deinit();
 
     // gpu mat4 alignment is 16B
-    const MatPack = struct {
-        model: [16]f32 = m.mat_identity(),
-        view: [16]f32 = m.mat_identity(),
-        proj: [16]f32 = m.mat_identity(),
-    };
-
-    const GroupData = struct {
-        // ||| added uniform, storage and texture
-        osc_scale: [2]f32 = undefined,
-        scale_2d: [2]f32 = undefined,
-        not_used_4d_0: [4]f32 = undefined,
-        termoral: [4]f32 = undefined,
-        not_used_4d_1: [4]f32 = undefined,
-        // 16B alignment
-        mtrices: MatPack = undefined,
-    };
-
-    const PerInstance = struct {
-        offset_2d: [2]f32 = undefined,
-        other_offsets: [2]f32 = undefined,
-        new_usage: [4]f32 = undefined,
-        empty_rest: [8]f32 = undefined,
-    };
 
     var uniform_dset = try addons.DescriptorPrep.init(
         allocator,
@@ -174,7 +161,7 @@ pub fn main() !void {
         gftx.baked.uniform_frag_vert,
         .{
             .location = 0,
-            .size = @sizeOf(GroupData),
+            .size = @sizeOf(t.GroupData),
         },
         null,
     );
@@ -188,7 +175,7 @@ pub fn main() !void {
         gftx.baked.storage_frag_vert,
         .{
             .location = 0,
-            .size = @sizeOf(PerInstance) * instance_num,
+            .size = @sizeOf(t.PerInstance) * instance_num,
         },
         null,
     );
@@ -279,6 +266,7 @@ pub fn main() !void {
     _ = glfw.setKeyCallback(window, key_callback);
 
     var timeline = addons.Timeline.init();
+    time_glob = &timeline;
     var perf_stats = addons.PerfStats.init();
     var state: Swapchain.PresentState = .optimal;
 
@@ -315,7 +303,7 @@ pub fn main() !void {
         defer storage_baker2.deinit(allocator);
         for (storage_dset.buff_arr.items) |possible_buffer| {
             const storage = possible_buffer.?;
-            const storagePtr: *[instance_num]PerInstance = @ptrCast(@alignCast(storage.mapping.?));
+            const storagePtr: *[instance_num]t.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
             for (0..instance_num) |i| {
                 const xi = @mod(i, 8);
                 const yi = i / 8;
@@ -331,7 +319,7 @@ pub fn main() !void {
 
                 const dist = std.math.sqrt(x_d * x_d + y_d * y_d);
 
-                var fresh_one: PerInstance = undefined;
+                var fresh_one: t.PerInstance = undefined;
                 fresh_one.offset_2d[0] = spatial_base + x_f * spatial_delta;
                 fresh_one.offset_2d[1] = spatial_base + y_f * spatial_delta;
                 fresh_one.other_offsets[0] = i_f * phase_delta;
@@ -350,24 +338,6 @@ pub fn main() !void {
         // }
     }
 
-    // static preset of matrices
-    const static_mats = MatPack{
-        .proj = m.mat_ortho(),
-        .view = try m.mat_look_at(
-            .{ 0, 0.1, 0 },
-            .{ 0, 0, 0.1 },
-            .{ 0, 1, 0 },
-        ),
-    };
-
-    m.mat_print(.{ .arr = static_mats.proj }, "projection");
-    m.mat_print(.{ .arr = static_mats.view }, "view");
-    for (0..swapchain_len) |i| {
-        const this_frame_uniform = uniform_dset.buff_arr.items[i].?;
-        const as_group_data: *GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
-        as_group_data.*.mtrices = static_mats;
-    }
-
     while (!glfw.windowShouldClose(window)) {
         var w: c_int = undefined;
         var h: c_int = undefined;
@@ -384,11 +354,14 @@ pub fn main() !void {
         const particle_scale = 0.2;
 
         const this_frame_uniform = uniform_dset.buff_arr.items[swapchain.image_index].?;
-        const as_group_data: *GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
+        const as_group_data: *t.GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
+
+        const timeline_osc = std.math.sin(timeline.total_s) * 0.1 + 0.1;
 
         as_group_data.*.osc_scale = .{ 0.1, 0.1 };
         as_group_data.*.scale_2d = .{ particle_scale, particle_scale };
         as_group_data.*.termoral = .{ timeline.total_s, 0, 1, 2 };
+        as_group_data.*.mtrices = try addons.paramatricVariation(timeline_osc);
 
         // typedPtr.*.data_2d[4] = 0.05 + std.math.sin(timeline.total_s * 4) * 0.05;
 

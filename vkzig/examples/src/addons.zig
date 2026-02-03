@@ -2,6 +2,9 @@ const std = @import("std");
 const vk = @import("third_party/vk.zig");
 const gftx = @import("graphics_context.zig");
 
+const t = @import("types.zig");
+const m = @import("math.zig");
+
 const Allocator = std.mem.Allocator;
 
 pub const PerfStats = struct {
@@ -52,6 +55,8 @@ pub const Timeline = struct {
     total_s: f32,
     delta_s: f32,
 
+    time_passage: bool = true,
+
     pub fn init() Timeline {
         const now = std.time.microTimestamp();
         return Timeline{
@@ -65,12 +70,13 @@ pub const Timeline = struct {
     pub fn update(self: *Timeline) void {
         const now = std.time.microTimestamp();
 
-        const total = @as(f32, @floatFromInt(now - self._t0));
         const delta = @as(f32, @floatFromInt(now - self._t_last));
 
         self._t_last = now;
-        self.total_s = total / 1000000;
         self.delta_s = delta / 1000000;
+        if (self.time_passage) {
+            self.total_s += self.delta_s;
+        }
     }
 };
 
@@ -223,3 +229,14 @@ pub const DescriptorPrep = struct {
         self.d_set_layout_arr.deinit(alloc);
     }
 };
+
+pub fn paramatricVariation(hmm: f32) !t.MatPack {
+    return t.MatPack{
+        .proj = m.mat_ortho().arr,
+        .view = try m.mat_look_at(
+            .{ 0, 1, 0 },
+            .{ hmm, 0, 0 },
+            .{ 0, 0, 1 },
+        ),
+    };
+}
