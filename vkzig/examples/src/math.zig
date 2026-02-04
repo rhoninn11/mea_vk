@@ -43,6 +43,9 @@ pub fn stack4d(a: vec3, b: f32) vec4 {
 pub fn splat4d(a: f32) vec4 {
     return @splat(a);
 }
+pub fn trim3d(a: vec4) vec3 {
+    return .{ a[0], a[1], a[2] };
+}
 
 pub fn dot(a: vec3, b: vec3) f32 {
     const squared = a[X] * b[X] + a[Y] * b[Y] + a[Z] * b[Z];
@@ -73,7 +76,7 @@ const vec3u = extern union {
 };
 
 const mat4u = extern union {
-    vec: mat4,
+    mat: mat4,
     arr: [16]f32,
 };
 
@@ -85,9 +88,11 @@ pub fn matMul(m: mat4, v: vec4) vec4 {
 
 test "mat mul test" {
     const v = vec3{ 8, -2, 1 };
-    const b = matMul(mat_identity(), v);
+    const b = matMul(mat_identity().mat, stack4d(v, 1));
 
-    try std.testing.expect(len(v - b) < 0.001);
+    try std.testing.expect(len(v - trim3d(b)) < 0.001);
+    try std.testing.expect(false);
+    // TODO: not sure if works properly
 }
 
 pub fn len(vec: vec3) f32 {
@@ -105,29 +110,45 @@ pub fn norm(v: vec3) vec3 {
     return v / @as(vec3, @splat(len(v)));
 }
 
-pub fn mat_identity() [16]f32 {
-    return .{
-        1, 0, 0, 0, //
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1,
+pub fn mat_identity() mat4u {
+    const out: mat4u = .{
+        .arr = .{
+            1, 0, 0, 0, //
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1,
+        },
     };
+    return out;
 }
 
-pub fn mat_ortho() mat4u {
-    const scale: f32 = 1.33;
-    const right_left: [2]f32 = .{ scale, -scale }; //   right left
-    const bot_top: [2]f32 = .{ scale, -scale }; //   up down     | vk has reversed y
-    const far_near: [2]f32 = .{ 10, 0 }; // far near
+pub fn mat_ortho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32) mat4u {
     const m4: mat4u = .{
         .arr = .{
-            2 / diff(right_left), 0,                 0,                  -sum(right_left) / diff(right_left), //
-            0,                    2 / diff(bot_top), 0,                  -sum(bot_top) / diff(bot_top),
-            0,                    0,                 1 / diff(far_near), -far_near[1] / diff(far_near),
-            0,                    0,                 0,                  1,
+            2 / (right - left), 0,               0,                -(right + left) / (right - left), //
+            0,                  2 / (down - up), 0,                -(down + up) / (down - up),
+            0,                  0,               1 / (far - near), -near / (far - near),
+            0,                  0,               0,                1,
         },
     };
     return m4;
+}
+
+pub fn mat_ortho_norm() mat4u {
+    const scale = 2;
+    // from up down depends, y axis flip in vulkan
+    return mat_ortho(scale, -scale, scale, -scale, scale, -scale);
+}
+
+test "ortho to vulkan" {
+    const initial = vec3{ 10, 10, -1 };
+    const final = vec3{ 1, -1, 0 };
+    const mat = mat_ortho(10, 5, 10, 5, 1, -1);
+    const after_transform = matMul(mat.mat, stack4d(initial, 1));
+
+    mat_print(mat, "ortho");
+    std.debug.print("{}\n", .{after_transform});
+    try std.testing.expect(len(final - trim3d(after_transform)) < 0.001);
 }
 
 pub fn mat_persp() [16]f32 {
@@ -170,7 +191,7 @@ pub fn mat_look_at(pos: vec3, target: vec3, up: vec3) ![16]f32 {
         .{ m_left[Z], m_up[Z], m_forward[Z], pos[Z] },
         stack4d(zero3(), 1),
     };
-    const dual: mat4u = .{ .vec = mat };
+    const dual: mat4u = .{ .mat = mat };
     return dual.arr;
     // return mat_identity();
 }
