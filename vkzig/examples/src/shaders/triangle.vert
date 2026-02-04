@@ -15,7 +15,7 @@ layout(set = 0, binding = 0) uniform GroupData{
     vec4 temporal;
     vec4 not_used_4d_2;
     MatPack matrices;
-} m_group;
+} _group;
 
 struct Instance{
     vec2 offset_2d;
@@ -26,7 +26,7 @@ struct Instance{
 };
 layout(set = 1, binding = 0) buffer readonly InstanceData{
     Instance per_instance[];
-} storage;
+} _storage;
 
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_color;
@@ -36,23 +36,24 @@ layout(location = 1) out float v_progress;
 
 // group locked at the middle of the screan
 void main() {
-    Instance m_inst = storage.per_instance[gl_InstanceIndex];
+    Instance m_inst = _storage.per_instance[gl_InstanceIndex];
+    MatPack ems = _group.matrices;
 
     vec2 instance_offset = m_inst.offset_2d;
-    vec2 prescaled_pos = a_pos.xy * m_group.scale_2d;
+    vec2 prescaled_pos = a_pos.xy * _group.scale_2d;
 
     float phase_offset = m_inst.other_offsets.x;
     float spread_offset = m_inst.other_offsets.y;
     
-    float phase = m_group.temporal.x + phase_offset;
-    vec2 osc_offset = vec2(cos(phase), sin(phase)) * m_group.osc_scale;
+    float phase = _group.temporal.x + phase_offset;
+    vec2 osc_offset = vec2(cos(phase), sin(phase)) * _group.osc_scale;
     osc_offset = vec2(0,0);
 
 //  should be visible after depth testing
-    float depth_osc = sin(m_group.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
+    float depth_osc = sin(_group.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
     depth_osc += gl_InstanceIndex*0.001;
     vec4 before_transform = vec4(prescaled_pos + instance_offset + osc_offset, depth_osc, 1.0);
-    gl_Position = m_group.matrices.proj * m_group.matrices.view * before_transform; 
+    gl_Position = ems.proj * ems.view * before_transform; 
     v_color.rg = a_color.rg;
     v_color.b = spread_offset;
     v_progress = a_color.r + m_inst.new_usage.x;

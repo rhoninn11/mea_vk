@@ -231,12 +231,15 @@ pub const DescriptorPrep = struct {
 };
 
 pub fn paramatricVariation(hmm: f32) !t.MatPack {
+    _ = hmm;
     return t.MatPack{
-        .proj = m.mat_ortho().arr,
-        .view = try m.mat_look_at(
-            .{ 0, 1, 0 },
-            .{ hmm, 0, 0 },
-            .{ 0, 0, 1 },
-        ),
+        // .proj = m.mat_ortho().arr,
+        // .view = try m.mat_look_at(
+        //     .{ 0, 1, 0 },
+        //     .{ hmm, 0, 0 },
+        //     .{ 0, 0, 1 },
+        // ),
+        .proj = m.mat_identity().arr,
+        .view = m.mat_identity().arr,
     };
 }

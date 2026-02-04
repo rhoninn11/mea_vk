@@ -1,9 +1,9 @@
 const m = @import("math.zig");
 
 pub const MatPack = struct {
-    model: [16]f32 = m.mat_identity(),
-    view: [16]f32 = m.mat_identity(),
-    proj: [16]f32 = m.mat_identity(),
+    model: [16]f32 = m.mat_identity().arr,
+    view: [16]f32 = m.mat_identity().arr,
+    proj: [16]f32 = m.mat_identity().arr,
 };
 
 pub const GroupData = struct {
