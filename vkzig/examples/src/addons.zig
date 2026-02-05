@@ -230,17 +230,17 @@ pub const DescriptorPrep = struct {
     }
 };
 
-pub fn paramatricVariation(hmm: f32) !t.MatPack {
-    _ = hmm;
+pub fn paramatricVariation(scale: f32, param: f32) !t.MatPack {
+    std.debug.print("+++ param: {d}\n", .{param});
+    const ortho_window = m.mat_ortho(scale, -scale, scale, -scale, 20, -20);
+
     const interm = t.MatPack{
-        // .proj = m.mat_ortho().arr,
-        // .view = try m.mat_look_at(
-        //     .{ 0, 1, 0 },
-        //     .{ hmm, 0, 0 },
-        //     .{ 0, 0, 1 },
-        // ),
-        .proj = m.mat_ortho_norm().arr,
-        .view = m.mat_identity().arr,
+        .proj = ortho_window.arr,
+        .view = (try m.mat_look_at(
+            .{ param, 0, -1 },
+            .{ 0, 0, 0 },
+            .{ 0, 1, 0 },
+        )).arr,
     };
     return interm;
 }

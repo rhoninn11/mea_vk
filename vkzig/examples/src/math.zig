@@ -117,25 +117,24 @@ pub fn mat_identity() mat4u {
     };
 }
 
-pub fn mat_ortho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32) mat4 {
+pub fn mat_ortho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32) mat4u {
     const w = right - left;
     const h = down - up; // Vk has -Y axis
     const d = far - near;
-    return .{
-        .{ 2 / w, 0, 0, 0 }, // column-major
-        .{ 0, 2 / h, 0, 0 },
-        .{ 0, 0, 1 / d, 0 },
-        .{ -(right + left) / w, -(down + up) / h, -near / d, 1 },
+    return mat4u{
+        .mat = .{
+            .{ 2 / w, 0, 0, 0 }, // column-major
+            .{ 0, 2 / h, 0, 0 },
+            .{ 0, 0, 1 / d, 0 },
+            .{ -(right + left) / w, -(down + up) / h, -near / d, 1 },
+        },
     };
 }
 
 pub fn mat_ortho_norm() mat4u {
     const scale = 1;
     // from up down depends, y axis flip in vulkan
-    return mat4u{
-        .mat = //
-        mat_ortho(scale, -scale, scale, -scale, scale, -scale),
-    };
+    return mat_ortho(scale, -scale, scale, -scale, scale, -scale);
 }
 
 test "|ortho_to_vulkan" {
@@ -145,10 +144,8 @@ test "|ortho_to_vulkan" {
     const y1 = vec3{ -1, 1, 0 };
 
     const M1 = mat_ortho(10, 5, 10, 5, 1, -1);
-
-    const v0 = matXvec(M1, stack4d(x0, 1));
-    const v1 = matXvec(M1, stack4d(x1, 1));
-
+    const v0 = matXvec(M1.mat, stack4d(x0, 1));
+    const v1 = matXvec(M1.mat, stack4d(x1, 1));
     try std.testing.expect(len(y0 - trim3d(v0)) < 0.001);
     try std.testing.expect(len(y1 - trim3d(v1)) < 0.001);
 
@@ -158,12 +155,8 @@ test "|ortho_to_vulkan" {
     const y3 = vec3{ -1, 1, 0 };
 
     const M2 = mat_ortho_norm();
-    mat_print(M2.mat, "hmmm");
     const v2 = matXvec(M2.mat, stack4d(x2, 1));
     const v3 = matXvec(M2.mat, stack4d(x3, 1));
-    std.debug.print("\n", .{});
-    std.debug.print("v2 {}\n", .{v2});
-    std.debug.print("v3 {}\n", .{v3});
     try std.testing.expect(len(y2 - trim3d(v2)) < 0.001);
     try std.testing.expect(len(y3 - trim3d(v3)) < 0.001);
 }
@@ -194,34 +187,51 @@ const minus_vec3 = @as(vec3, @splat(-1));
 
 pub fn mat_look_at(pos: vec3, target: vec3, up: vec3) !mat4u {
     const delta = target - pos;
-    const m_forward = norm(delta);
-    if (abs(dot(m_forward, up)) > 0.95) {
+    const m_z = norm(delta);
+    if (abs(dot(m_z, up)) > 0.95) {
         return MathErr.to_close_to_singularity;
     }
 
-    const m_left = norm(cross(m_forward, up));
-    const m_up = cross(m_left, m_forward);
+    const m_x = -norm(cross(m_z, up));
+    const m_y = -cross(m_x, m_z);
 
+    const trans: vec3 = .{
+        -dot(m_x, pos),
+        -dot(m_y, pos),
+        -dot(m_z, pos),
+    };
     const mat: mat4u = .{
         .mat = .{
-            stack4d(m_left, 0), //column-major
-            stack4d(m_up, 0),
-            stack4d(m_forward, 0),
-            stack4d(pos, 1),
+            stack4d(m_x, 0), //column-major
+            stack4d(m_y, 0),
+            stack4d(m_z, 0),
+            stack4d(trans, 1),
         },
     };
     return mat;
     // return mat_identity();
 }
 
-// test "is_matrix_looking" {
-//     const random_point = vec3{ 1, 0, 0 };
+test "is_matrix_looking" {
+    const up = vec3{ 0, 1, 0 };
+    const random_point = vec3{ 0, 0, 0.5 };
+    const right_nighbour = vec3{ 1, 0, 0.5 };
+    const up_nighbour = vec3{ 0, 1, 0.5 };
+    const observ = vec3{ 0, 0, -2 };
 
-//     const mat = try mat_look_at(.{ 2, 0, 0 }, random_point, .{ 0, 1, 0 });
+    const mat = try mat_look_at(observ, random_point, up);
 
-//     const t_point = matXvec(mat.mat, stack4d(random_point, 1));
-//     mat_print(mat, "look at");
-//     std.debug.print("{}\n", .{t_point});
-//     try std.testing.expect(abs(t_point[0]) < 0.001);
-//     try std.testing.expect(abs(t_point[1]) < 0.001);
-// }
+    std.debug.print("forward: {}\n", .{mat.mat[2]});
+
+    const t0 = matXvec(mat.mat, stack4d(random_point, 1));
+    const t1 = matXvec(mat.mat, stack4d(right_nighbour, 1));
+    const t2 = matXvec(mat.mat, stack4d(up_nighbour, 1));
+    std.debug.print("targeted: {}\n", .{t0});
+    std.debug.print("right?: {}\n", .{t1});
+    std.debug.print("up?: {}\n", .{t2});
+    try std.testing.expect(abs(t0[0]) < 0.001);
+    try std.testing.expect(abs(t0[1]) < 0.001);
+
+    try std.testing.expect(t0[0] < t1[0]); //should be on right
+    try std.testing.expect(t0[1] < t2[1]); //should be higher
+}

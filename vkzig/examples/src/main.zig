@@ -266,6 +266,7 @@ pub fn main() !void {
     _ = glfw.setKeyCallback(window, key_callback);
 
     var timeline = addons.Timeline.init();
+    var timeline1 = addons.Timeline.init();
     time_glob = &timeline;
     var perf_stats = addons.PerfStats.init();
     var state: Swapchain.PresentState = .optimal;
@@ -274,7 +275,7 @@ pub fn main() !void {
     const spatial_delta = 0.2;
     const along = 1 / @as(f32, @floatFromInt(instance_num - 1));
     const phase_delta = along * std.math.tau;
-    const spread_base = -0.2;
+    const spread_base = 0;
     const spread_delta = along * 0.2;
 
     const seed: u64 = @intCast(std.time.timestamp()); // more random
@@ -346,6 +347,7 @@ pub fn main() !void {
         // Don't present or resize swapchain while the window is minimized
         perf_stats.messure();
         timeline.update();
+        timeline1.update();
         if (w == 0 or h == 0) {
             glfw.pollEvents();
             continue;
@@ -356,12 +358,13 @@ pub fn main() !void {
         const this_frame_uniform = uniform_dset.buff_arr.items[swapchain.image_index].?;
         const as_group_data: *t.GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
 
-        const timeline_osc = std.math.sin(timeline.total_s) * 0.1 + 0.1;
+        const scale_osc = std.math.sin(timeline.total_s) * 0.2 + 2;
+        const z_pos_osc = std.math.sin(timeline1.total_s * 0.2);
 
         as_group_data.*.osc_scale = .{ 0.1, 0.1 };
         as_group_data.*.scale_2d = .{ particle_scale, particle_scale };
         as_group_data.*.termoral = .{ timeline.total_s, 0, 1, 2 };
-        as_group_data.*.mtrices = try addons.paramatricVariation(timeline_osc);
+        as_group_data.*.mtrices = try addons.paramatricVariation(scale_osc, z_pos_osc);
 
         // typedPtr.*.data_2d[4] = 0.05 + std.math.sin(timeline.total_s * 4) * 0.05;
 
