@@ -54,6 +54,7 @@ void main() {
     depth_osc += gl_InstanceIndex*0.001;
     vec4 before_transform = vec4(prescaled_pos + instance_offset + osc_offset, depth_osc, 1.0);
     gl_Position = ems.proj * ems.view * before_transform; 
+    // gl_Position = before_transform; 
     v_color.rg = a_color.rg;
     v_color.b = spread_offset;
     v_progress = a_color.r + m_inst.new_usage.x;

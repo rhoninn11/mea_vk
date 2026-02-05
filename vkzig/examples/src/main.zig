@@ -270,7 +270,7 @@ pub fn main() !void {
     var perf_stats = addons.PerfStats.init();
     var state: Swapchain.PresentState = .optimal;
 
-    const spatial_base = -0.75;
+    const spatial_base = 0;
     const spatial_delta = 0.2;
     const along = 1 / @as(f32, @floatFromInt(instance_num - 1));
     const phase_delta = along * std.math.tau;
@@ -866,7 +866,7 @@ fn createPipeline(
         .rasterizer_discard_enable = .false,
         .polygon_mode = .fill,
         .cull_mode = .{ .back_bit = true },
-        .front_face = .clockwise,
+        .front_face = .counter_clockwise, // couse we assume Y axis flip
         .depth_bias_enable = .false,
         .depth_bias_constant_factor = 0,
         .depth_bias_clamp = 0,
