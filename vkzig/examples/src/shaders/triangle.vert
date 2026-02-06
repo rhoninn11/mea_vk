@@ -1,5 +1,7 @@
 #version 450
 
+#define TAU 6.2831853071
+#define PI 3.1415926538
 
 struct MatPack {
     mat4 model;
@@ -31,7 +33,7 @@ layout(set = 1, binding = 0) buffer readonly InstanceData{
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_color;
 
-layout(location = 0) out vec3 v_color;
+layout(location = 0) out vec4 v_color;
 layout(location = 1) out float v_progress;
 
 // group locked at the middle of the screan
@@ -50,12 +52,17 @@ void main() {
     osc_offset = vec2(0,0);
 
 //  should be visible after depth testing
+    float alt_depth = cos(m_inst.new_usage.y*PI*0.5);
     float depth_osc = sin(_group.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
     depth_osc += gl_InstanceIndex*0.001;
-    vec4 before_transform = vec4(prescaled_pos + instance_offset + osc_offset, depth_osc, 1.0);
+    alt_depth += gl_InstanceIndex*0.001;
+
+    vec4 before_transform = vec4(prescaled_pos + instance_offset + osc_offset, alt_depth, 1.0);
     gl_Position = ems.proj * ems.view * before_transform; 
     // gl_Position = before_transform; 
     v_color.rg = a_color.rg;
     v_color.b = spread_offset;
+    v_color.a = alt_depth;
+    v_color.a *= v_color.a;
     v_progress = a_color.r + m_inst.new_usage.x;
 }

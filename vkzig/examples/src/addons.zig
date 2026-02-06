@@ -231,7 +231,6 @@ pub const DescriptorPrep = struct {
 };
 
 pub fn paramatricVariation(scale: f32, param: f32) !t.MatPack {
-    std.debug.print("+++ param: {d}\n", .{param});
     const ortho_window = m.mat_ortho(scale, -scale, scale, -scale, 20, -20);
 
     const interm = t.MatPack{

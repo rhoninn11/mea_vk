@@ -333,9 +333,9 @@ pub fn main() !void {
             }
         }
         // const hey = storage_dset.buff_arr.items[0].?.mapping.?;
-        // const storagePtr: *[instance_num]PerInstance = @ptrCast(@alignCast(hey));
+        // const storagePtr: *[instance_num]t.PerInstance = @ptrCast(@alignCast(hey));
         // for (0..instance_num) |i| {
-        //     std.debug.print("i: {d} x_f: {d}, x_d: {d}\n", .{ i, storagePtr[i].new_usage[2], storagePtr[i].new_usage[3] });
+        //     std.debug.print("dist: {d}\n", .{ i, storagePtr[i].new_usage[1] });
         // }
     }
 
