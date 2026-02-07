@@ -1,7 +1,4 @@
 
-
-// Ach te nawiązania biblijne, one zawsze dodają takiego mistycyzmu przez to połączenie z historią dziejów
-
 #if defined(SOKOL_IMPL) && !defined(SOKOL_AUDIO_IMPL)
 #define SOKOL_AUDIO_IMPL
 #endif

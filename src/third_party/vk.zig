@@ -1,8 +1,10 @@
 // This file is generated from the Khronos Vulkan XML API registry by vulkan-zig.
 // https://github.com/Snektron/vulkan-zig branch "zig-0.15-compat", vulkan xml version
 // References this version: https://github.com/KhronosGroup/Vulkan-Headers/archive/v1.3.283.tar.gz
+//
+//
+//
 
-// TODO: Read a license, to detemine if generated code is also covered by this license
 // =============================================================================================
 // Copyright © Robin Voetter
 

@@ -39,7 +39,7 @@ pub const PerfStats = struct {
 
                 // std.debug.print("+++ omg is over 9000 {d}\n", .{fps});
             }
-            std.debug.print("+++ rendering hit {d} fps\n", .{fps});
+            // std.debug.print("+++ rendering hit {d} fps\n", .{fps});
             s.t0 += update_interval_i;
             s.frame_num = 0;
         }
@@ -233,11 +233,12 @@ pub const DescriptorPrep = struct {
 pub fn paramatricVariation(scale: f32, param: f32) !t.MatPack {
     const ortho_window = m.mat_ortho(scale, -scale, scale, -scale, 20, -20);
 
+    std.debug.print("param | {} |\n", .{param});
     const interm = t.MatPack{
         .proj = ortho_window.arr,
         .view = (try m.mat_look_at(
             .{ param, 0, -1 },
-            .{ 0, 0, 0 },
+            .{ param, 0, 0 },
             .{ 0, 1, 0 },
         )).arr,
     };
