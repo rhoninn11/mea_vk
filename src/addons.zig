@@ -1,5 +1,6 @@
 const std = @import("std");
 const vk = @import("third_party/vk.zig");
+const glfw = @import("third_party/glfw.zig");
 const gftx = @import("graphics_context.zig");
 
 const t = @import("types.zig");
@@ -29,7 +30,7 @@ pub const PerfStats = struct {
 
         const scale: f32 = messure_interval / update_interval;
         if (delta > update_interval_i) {
-            std.debug.print("\x1B[A\x1B[2K", .{});
+            // std.debug.print("\x1B[A\x1B[2K", .{});
             var fps: f32 = @floatFromInt(s.frame_num);
             fps *= scale;
 
@@ -48,12 +49,18 @@ pub const PerfStats = struct {
     }
 };
 
+pub const IntervalInfo = struct {
+    _t_interval: i64,
+    interval: i64,
+};
+
 pub const Timeline = struct {
     _t0: i64,
     _t_last: i64,
+    interval: ?IntervalInfo = null,
 
     total_s: f32,
-    delta_s: f32,
+    delta_ms: f32,
 
     time_passage: bool = true,
 
@@ -63,7 +70,7 @@ pub const Timeline = struct {
             ._t0 = now,
             ._t_last = now,
             .total_s = 0,
-            .delta_s = 0.0001,
+            .delta_ms = 0.0001,
         };
     }
 
@@ -73,10 +80,34 @@ pub const Timeline = struct {
         const delta = @as(f32, @floatFromInt(now - self._t_last));
 
         self._t_last = now;
-        self.delta_s = delta / 1000000;
+        self.delta_ms = delta / 1000;
         if (self.time_passage) {
-            self.total_s += self.delta_s;
+            self.total_s += self.delta_ms / 1000;
         }
+    }
+
+    pub fn arm(self: *Timeline, us: i32) void {
+        self.interval = IntervalInfo{
+            ._t_interval = self._t_last,
+            .interval = us,
+        };
+    }
+
+    pub fn triggerd(self: *Timeline) bool {
+        var intv: *IntervalInfo = undefined;
+        if (self.interval) |_| {
+            intv = &self.interval.?;
+        } else {
+            return false;
+        }
+
+        const delta = self._t_last - intv._t_interval;
+        if (delta > intv.interval) {
+            intv._t_interval += intv.interval;
+            return true;
+        }
+
+        return false;
     }
 };
 
@@ -230,17 +261,56 @@ pub const DescriptorPrep = struct {
     }
 };
 
-pub fn paramatricVariation(scale: f32, param: f32) !t.MatPack {
+pub fn paramatricVariation(scale: f32, pos: m.vec2, targ: m.vec2) !t.MatPack {
     const ortho_window = m.mat_ortho(scale, -scale, scale, -scale, 20, -20);
 
-    std.debug.print("param | {} |\n", .{param});
+    // std.debug.print("param | {} |\n", .{param});
     const interm = t.MatPack{
         .proj = ortho_window.arr,
         .view = (try m.mat_look_at(
-            .{ param, 0, -1 },
-            .{ param, 0, 0 },
+            .{ pos[0], pos[1], -1 },
+            .{ targ[0], targ[1], 0 },
             .{ 0, 1, 0 },
         )).arr,
     };
     return interm;
 }
+
+pub fn getWindowSize(window: *glfw.Window) vk.Extent2D {
+    var w: c_int = undefined;
+    var h: c_int = undefined;
+    glfw.getFramebufferSize(window, &w, &h);
+    return .{
+        .height = @intCast(w),
+        .width = @intCast(h),
+    };
+}
+
+pub fn extentDiffer(a: vk.Extent2D, b: vk.Extent2D) bool {
+    return a.width != b.width or a.height != b.height;
+}
+
+pub fn visible(a: vk.Extent2D) bool {
+    return a.width != 0 and a.height != 0;
+}
+
+pub const Slider = struct {
+    hmm: *const []const m.vec2,
+    len: u8,
+    idx: u8,
+    pub fn init(point: *const []const m.vec2) Slider {
+        std.debug.assert(point.len < std.math.maxInt(u8));
+        return .{
+            .hmm = point,
+            .len = @intCast(point.len),
+            .idx = 0,
+        };
+    }
+    pub fn curr(self: *Slider) m.vec2 {
+        return self.hmm.ptr[self.idx];
+    }
+    pub fn next(self: *Slider) m.vec2 {
+        self.idx = @mod(self.idx + 1, self.len);
+        return self.hmm.ptr[self.idx];
+    }
+};

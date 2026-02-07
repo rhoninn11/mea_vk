@@ -53,17 +53,18 @@ pub fn build(b: *std.Build) !void {
     // });
     // triangle_exe.root_module.addImport("glfw", glfw_module);
 
-    const registry = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
-    const registry_path: std.Build.LazyPath = if (maybe_override_registry) |override_registry|
-        .{ .cwd_relative = override_registry }
-    else
-        registry;
+    _ = maybe_override_registry;
+    // const registry = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
+    // const registry_path: std.Build.LazyPath = if (maybe_override_registry) |override_registry|
+    //     .{ .cwd_relative = override_registry }
+    // else
+    //     registry;
 
-    const vulkan = b.dependency("vulkan_zig", .{
-        .registry = registry_path,
-    }).module("vulkan-zig");
+    // const vulkan = b.dependency("vulkan_zig", .{
+    //     .registry = registry_path,
+    // }).module("vulkan-zig");
 
-    triangle_exe.root_module.addImport("vulkan", vulkan);
+    // triangle_exe.root_module.addImport("vulkan", vulkan);
 
     if (use_zig_shaders) {
         const spirv_target = b.resolveTargetQuery(.{

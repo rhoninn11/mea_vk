@@ -14,7 +14,9 @@ const helpers = @import("helpers.zig");
 const vertex = @import("vertex.zig");
 const m = @import("math.zig");
 const t = @import("types.zig");
+const p = @import("phys.zig");
 
+const InertiaVec2 = p.InertiaPack(m.vec3);
 const Vertex = vertex.Vertex;
 
 const BufforingVert = Buffering(Vertex);
@@ -267,6 +269,7 @@ pub fn main() !void {
 
     var timeline = addons.Timeline.init();
     var timeline1 = addons.Timeline.init();
+    var timeline2 = addons.Timeline.init();
     time_glob = &timeline;
     var perf_stats = addons.PerfStats.init();
     var state: Swapchain.PresentState = .optimal;
@@ -339,16 +342,49 @@ pub fn main() !void {
         // }
     }
 
+    const spots_a: []const m.vec2 = &.{ .{ 0, 0 }, .{ 1, 0 }, .{ 1, 1 }, .{ 0, 1 } };
+    const spots_b: []const m.vec2 = &.{
+        .{ 0, 0 }, .{ 0.5, 0 }, .{ 1, 0 }, .{ 1, 0.5 }, //
+        .{ 1, 1 }, .{ 0.5, 1 }, .{ 0, 1 }, .{ 0, 0.5 },
+    };
+    _ = spots_a;
+    // _ = spots_b;
+    var slid_a = addons.Slider.init(&spots_b);
+    var slid_b = addons.Slider.init(&spots_b);
+
+    timeline1.arm(std.time.us_per_s);
+    timeline2.arm(std.time.us_per_s / 2);
+
+    const IVec2 = p.InertiaPack(m.vec2);
+    var inertia = IVec2.Inertia.init(.{ -1, 0 });
+    var inertia1 = IVec2.Inertia.init(.{ -1, 0 });
+    inertia.phx = IVec2.InertiaCfg.default();
+    inertia1.phx = inertia.phx;
+
     while (!glfw.windowShouldClose(window)) {
-        var w: c_int = undefined;
-        var h: c_int = undefined;
-        glfw.getFramebufferSize(window, &w, &h);
+        const win_size = addons.getWindowSize(window);
 
         // Don't present or resize swapchain while the window is minimized
         perf_stats.messure();
         timeline.update();
         timeline1.update();
-        if (w == 0 or h == 0) {
+        timeline2.update();
+
+        if (timeline2.triggerd()) {
+            inertia.in(slid_a.next());
+            std.debug.print("we are tageting {}\n", .{slid_a.curr()});
+        }
+
+        if (timeline2.triggerd()) {
+            inertia1.in(slid_b.next());
+            std.debug.print("we are tageting {}\n", .{slid_b.curr()});
+        }
+
+        inertia.simulate(timeline1.delta_ms);
+        inertia1.simulate(timeline2.delta_ms);
+
+        //minimalized
+        if (!addons.visible(win_size)) {
             glfw.pollEvents();
             continue;
         }
@@ -359,22 +395,26 @@ pub fn main() !void {
         const as_group_data: *t.GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
 
         const scale_osc = std.math.sin(timeline.total_s) * 0.2 + 2;
-        const z_pos_osc = std.math.sin(timeline1.total_s * 0.2);
 
         as_group_data.*.osc_scale = .{ 0.1, 0.1 };
         as_group_data.*.scale_2d = .{ particle_scale, particle_scale };
         as_group_data.*.termoral = .{ timeline.total_s, 0, 1, 2 };
-        as_group_data.*.mtrices = try addons.paramatricVariation(scale_osc, z_pos_osc);
+        as_group_data.*.mtrices = try addons.paramatricVariation(
+            scale_osc,
+            inertia.out(),
+            inertia.out(),
+            // inertia1.out(),
+        );
 
         // typedPtr.*.data_2d[4] = 0.05 + std.math.sin(timeline.total_s * 4) * 0.05;
 
         const cmdbuf = cmdbufs[swapchain.image_index];
         // std.debug.print("+++ img_idx {d}\n", .{swapchain.image_index});
 
-        if (state == .suboptimal or resolution_extent.width != @as(u32, @intCast(w)) or resolution_extent.height != @as(u32, @intCast(h))) {
-            std.debug.print("??? after resize?\n", .{});
-            resolution_extent.width = @intCast(w);
-            resolution_extent.height = @intCast(h);
+        if (state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {
+
+            // std.debug.assert(false); //cuz it will throw error due to bad depth_img resolution
+            resolution_extent = win_size;
             try swapchain.recreate(resolution_extent);
 
             destroyFramebuffers(&gc, allocator, framebuffers);
