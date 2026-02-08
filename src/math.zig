@@ -186,26 +186,26 @@ pub fn abs(a: f32) f32 {
 
 const minus_vec3 = @as(vec3, @splat(-1));
 
-pub fn mat_look_at(pos: vec3, target: vec3, up: vec3) !mat4u {
+pub fn mat_look_at(pos: vec3, target: vec3, ref_up: vec3) !mat4u {
     const delta = target - pos;
-    const m_z = norm(delta);
-    if (abs(dot(m_z, up)) > 0.95) {
+    const forward = norm(delta);
+    if (abs(dot(forward, ref_up)) > 0.95) {
         return MathErr.to_close_to_singularity;
     }
 
-    const m_x = -norm(cross(m_z, up));
-    const m_y = -cross(m_x, m_z);
+    const right = norm(cross(ref_up, forward));
+    const up = cross(forward, right);
 
     const trans: vec3 = .{
-        -dot(m_x, pos),
-        -dot(m_y, pos),
-        -dot(m_z, pos),
+        -dot(right, pos),
+        -dot(up, pos),
+        -dot(forward, pos),
     };
     const mat: mat4u = .{
         .mat = .{
-            stack4d(m_x, 0), //column-major
-            stack4d(m_y, 0),
-            stack4d(m_z, 0),
+            stack4d(right, 0), //column-major
+            stack4d(up, 0),
+            stack4d(forward, 0),
             stack4d(trans, 1),
         },
     };

@@ -52,10 +52,12 @@ void main() {
     osc_offset = vec2(0,0);
 
 //  should be visible after depth testing
-    float alt_depth = cos(m_inst.new_usage.y*PI*0.5);
+    float alt_depth = cos(m_inst.new_usage.y*PI*0.5)*0.5 + 0.5;
     float depth_osc = sin(_group.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
     depth_osc += gl_InstanceIndex*0.001;
+    alt_depth *= 1;
     alt_depth += gl_InstanceIndex*0.001;
+
 
     vec4 before_transform = vec4(prescaled_pos + instance_offset + osc_offset, alt_depth, 1.0);
     gl_Position = ems.proj * ems.view * before_transform; 
@@ -63,6 +65,6 @@ void main() {
     v_color.rg = a_color.rg;
     v_color.b = spread_offset;
     v_color.a = alt_depth;
-    v_color.a *= v_color.a;
+
     v_progress = a_color.r + m_inst.new_usage.x;
 }

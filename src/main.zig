@@ -57,6 +57,7 @@ fn Buffering(Base: type) type {
     };
 }
 
+var stationary_pos = true;
 fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
     _ = scancode;
     _ = mods;
@@ -70,6 +71,9 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
             hey.time_passage = !hey.time_passage;
         }
         // TODO
+    }
+    if (action == glfw.Press and key == glfw.KeyQ) {
+        stationary_pos = !stationary_pos;
     }
 }
 
@@ -151,7 +155,7 @@ pub fn main() !void {
     }, null);
     defer gc.dev.destroyCommandPool(pool_cmd, null);
 
-    var image = try first_texture(&gc, pool_cmd);
+    var image = try vulkanTexture(&gc, pool_cmd);
     defer image.deinit();
 
     // gpu mat4 alignment is 16B
@@ -269,7 +273,6 @@ pub fn main() !void {
 
     var timeline = addons.Timeline.init();
     var timeline1 = addons.Timeline.init();
-    var timeline2 = addons.Timeline.init();
     time_glob = &timeline;
     var perf_stats = addons.PerfStats.init();
     var state: Swapchain.PresentState = .optimal;
@@ -342,24 +345,14 @@ pub fn main() !void {
         // }
     }
 
-    const spots_a: []const m.vec2 = &.{ .{ 0, 0 }, .{ 1, 0 }, .{ 1, 1 }, .{ 0, 1 } };
-    const spots_b: []const m.vec2 = &.{
-        .{ 0, 0 }, .{ 0.5, 0 }, .{ 1, 0 }, .{ 1, 0.5 }, //
-        .{ 1, 1 }, .{ 0.5, 1 }, .{ 0, 1 }, .{ 0, 0.5 },
-    };
-    _ = spots_a;
-    // _ = spots_b;
-    var slid_a = addons.Slider.init(&spots_b);
-    var slid_b = addons.Slider.init(&spots_b);
-
-    timeline1.arm(std.time.us_per_s);
-    timeline2.arm(std.time.us_per_s / 2);
+    const spots_a: []const m.vec2 = &.{ .{ 0, 0 }, .{ 1, 0 }, .{ 0, 1 } };
+    var slid_a = addons.Slider.init(&spots_a);
+    timeline1.arm(std.time.us_per_s / 2);
 
     const IVec2 = p.InertiaPack(m.vec2);
     var inertia = IVec2.Inertia.init(.{ -1, 0 });
-    var inertia1 = IVec2.Inertia.init(.{ -1, 0 });
     inertia.phx = IVec2.InertiaCfg.default();
-    inertia1.phx = inertia.phx;
+    const zero2 = m.vec2{ 0, 0 };
 
     while (!glfw.windowShouldClose(window)) {
         const win_size = addons.getWindowSize(window);
@@ -368,20 +361,13 @@ pub fn main() !void {
         perf_stats.messure();
         timeline.update();
         timeline1.update();
-        timeline2.update();
 
-        if (timeline2.triggerd()) {
+        if (timeline1.triggerd()) {
             inertia.in(slid_a.next());
-            std.debug.print("we are tageting {}\n", .{slid_a.curr()});
-        }
-
-        if (timeline2.triggerd()) {
-            inertia1.in(slid_b.next());
-            std.debug.print("we are tageting {}\n", .{slid_b.curr()});
+            // std.debug.print("we are tageting {}\n", .{slid_a.curr()});
         }
 
         inertia.simulate(timeline1.delta_ms);
-        inertia1.simulate(timeline2.delta_ms);
 
         //minimalized
         if (!addons.visible(win_size)) {
@@ -395,17 +381,20 @@ pub fn main() !void {
         const as_group_data: *t.GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
 
         const scale_osc = std.math.sin(timeline.total_s) * 0.2 + 2;
+        _ = scale_osc;
 
         as_group_data.*.osc_scale = .{ 0.1, 0.1 };
         as_group_data.*.scale_2d = .{ particle_scale, particle_scale };
         as_group_data.*.termoral = .{ timeline.total_s, 0, 1, 2 };
-        as_group_data.*.mtrices = try addons.paramatricVariation(
-            scale_osc,
-            inertia.out(),
-            inertia.out(),
-            // inertia1.out(),
-        );
 
+        var mat_pack: t.MatPack = undefined;
+        const pnt = inertia.out();
+        if (stationary_pos) {
+            mat_pack = try addons.paramatricVariation(1, zero2, pnt);
+        } else {
+            mat_pack = try addons.paramatricVariation(1, pnt, zero2);
+        }
+        as_group_data.*.matrices = mat_pack;
         // typedPtr.*.data_2d[4] = 0.05 + std.math.sin(timeline.total_s * 4) * 0.05;
 
         const cmdbuf = cmdbufs[swapchain.image_index];
@@ -452,22 +441,14 @@ pub fn main() !void {
     try gc.dev.deviceWaitIdle();
 }
 
-const ImgLTranConfig = struct {
-    image: vk.Image,
-    old_layout: vk.ImageLayout,
-    new_layout: vk.ImageLayout,
-    format: ?vk.Format = null,
-    flags: gftx.LTransRelated,
-};
-
-fn imgLTrans(gc: *const GraphicsContext, pool: vk.CommandPool, cfg: ImgLTranConfig) !void {
-    const devk = gc.dev;
+fn imgLTrans(cmd_ctx: gftx.PoolInCtx, cfg: t.ImgLTranConfig) !void {
+    const devk = cmd_ctx.gc.dev;
     const family_ignored: u32 = 0;
     // const zero_mask: u32 = 0;
 
-    const step: vk.CommandBuffer = try gftx.beginSingleCmd(gc, pool);
+    const one_shot = try gftx.OneShotCommanded.init(cmd_ctx);
 
-    const il_barriers: []const vk.ImageMemoryBarrier = &.{
+    const img_lyr_barriers: []const vk.ImageMemoryBarrier = &.{
         vk.ImageMemoryBarrier{
             .s_type = .image_memory_barrier,
             .old_layout = cfg.old_layout,
@@ -481,7 +462,7 @@ fn imgLTrans(gc: *const GraphicsContext, pool: vk.CommandPool, cfg: ImgLTranConf
         },
     };
     devk.cmdPipelineBarrier(
-        step,
+        one_shot.cbfr,
         cfg.flags.stages.src,
         cfg.flags.stages.dst,
         .{},
@@ -489,11 +470,11 @@ fn imgLTrans(gc: *const GraphicsContext, pool: vk.CommandPool, cfg: ImgLTranConf
         null,
         0,
         null,
-        @intCast(il_barriers.len),
-        il_barriers.ptr,
+        @intCast(img_lyr_barriers.len),
+        img_lyr_barriers.ptr,
     );
 
-    try gftx.endSingleCmd(gc, step);
+    try one_shot.resolve();
 }
 
 const BfrToImgCpyCfg = struct {
@@ -502,10 +483,10 @@ const BfrToImgCpyCfg = struct {
     layout: vk.ImageLayout,
 };
 
-fn bfr2ImgCopy(gc: *const GraphicsContext, pool: vk.CommandPool, cfg: BfrToImgCpyCfg) !void {
-    const devk = gc.dev;
+fn bfr2ImgCopy(cmd_ctx: gftx.PoolInCtx, cfg: BfrToImgCpyCfg) !void {
+    const devk = cmd_ctx.gc.dev;
 
-    const step: vk.CommandBuffer = try gftx.beginSingleCmd(gc, pool);
+    const one_shot = try gftx.OneShotCommanded.init(cmd_ctx);
 
     const bfr_img_cpy: vk.BufferImageCopy = .{
         .buffer_offset = 0,
@@ -520,7 +501,7 @@ fn bfr2ImgCopy(gc: *const GraphicsContext, pool: vk.CommandPool, cfg: BfrToImgCp
         .image_offset = .{ .x = 0, .y = 0, .z = 0 },
     };
     devk.cmdCopyBufferToImage(
-        step,
+        one_shot.cbfr,
         cfg.buffer,
         cfg.image,
         cfg.layout,
@@ -528,11 +509,15 @@ fn bfr2ImgCopy(gc: *const GraphicsContext, pool: vk.CommandPool, cfg: BfrToImgCp
         @ptrCast(&bfr_img_cpy),
     );
 
-    try gftx.endSingleCmd(gc, step);
+    try one_shot.resolve();
 }
 
-fn first_texture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gftx.RGBImage {
+fn vulkanTexture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gftx.RGBImage {
     const devk = gc.dev;
+    const cmd_ctx = gftx.PoolInCtx{
+        .gc = gc,
+        .pool = with_pool,
+    };
 
     var test_img = try gftx.RGBImage.init(gc, 64, 64);
 
@@ -552,7 +537,7 @@ fn first_texture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gftx.RG
     const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
     const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
 
-    try imgLTrans(gc, with_pool, .{
+    try imgLTrans(cmd_ctx, .{
         .old_layout = .undefined,
         .new_layout = dst_layout,
         .image = test_img.dvk_img,
@@ -560,13 +545,13 @@ fn first_texture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gftx.RG
         .flags = gftx.baked.undefined_to_transfered,
     });
 
-    try bfr2ImgCopy(gc, with_pool, .{
+    try bfr2ImgCopy(cmd_ctx, .{
         .buffer = src_buff.dvk_bfr,
         .image = test_img.dvk_img,
         .layout = dst_layout,
     });
 
-    try imgLTrans(gc, with_pool, .{
+    try imgLTrans(cmd_ctx, .{
         .old_layout = dst_layout,
         .new_layout = shader_read_layout,
         .image = test_img.dvk_img,

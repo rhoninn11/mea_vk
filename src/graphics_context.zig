@@ -2,6 +2,7 @@ const std = @import("std");
 
 const glfw = @import("third_party/glfw.zig");
 const vk = @import("third_party/vk.zig");
+const t = @import("types.zig");
 
 const c = @import("c.zig");
 const Allocator = std.mem.Allocator;
@@ -33,20 +34,6 @@ const DeviceWrapper = vk.DeviceWrapper;
 
 const Instance = vk.InstanceProxy;
 const Device = vk.DeviceProxy;
-
-pub const LTransRelated = struct {
-    const Stages = struct {
-        src: vk.PipelineStageFlags,
-        dst: vk.PipelineStageFlags,
-    };
-    const Accesses = struct {
-        src: vk.AccessFlags,
-        dst: vk.AccessFlags,
-    };
-
-    stages: Stages,
-    accesses: Accesses,
-};
 
 pub const baked = struct {
     pub const DSetInit = struct {
@@ -148,7 +135,7 @@ pub const baked = struct {
         .layer_count = 1,
     };
 
-    pub const undefined_to_transfered: LTransRelated = .{
+    pub const undefined_to_transfered: t.LTransRelated = .{
         .accesses = .{
             .src = .{},
             .dst = .{
@@ -165,7 +152,7 @@ pub const baked = struct {
         },
     };
 
-    pub const transfered_to_fragment_readed: LTransRelated = .{
+    pub const transfered_to_fragment_readed: t.LTransRelated = .{
         .accesses = .{
             .src = .{
                 .transfer_write_bit = true,
@@ -373,52 +360,60 @@ pub const DepthImage = struct {
     }
 };
 
-pub fn beginSingleCmd(gc: *const GraphicsContext, pool: vk.CommandPool) !vk.CommandBuffer {
-    const devk = gc.dev;
-    var bfr: vk.CommandBuffer = undefined;
+pub const OneShotCommanded = struct {
+    gc: *const GraphicsContext,
+    cbfr: vk.CommandBuffer,
 
-    const cb_alloc_info: vk.CommandBufferAllocateInfo = .{
-        .s_type = .command_buffer_allocate_info,
-        .command_pool = pool,
-        .level = .primary,
-        .command_buffer_count = 1,
-    };
-    try devk.allocateCommandBuffers(
-        &cb_alloc_info,
-        @ptrCast(&bfr),
-    );
+    pub fn resolve(self: *const OneShotCommanded) !void {
+        const devk = self.gc.dev;
+        try devk.endCommandBuffer(self.cbfr);
 
-    const begin_info: vk.CommandBufferBeginInfo = .{
-        .flags = .{ .one_time_submit_bit = true },
-    };
-    try devk.beginCommandBuffer(bfr, &begin_info);
+        const submmit_info: vk.SubmitInfo = .{
+            .command_buffer_count = 1,
+            .p_command_buffers = @ptrCast(&self.cbfr),
+        };
+        const vkq = self.gc.graphics_queue.handle;
+        try devk.queueSubmit(vkq, 1, @ptrCast(&submmit_info), .null_handle);
+        try devk.queueWaitIdle(vkq);
+    }
+    pub fn init(cmd_ctx: PoolInCtx) !OneShotCommanded {
+        const devk = cmd_ctx.gc.dev;
+        var cbfr: vk.CommandBuffer = undefined;
 
-    return bfr;
-}
+        const cb_alloc_info: vk.CommandBufferAllocateInfo = .{
+            .s_type = .command_buffer_allocate_info,
+            .command_pool = cmd_ctx.pool,
+            .level = .primary,
+            .command_buffer_count = 1,
+        };
+        try devk.allocateCommandBuffers(
+            &cb_alloc_info,
+            @ptrCast(&cbfr),
+        );
 
-pub fn endSingleCmd(gc: *const GraphicsContext, cmd_buff: vk.CommandBuffer) !void {
-    const devk = gc.dev;
-    try devk.endCommandBuffer(cmd_buff);
+        const begin_info: vk.CommandBufferBeginInfo = .{
+            .flags = .{ .one_time_submit_bit = true },
+        };
+        try devk.beginCommandBuffer(cbfr, &begin_info);
 
-    const submmit_info: vk.SubmitInfo = .{
-        .command_buffer_count = 1,
-        .p_command_buffers = @ptrCast(&cmd_buff),
-    };
-    const vkq = gc.graphics_queue.handle;
-    try devk.queueSubmit(vkq, 1, @ptrCast(&submmit_info), .null_handle);
-    try devk.queueWaitIdle(vkq);
-}
+        return .{
+            .gc = cmd_ctx.gc,
+            .cbfr = cbfr,
+        };
+    }
+};
 
 pub const BufferData = struct {
     dvk_bfr: vk.Buffer,
     dvk_mem: vk.DeviceMemory,
     mapping: ?*anyopaque,
 
-    pub fn deinit(self: BufferData, dev: vk.DeviceProxy) void {
+    pub fn deinit(self: *const BufferData, dev: vk.DeviceProxy) void {
         dev.destroyBuffer(self.dvk_bfr, null);
         dev.freeMemory(self.dvk_mem, null);
     }
 };
+
 pub fn createBuffer(
     gc: *const GraphicsContext,
     mem_flags: vk.MemoryPropertyFlags,
@@ -449,6 +444,11 @@ pub fn createBuffer(
         .mapping = try devk.mapMemory(memory, 0, r.size, .{}),
     };
 }
+pub const PoolInCtx = struct {
+    gc: *const GraphicsContext,
+    pool: vk.CommandPool,
+};
+
 pub const GraphicsContext = struct {
     pub const CommandBuffer = vk.CommandBufferProxy;
 
