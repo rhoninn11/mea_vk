@@ -261,19 +261,16 @@ pub const DescriptorPrep = struct {
     }
 };
 
-pub fn paramatricVariation(scale: f32, pos: m.vec2, targ: m.vec2) !t.MatPack {
+pub fn paramatricVariation(scale: f32, pos: m.vec3, targ: m.vec2) !t.MatPack {
     const ortho_window = m.mat_ortho(scale, -scale, scale, -scale, 20, -20);
     const persp_window = m.mat_persp(1, 0.75, std.math.pi / 2.0, 0.1, 20);
 
     // std.debug.print("param | {} |\n", .{param});
     _ = ortho_window;
+    _ = targ;
     const interm = t.MatPack{
         .proj = persp_window.arr,
-        .view = (try m.mat_look_at(
-            .{ pos[0], pos[1], -1 },
-            .{ targ[0], targ[1], 0 },
-            .{ 0, 1, 0 },
-        )).arr,
+        .view = m.mat_translate(-pos).arr,
     };
     return interm;
 }
@@ -296,23 +293,26 @@ pub fn visible(a: vk.Extent2D) bool {
     return a.width != 0 and a.height != 0;
 }
 
-pub const Slider = struct {
-    hmm: *const []const m.vec2,
-    len: u8,
-    idx: u8,
-    pub fn init(point: *const []const m.vec2) Slider {
-        std.debug.assert(point.len < std.math.maxInt(u8));
-        return .{
-            .hmm = point,
-            .len = @intCast(point.len),
-            .idx = 0,
-        };
-    }
-    pub fn curr(self: *Slider) m.vec2 {
-        return self.hmm.ptr[self.idx];
-    }
-    pub fn next(self: *Slider) m.vec2 {
-        self.idx = @mod(self.idx + 1, self.len);
-        return self.hmm.ptr[self.idx];
-    }
-};
+pub fn Slider(vecTpy: type) type {
+    return struct {
+        const Self = @This();
+        hmm: *const []const vecTpy,
+        len: u8,
+        idx: u8,
+        pub fn init(point: *const []const vecTpy) Self {
+            std.debug.assert(point.len < std.math.maxInt(u8));
+            return .{
+                .hmm = point,
+                .len = @intCast(point.len),
+                .idx = 0,
+            };
+        }
+        pub fn curr(self: *Self) vecTpy {
+            return self.hmm.ptr[self.idx];
+        }
+        pub fn next(self: *Self) vecTpy {
+            self.idx = @mod(self.idx + 1, self.len);
+            return self.hmm.ptr[self.idx];
+        }
+    };
+}

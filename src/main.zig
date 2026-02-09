@@ -345,14 +345,13 @@ pub fn main() !void {
         // }
     }
 
-    const spots_a: []const m.vec2 = &.{ .{ 0, 0 }, .{ 1, 0 }, .{ 0, 1 } };
-    var slid_a = addons.Slider.init(&spots_a);
+    const spots_a: []const m.vec3 = &.{ .{ 0, 0, -0.5 }, .{ 1, 0, -0.6 }, .{ 0, 1, -0.7 } };
+    var slid_a = addons.Slider(m.vec3).init(&spots_a);
     timeline1.arm(std.time.us_per_s / 2);
 
-    const IVec2 = p.InertiaPack(m.vec2);
-    var inertia = IVec2.Inertia.init(.{ -1, 0 });
-    inertia.phx = IVec2.InertiaCfg.default();
-    const zero2 = m.vec2{ 0, 0 };
+    const IVec3 = p.InertiaPack(m.vec3);
+    var inertia = IVec3.Inertia.init(.{ 0, 0, 0 });
+    inertia.phx = IVec3.InertiaCfg.default();
 
     while (!glfw.windowShouldClose(window)) {
         const win_size = addons.getWindowSize(window);
@@ -386,16 +385,11 @@ pub fn main() !void {
         as_group_data.*.osc_scale = .{ 0.1, 0.1 };
         as_group_data.*.scale_2d = .{ particle_scale, particle_scale };
         as_group_data.*.termoral = .{ timeline.total_s, 0, 1, 2 };
-
-        var mat_pack: t.MatPack = undefined;
-        const pnt = inertia.out();
-        if (stationary_pos) {
-            mat_pack = try addons.paramatricVariation(1, zero2, pnt);
-        } else {
-            mat_pack = try addons.paramatricVariation(1, pnt, zero2);
-        }
-        as_group_data.*.matrices = mat_pack;
-        // typedPtr.*.data_2d[4] = 0.05 + std.math.sin(timeline.total_s * 4) * 0.05;
+        as_group_data.*.matrices = try addons.paramatricVariation(
+            1,
+            inertia.out(),
+            .{ 0, 0 },
+        );
 
         const cmdbuf = cmdbufs[swapchain.image_index];
         // std.debug.print("+++ img_idx {d}\n", .{swapchain.image_index});

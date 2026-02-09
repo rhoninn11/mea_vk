@@ -118,6 +118,32 @@ pub fn mat_identity() mat4u {
     };
 }
 
+pub fn mat_translate(t: vec3) mat4u {
+    return mat4u{
+        .mat = .{
+            .{ 1, 0, 0, 0 }, //column-major
+            .{ 0, 1, 0, 0 },
+            .{ 0, 0, 1, 0 },
+            .{ t[0], t[1], t[2], 1 },
+        },
+    };
+}
+
+test "|point_moved" {
+    const a = vec3{ 1, 2, 3 };
+    const b = vec3{ -1, 7, 18 };
+    const assumed = a + b;
+    const mat = mat_translate(a);
+    const t = matXvec(mat.mat, stack4d(b, 1));
+
+    std.debug.print("translate \n", .{});
+    std.debug.print("t {}\n", .{t});
+
+    var e = assumed - trim3d(t);
+    for (0..3) |i| e[i] = abs(e[i]);
+    try std.testing.expect(@reduce(.Add, e) < 0.001);
+}
+
 pub fn mat_ortho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32) mat4u {
     const w = right - left;
     const h = down - up; // Vk has -Y axis
@@ -182,7 +208,7 @@ pub fn math_persp_def() mat4u {
     return mat_persp(4, 3, std.math.pi / 2.0, 0.1, 10);
 }
 
-test "|pers_to_vulkan" {
+test "|persp_to_vulkan" {
     const x0 = .{ 1, 0, 1, 1 };
     const x1 = .{ 1, 0, 8, 1 };
 
@@ -190,9 +216,9 @@ test "|pers_to_vulkan" {
 
     const y0 = matXvec(M1, x0);
     const y1 = matXvec(M1, x1);
-    //devide by w ([x, y, z, w]) is applied before placing in NDC
 
     try std.testing.expect(y0[0] / y0[3] > y1[0] / y1[3]);
+    //Lesson: GPUs are deviding vec3 by w coordinate
 }
 
 pub fn mat_print(mat: mat4, name: []const u8) void {
@@ -243,22 +269,32 @@ pub fn mat_look_at(pos: vec3, target: vec3, ref_up: vec3) !mat4u {
     // return mat_identity();
 }
 
+const UP = vec3{ 0, 1, 0 };
 test "is_matrix_looking" {
-    const up = vec3{ 0, 1, 0 };
-    const random_point = vec3{ 0, 0, 0.5 };
-    const right_nighbour = vec3{ 1, 0, 0.5 };
-    const up_nighbour = vec3{ 0, 1, 0.5 };
-    const observ = vec3{ 0, 0, -2 };
+    const observ = vec3{ -1, 1, -1 };
 
-    const mat = try mat_look_at(observ, random_point, up);
+    const M = 0;
+    const R = 1;
+    const U = 2;
+    const point_m = vec3{ 1, 0, 1 };
+    const point_r = vec3{ 1.1, 0, 1 };
+    const point_u = vec3{ 0, 0.1, 1 };
 
-    const t0 = matXvec(mat.mat, stack4d(random_point, 1));
-    const t1 = matXvec(mat.mat, stack4d(right_nighbour, 1));
-    const t2 = matXvec(mat.mat, stack4d(up_nighbour, 1));
+    const mat = try mat_look_at(observ, point_m, UP);
+    const pts: [3]vec3 = .{ point_m, point_r, point_u };
+    var outs: [3]vec4 = undefined;
+    for (pts, 0..) |x, i| {
+        outs[i] = matXvec(mat.mat, stack4d(x, 1));
+    }
 
-    try std.testing.expect(abs(t0[0]) < 0.001);
-    try std.testing.expect(abs(t0[1]) < 0.001);
+    std.debug.print("---\n", .{});
+    std.debug.print("middle one {}\n", .{outs[M]});
+    std.debug.print("right one  {}\n", .{outs[R]});
+    std.debug.print("left one   {}\n", .{outs[U]});
+    try std.testing.expect(abs(outs[M][X]) < 0.001);
+    try std.testing.expect(abs(outs[M][Y]) < 0.001);
 
-    try std.testing.expect(t0[0] < t1[0]); //should be on right
-    try std.testing.expect(t0[1] < t2[1]); //should be higher
+    try std.testing.expect(outs[M][X] < outs[R][X]); //should be on right
+    try std.testing.expect(outs[M][Y] < outs[U][Y]); //should be higher
+
 }
