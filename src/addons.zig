@@ -263,10 +263,12 @@ pub const DescriptorPrep = struct {
 
 pub fn paramatricVariation(scale: f32, pos: m.vec2, targ: m.vec2) !t.MatPack {
     const ortho_window = m.mat_ortho(scale, -scale, scale, -scale, 20, -20);
+    const persp_window = m.mat_persp(1, 0.75, std.math.pi / 2.0, 0.1, 20);
 
     // std.debug.print("param | {} |\n", .{param});
+    _ = ortho_window;
     const interm = t.MatPack{
-        .proj = ortho_window.arr,
+        .proj = persp_window.arr,
         .view = (try m.mat_look_at(
             .{ pos[0], pos[1], -1 },
             .{ targ[0], targ[1], 0 },

@@ -893,8 +893,8 @@ fn createPipeline(
         .depth_clamp_enable = .false,
         .rasterizer_discard_enable = .false,
         .polygon_mode = .fill,
-        .cull_mode = .{ .back_bit = true },
-        .front_face = .counter_clockwise, // couse we assume Y axis flip
+        .cull_mode = .{ .back_bit = false },
+        .front_face = .clockwise, // couse we assume Y axis flip
         .depth_bias_enable = .false,
         .depth_bias_constant_factor = 0,
         .depth_bias_clamp = 0,
