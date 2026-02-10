@@ -345,6 +345,7 @@ pub fn main() !void {
         // }
     }
 
+    // const spots_a: []const m.vec3 = &.{ .{ 0, 0, 0 }, .{ 1, 0, 0 }, .{ 0, 1, 0 } };
     const spots_a: []const m.vec3 = &.{ .{ 0, 0, -0.5 }, .{ 1, 0, -0.6 }, .{ 0, 1, -0.7 } };
     var slid_a = addons.Slider(m.vec3).init(&spots_a);
     timeline1.arm(std.time.us_per_s / 2);
@@ -388,7 +389,7 @@ pub fn main() !void {
         as_group_data.*.matrices = try addons.paramatricVariation(
             1,
             inertia.out(),
-            .{ 0, 0 },
+            .{ 0, 0, 0 },
         );
 
         const cmdbuf = cmdbufs[swapchain.image_index];

@@ -261,16 +261,20 @@ pub const DescriptorPrep = struct {
     }
 };
 
-pub fn paramatricVariation(scale: f32, pos: m.vec3, targ: m.vec2) !t.MatPack {
-    const ortho_window = m.mat_ortho(scale, -scale, scale, -scale, 20, -20);
+pub fn paramatricVariation(scale: f32, pos: m.vec3, targ: m.vec3) !t.MatPack {
     const persp_window = m.mat_persp(1, 0.75, std.math.pi / 2.0, 0.1, 20);
-
-    // std.debug.print("param | {} |\n", .{param});
+    const ortho_window = m.mat_ortho(scale, -scale, scale, -scale, 20, -20);
     _ = ortho_window;
-    _ = targ;
+
+    const trans = m.mat_translate(-pos);
+    const rot = m.lookRotation(pos, targ);
+    const look_at_combinged = m.matXmat(rot.mat, trans.mat);
+
     const interm = t.MatPack{
         .proj = persp_window.arr,
-        .view = m.mat_translate(-pos).arr,
+        .view = look_at_combinged.arr,
+        // .view = m.mat_translate(-pos).arr,
+        // .view = m.lookRotation(.{ 0, 0, -1 }, pos).arr,
     };
     return interm;
 }

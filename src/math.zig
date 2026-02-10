@@ -37,6 +37,9 @@ pub fn stack(a: [2]f32, z: f32) [3]f32 {
 pub fn zero3() vec3 {
     return .{ 0, 0, 0 };
 }
+pub fn zero4() vec4 {
+    return .{ 0, 0, 0, 0 };
+}
 
 pub fn stack4d(a: vec3, b: f32) vec4 {
     return .{ a[0], a[1], a[2], b };
@@ -96,11 +99,39 @@ pub fn matXvec(m: mat4, v: vec4) vec4 {
     return out;
 }
 
-test "mat mul test" {
+test "|mat_mul_vec" {
     const v = vec3{ 8, -2, 1 };
     const b = matXvec(mat_identity().mat, stack4d(v, 1));
 
     try std.testing.expect(len(v - trim3d(b)) < 0.001);
+}
+
+pub fn matXmat(A: mat4, B: mat4) mat4u {
+    return .{
+        .mat = .{
+            matXvec(A, B[0]), //column-major
+            matXvec(A, B[1]),
+            matXvec(A, B[2]),
+            matXvec(A, B[3]),
+        },
+    };
+}
+
+test "|mat_mul_mat" {
+    const a: vec3 = .{ 1, 3, 5 };
+    const b: vec3 = .{ -2, 12, -5 };
+    const c = a + b;
+
+    const A = mat_translate(a);
+    const B = mat_translate(b);
+    const C = matXmat(A.mat, B.mat);
+
+    const x = vec4{ 0, 0, 0, 1 };
+    const y = matXvec(C.mat, x);
+
+    var e = c - trim3d(y);
+    for (0..3) |i| e[i] = abs(e[i]);
+    try std.testing.expect(@reduce(.Add, e) < 0.001);
 }
 
 pub fn norm(v: vec3) vec3 {
@@ -142,6 +173,37 @@ test "|point_moved" {
     var e = assumed - trim3d(t);
     for (0..3) |i| e[i] = abs(e[i]);
     try std.testing.expect(@reduce(.Add, e) < 0.001);
+}
+
+pub fn lookRotation(pos: vec3, target: vec3) mat4u {
+    const ref_up: vec3 = .{ 0, 1, 0 };
+    std.debug.print("pos {}, target {}\n", .{ pos, target });
+
+    const delta = target - pos;
+    const forward = norm(delta);
+    if (abs(dot(forward, ref_up)) > 0.95) {
+        @panic("singularity");
+    }
+
+    const right = norm(cross(ref_up, forward));
+    const up = cross(forward, right);
+
+    // return .{
+    //     .mat = .{
+    //         stack4d(right, 0), //column-major
+    //         stack4d(up, 0),
+    //         stack4d(forward, 0),
+    //         stack4d(zero3(), 1),
+    //     },
+    // };
+    return .{
+        .mat = .{
+            stack4d(.{ right[X], up[X], forward[X] }, 0), //column-major
+            stack4d(.{ right[Y], up[Y], forward[Y] }, 0),
+            stack4d(.{ right[Z], up[Z], forward[Z] }, 0),
+            stack4d(zero3(), 1),
+        },
+    };
 }
 
 pub fn mat_ortho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32) mat4u {
@@ -243,30 +305,21 @@ pub fn abs(a: f32) f32 {
 const minus_vec3 = @as(vec3, @splat(-1));
 
 pub fn mat_look_at(pos: vec3, target: vec3, ref_up: vec3) !mat4u {
-    const delta = target - pos;
-    const forward = norm(delta);
-    if (abs(dot(forward, ref_up)) > 0.95) {
-        return MathErr.to_close_to_singularity;
-    }
+    _ = ref_up;
 
-    const right = norm(cross(ref_up, forward));
-    const up = cross(forward, right);
+    const trans = mat_translate(-pos);
+    const rot = lookRotation(pos, target);
+    return matXmat(rot.mat, trans.mat);
 
-    const trans: vec3 = .{
-        -dot(right, pos),
-        -dot(up, pos),
-        -dot(forward, pos),
-    };
-    const mat: mat4u = .{
-        .mat = .{
-            stack4d(right, 0), //column-major
-            stack4d(up, 0),
-            stack4d(forward, 0),
-            stack4d(trans, 1),
-        },
-    };
-    return mat;
-    // return mat_identity();
+    // const mat: mat4u = .{
+    //     .mat = .{
+    //         stack4d(.{ right[X], up[X], forward[X] }, 0), //column-major
+    //         stack4d(.{ right[Y], up[Y], forward[Y] }, 0),
+    //         stack4d(.{ right[Z], up[Z], forward[Z] }, 0),
+    //         stack4d(trans, 1),
+    //     },
+    // };
+    // return mat;
 }
 
 const UP = vec3{ 0, 1, 0 };
@@ -278,7 +331,7 @@ test "is_matrix_looking" {
     const U = 2;
     const point_m = vec3{ 1, 0, 1 };
     const point_r = vec3{ 1.1, 0, 1 };
-    const point_u = vec3{ 0, 0.1, 1 };
+    const point_u = vec3{ 1, 0.1, 1 };
 
     const mat = try mat_look_at(observ, point_m, UP);
     const pts: [3]vec3 = .{ point_m, point_r, point_u };
@@ -296,5 +349,4 @@ test "is_matrix_looking" {
 
     try std.testing.expect(outs[M][X] < outs[R][X]); //should be on right
     try std.testing.expect(outs[M][Y] < outs[U][Y]); //should be higher
-
 }
