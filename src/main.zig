@@ -345,13 +345,30 @@ pub fn main() !void {
         // }
     }
 
-    // const spots_a: []const m.vec3 = &.{ .{ 0, 0, 0 }, .{ 1, 0, 0 }, .{ 0, 1, 0 } };
-    const spots_a: []const m.vec3 = &.{ .{ 0, 0, -0.5 }, .{ 1, 0, -0.6 }, .{ 0, 1, -0.7 } };
-    var slid_a = addons.Slider(m.vec3).init(&spots_a);
+    const len = 16;
+    const radius = 1.3;
+    var inspect_ring: std.ArrayList(m.vec3) = .empty;
+    try inspect_ring.resize(allocator, len);
+    defer inspect_ring.deinit(allocator);
+    for (0..len) |i| {
+        const total: f32 = @floatFromInt(len - 1);
+        const hmm: f32 = @floatFromInt(i);
+        const progres = hmm / total;
+
+        const phi = std.math.tau * progres;
+        const point = m.vec3{
+            -std.math.sin(phi) * radius,
+            0.5,
+            -std.math.cos(phi) * radius,
+        };
+        inspect_ring.items[i] = point;
+    }
+
+    var slid_a = addons.Slider(m.vec3).init(&inspect_ring.items);
     timeline1.arm(std.time.us_per_s / 2);
 
     const IVec3 = p.InertiaPack(m.vec3);
-    var inertia = IVec3.Inertia.init(.{ 0, 0, 0 });
+    var inertia = IVec3.Inertia.init(inspect_ring.items[0]);
     inertia.phx = IVec3.InertiaCfg.default();
 
     while (!glfw.windowShouldClose(window)) {

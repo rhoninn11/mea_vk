@@ -266,13 +266,17 @@ pub fn paramatricVariation(scale: f32, pos: m.vec3, targ: m.vec3) !t.MatPack {
     const ortho_window = m.mat_ortho(scale, -scale, scale, -scale, 20, -20);
     _ = ortho_window;
 
+    const ref_up: m.vec3 = .{ 0, 1, 0 };
     const trans = m.mat_translate(-pos);
-    const rot = m.lookRotation(pos, targ);
+    const rot = m.lookRotation(pos, targ, ref_up);
     const look_at_combinged = m.matXmat(rot.mat, trans.mat);
+
+    const model_rot = m.lookRotation(m.zero3(), .{ 0, 1, 0 }, .{ 0, 0, 1 });
 
     const interm = t.MatPack{
         .proj = persp_window.arr,
         .view = look_at_combinged.arr,
+        .model = model_rot.arr,
         // .view = m.mat_translate(-pos).arr,
         // .view = m.lookRotation(.{ 0, 0, -1 }, pos).arr,
     };

@@ -89,7 +89,7 @@ pub const Vertex = struct {
             const stage_i = pre_i * 2;
             const base: [2]f32 = staged_stamps[stage_i].pos[0..2].*;
 
-            staged_stamps[stage_i].pos = m.stack(m.mul2D(base, r), 0.75);
+            staged_stamps[stage_i].pos = m.stack(m.mul2D(base, r), 0.1);
             staged_stamps[stage_i + 1].pos = m.stack(m.mul2D(base, r + r_delta), 0);
         }
 
@@ -109,7 +109,7 @@ pub const Vertex = struct {
             const pos_offs = [_]u8{ 0, 1, 2, 2, 1, 3 };
             for (pos_offs, 0..) |pos_off, jj| {
                 const stage = staged_stamps[pos_i + pos_off];
-                stage_vert[tri_pair_i + jj] = .{
+                const v = Vertex{
                     .pos = .{
                         stage.pos[X],
                         stage.pos[Y],
@@ -117,6 +117,7 @@ pub const Vertex = struct {
                     },
                     .color = .{ stage.progress, stage.v, 0 },
                 };
+                stage_vert[tri_pair_i + jj] = v;
             }
         }
         return stage_vert_arr;

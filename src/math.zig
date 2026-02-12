@@ -175,10 +175,7 @@ test "|point_moved" {
     try std.testing.expect(@reduce(.Add, e) < 0.001);
 }
 
-pub fn lookRotation(pos: vec3, target: vec3) mat4u {
-    const ref_up: vec3 = .{ 0, 1, 0 };
-    std.debug.print("pos {}, target {}\n", .{ pos, target });
-
+pub fn lookRotation(pos: vec3, target: vec3, ref_up: vec3) mat4u {
     const delta = target - pos;
     const forward = norm(delta);
     if (abs(dot(forward, ref_up)) > 0.95) {
@@ -188,16 +185,9 @@ pub fn lookRotation(pos: vec3, target: vec3) mat4u {
     const right = norm(cross(ref_up, forward));
     const up = cross(forward, right);
 
-    // return .{
-    //     .mat = .{
-    //         stack4d(right, 0), //column-major
-    //         stack4d(up, 0),
-    //         stack4d(forward, 0),
-    //         stack4d(zero3(), 1),
-    //     },
-    // };
     return .{
         .mat = .{
+            // ratation transposition
             stack4d(.{ right[X], up[X], forward[X] }, 0), //column-major
             stack4d(.{ right[Y], up[Y], forward[Y] }, 0),
             stack4d(.{ right[Z], up[Z], forward[Z] }, 0),
