@@ -322,5 +322,9 @@ pub fn Slider(vecTpy: type) type {
             self.idx = @mod(self.idx + 1, self.len);
             return self.hmm.ptr[self.idx];
         }
+        pub fn prev(self: *Self) vecTpy {
+            self.idx = if (self.idx == 0) self.len - 1 else self.idx - 1;
+            return self.hmm.ptr[self.idx];
+        }
     };
 }

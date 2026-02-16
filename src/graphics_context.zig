@@ -376,7 +376,7 @@ pub const OneShotCommanded = struct {
         try devk.queueSubmit(vkq, 1, @ptrCast(&submmit_info), .null_handle);
         try devk.queueWaitIdle(vkq);
     }
-    pub fn init(cmd_ctx: PoolInCtx) !OneShotCommanded {
+    pub fn init(cmd_ctx: *const PoolInCtx) !OneShotCommanded {
         const devk = cmd_ctx.gc.dev;
         var cbfr: vk.CommandBuffer = undefined;
 

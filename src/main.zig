@@ -28,8 +28,11 @@ const frag_spv align(@alignOf(u32)) = @embedFile("fragment_shader").*;
 const app_name = "vulkan-zig triangle example";
 const future_app_name = "oct_calculator";
 
+// Taki buferek może posłużyć np. do wysłania trójkątów na gpu
 fn Buffering(Base: type) type {
     return struct {
+        const Self = @This();
+
         pub fn memSize(based_on: []const Base) usize {
             std.debug.assert(based_on.len >= 1);
 
@@ -54,26 +57,60 @@ fn Buffering(Base: type) type {
                 .sharing_mode = .exclusive,
             }, null);
         }
+
+        pub fn vertUpload(gctx: *const gftx.PoolInCtx, to_upload: []const Vertex, here: vk.Buffer) !void {
+            const gc = gctx.gc;
+            const mem_reqs = gc.dev.getBufferMemoryRequirements(here);
+            const memory = try gc.allocate(mem_reqs, .{ .device_local_bit = true });
+            defer gc.dev.freeMemory(memory, null);
+            try gc.dev.bindBufferMemory(here, memory, 0);
+
+            try uploadVertices(&gc, gctx.pool, here, to_upload);
+        }
     };
 }
 
-var stationary_pos = true;
+const KeyAction = struct {
+    key: c_int,
+    action: c_int,
+
+    fn press(self: *const KeyAction, key: glfw.Key) bool {
+        return self.action == glfw.Press and self.key == key;
+    }
+
+    fn down(self: *const KeyAction, key: glfw.Key) bool {
+        return self.action == glfw.Down and self.key == key;
+    }
+};
+const Moves = enum(u8) {
+    none = 0,
+    left = 1,
+    right = 2,
+};
+
+var movement: Moves = .none;
 fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
     _ = scancode;
     _ = mods;
-    if (action == glfw.Press and key == glfw.KeyEscape) {
+    const x: KeyAction = .{
+        .action = action,
+        .key = key,
+    };
+    if (x.press(glfw.KeyEscape)) {
         std.debug.print("key down\n", .{});
         glfw.setWindowShouldClose(win, true);
     }
-    if (action == glfw.Press and key == glfw.KeySpace) {
+    if (x.press(glfw.KeySpace)) {
         if (time_glob) |hey| {
             std.debug.print("timeline toggled", .{});
             hey.time_passage = !hey.time_passage;
         }
-        // TODO
     }
-    if (action == glfw.Press and key == glfw.KeyQ) {
-        stationary_pos = !stationary_pos;
+    if (x.press(glfw.KeyD)) {
+        movement = .right;
+    }
+    if (x.press(glfw.KeyA)) {
+        movement = .left;
     }
 }
 
@@ -155,7 +192,12 @@ pub fn main() !void {
     }, null);
     defer gc.dev.destroyCommandPool(pool_cmd, null);
 
-    var image = try vulkanTexture(&gc, pool_cmd);
+    const cmd_ctx = gftx.PoolInCtx{
+        .gc = &gc,
+        .pool = pool_cmd,
+    };
+
+    var image = try vulkanTexture(cmd_ctx.gc, cmd_ctx.pool);
     defer image.deinit();
 
     // gpu mat4 alignment is 16B
@@ -232,7 +274,8 @@ pub fn main() !void {
     );
     defer destroyFramebuffers(&gc, allocator, framebuffers);
 
-    var shape = try Vertex.Ring(allocator, 32);
+    // const triangle = vertex.
+    var shape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, 32);
     defer shape.deinit(allocator);
 
     const as_slice: []const Vertex = shape.items;
@@ -380,9 +423,15 @@ pub fn main() !void {
         timeline1.update();
 
         if (timeline1.triggerd()) {
-            inertia.in(slid_a.next());
-            // std.debug.print("we are tageting {}\n", .{slid_a.curr()});
+            // std.debug.print("+++ interval info:D\n", .{});
         }
+        _ = switch (movement) {
+            Moves.left => slid_a.next(),
+            Moves.right => slid_a.prev(),
+            else => {},
+        };
+        if (movement != .none) inertia.in(slid_a.curr());
+        movement = .none;
 
         inertia.simulate(timeline1.delta_ms);
 
@@ -453,7 +502,7 @@ pub fn main() !void {
     try gc.dev.deviceWaitIdle();
 }
 
-fn imgLTrans(cmd_ctx: gftx.PoolInCtx, cfg: t.ImgLTranConfig) !void {
+fn imgLTrans(cmd_ctx: *const gftx.PoolInCtx, cfg: t.ImgLTranConfig) !void {
     const devk = cmd_ctx.gc.dev;
     const family_ignored: u32 = 0;
     // const zero_mask: u32 = 0;
@@ -495,7 +544,7 @@ const BfrToImgCpyCfg = struct {
     layout: vk.ImageLayout,
 };
 
-fn bfr2ImgCopy(cmd_ctx: gftx.PoolInCtx, cfg: BfrToImgCpyCfg) !void {
+fn bfr2ImgCopy(cmd_ctx: *const gftx.PoolInCtx, cfg: BfrToImgCpyCfg) !void {
     const devk = cmd_ctx.gc.dev;
 
     const one_shot = try gftx.OneShotCommanded.init(cmd_ctx);
@@ -549,7 +598,7 @@ fn vulkanTexture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gftx.RG
     const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
     const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
 
-    try imgLTrans(cmd_ctx, .{
+    try imgLTrans(&cmd_ctx, .{
         .old_layout = .undefined,
         .new_layout = dst_layout,
         .image = test_img.dvk_img,
@@ -557,13 +606,13 @@ fn vulkanTexture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gftx.RG
         .flags = gftx.baked.undefined_to_transfered,
     });
 
-    try bfr2ImgCopy(cmd_ctx, .{
+    try bfr2ImgCopy(&cmd_ctx, .{
         .buffer = src_buff.dvk_bfr,
         .image = test_img.dvk_img,
         .layout = dst_layout,
     });
 
-    try imgLTrans(cmd_ctx, .{
+    try imgLTrans(&cmd_ctx, .{
         .old_layout = dst_layout,
         .new_layout = shader_read_layout,
         .image = test_img.dvk_img,
@@ -603,6 +652,12 @@ fn uploadVertices(gc: *const GraphicsContext, pool: vk.CommandPool, buffer: vk.B
 }
 
 // Z tego co rozumiem to... nie tego jeszcze nie rozumiem xD
+// No to już ci mówię:D to nie jest aż takie skomplikowane
+// kopiujemy tutaj po prostu dane pomiędzy dwoma bufferami
+// aleeee...
+// Kopiowanie jest po prostu rodzaje komendy, którą najpierw
+// musimy nagrać, a potem wysłać do kolejki na gpu
+// (a same kolejki są jakby wątkami gpu)
 fn copyBuffer(gc: *const GraphicsContext, pool: vk.CommandPool, dst: vk.Buffer, src: vk.Buffer, size: vk.DeviceSize) !void {
     var cmdbuf_handle: vk.CommandBuffer = undefined;
     try gc.dev.allocateCommandBuffers(&.{
@@ -701,6 +756,8 @@ fn createCommandBuffers(
             .offset = .{ .x = 0, .y = 0 },
             .extent = extent,
         };
+
+        // oscilationg ring
         gc.dev.cmdBeginRenderPass(cmdbuf, &.{
             .render_pass = render_pass,
             .framebuffer = framebuffer,
@@ -742,6 +799,9 @@ fn createCommandBuffers(
                 0,
                 0,
             );
+
+            // czyli co jakbym tutaj miał więcej modeli większej ilości instancji, bo bym je po prostu mógł,
+            // tutaj rysować jakby końca świata miało nie być xD
         }
         try gc.dev.endCommandBuffer(cmdbuf);
     }
