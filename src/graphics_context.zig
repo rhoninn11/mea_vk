@@ -12,6 +12,7 @@ const swpchn = @import("swapchain.zig");
 const required_layer_names = [_][*:0]const u8{"VK_LAYER_KHRONOS_validation"};
 
 const required_device_extensions = [_][*:0]const u8{vk.extensions.khr_swapchain.name};
+// TODO: multiview rendering: https://claude.ai/chat/2d2c56f2-1939-4c4c-ba23-234fc24feac2
 
 /// There are 3 levels of bindings in vulkan-zig:
 /// - The Dispatch types (vk.BaseDispatch, vk.InstanceDispatch, vk.DeviceDispatch)
