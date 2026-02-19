@@ -81,7 +81,22 @@ const KeyAction = struct {
     fn down(self: *const KeyAction, key: glfw.Key) bool {
         return self.action == glfw.Down and self.key == key;
     }
+
+    fn up(self: *const KeyAction, key: glfw.Key) bool {
+        return self.action == glfw.Up and self.key == key;
+    }
 };
+
+const Hold = struct {
+    active: bool = false,
+
+    pub fn hold(self: *Hold, ka: *const KeyAction, key: glfw.Key) bool {
+        self.active = !self.active and ka.down(key);
+        self.active = self.active and ka.up(key);
+        return self.active;
+    }
+};
+
 const Moves = enum(u8) {
     none = 0,
     left = 1,
@@ -89,6 +104,8 @@ const Moves = enum(u8) {
 };
 
 var movement: Moves = .none;
+var hold_l = Hold{};
+var hold_r = Hold{};
 fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
     _ = scancode;
     _ = mods;
@@ -114,15 +131,32 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
     }
 }
 
+fn windowExtext(window: *c_long) vk.Extent2D {
+    var resolution_extent: vk.Extent2D = undefined;
+    resolution_extent.width, resolution_extent.height = blk: {
+        var w: c_int = undefined;
+        var h: c_int = undefined;
+        glfw.getFramebufferSize(window, &w, &h);
+        break :blk .{ @intCast(w), @intCast(h) };
+    };
+    return resolution_extent;
+}
+
 const EasyAcces = struct {
-    window: ?*c_long,
-    vkctx: ?*const GraphicsContext = null,
+    alloc: std.mem.Allocator,
+    window: *c_long,
+    vkctx: *const GraphicsContext,
 };
 
 var time_glob: ?*addons.Timeline = null;
+const BasicErrs = error{
+    NoCtx,
+};
 
+fn orbit(phi: f32) m.vec3 {
+    return .{ std.math.cos(phi), 0, -std.math.sin(phi) };
+}
 pub fn main() !void {
-    var swapchain_len: u8 = undefined;
     vertex.probing();
 
     std.debug.print("+++ vertex info: {d}\n", .{Vertex.s_fields_num});
@@ -156,35 +190,44 @@ pub fn main() !void {
     // divisor of the initial window size (see https://github.com/Snektron/vulkan-zig/pull/192).
     // To fix it, just fetch the actual size here, after the windowing system has had the time to
     // update the window.
-    resolution_extent.width, resolution_extent.height = blk: {
-        var w: c_int = undefined;
-        var h: c_int = undefined;
-        glfw.getFramebufferSize(window, &w, &h);
-        break :blk .{ @intCast(w), @intCast(h) };
-    };
+    // resolution_extent.width, resolution_extent.height = blk: {
+    //     var w: c_int = undefined;
+    //     var h: c_int = undefined;
+    //     glfw.getFramebufferSize(window, &w, &h);
+    //     break :blk .{ @intCast(w), @intCast(h) };
+    // };
+    resolution_extent = windowExtext(window);
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const gc = try GraphicsContext.init(allocator, app_name, window);
-    defer gc.deinit();
+    const vkctx = try GraphicsContext.init(allocator, app_name, window);
+    defer vkctx.deinit();
 
-    std.log.debug("Using device: {s}", .{gc.deviceName()});
+    std.log.debug("Using device: {s}", .{vkctx.deviceName()});
     const access = EasyAcces{
         .window = window,
-        .vkctx = &gc,
+        .vkctx = &vkctx,
+        .alloc = allocator,
     };
-    _ = access;
+    try deeper(access);
+}
+fn deeper(access: EasyAcces) !void {
+    var swapchain_len: u8 = undefined;
+    // const gc = access.vkctx.?.*;
+    const gc = access.vkctx;
+    const window = access.window;
+    const allocator = access.alloc;
 
-    const scene_depth = try gftx.DepthImage.init(&gc, resolution_extent);
-    defer scene_depth.deinit(&gc);
-
-    var swapchain = try Swapchain.init(&gc, allocator, resolution_extent);
+    var resolution_extent = windowExtext(window);
+    const scene_depth = try gftx.DepthImage.init(gc, resolution_extent);
+    defer scene_depth.deinit(gc);
+    var swapchain = try Swapchain.init(gc, allocator, resolution_extent);
     defer swapchain.deinit();
 
+    std.debug.print("+++ Serial frames {}\n", .{swapchain_len});
     swapchain_len = @intCast(swapchain.swap_images.len);
-    std.debug.print("+++ {d} buffered video frames\n", .{swapchain_len});
 
     // texture image
     const pool_cmd = try gc.dev.createCommandPool(&.{
@@ -193,7 +236,7 @@ pub fn main() !void {
     defer gc.dev.destroyCommandPool(pool_cmd, null);
 
     const cmd_ctx = gftx.PoolInCtx{
-        .gc = &gc,
+        .gc = gc,
         .pool = pool_cmd,
     };
 
@@ -204,7 +247,7 @@ pub fn main() !void {
 
     var uniform_dset = try addons.DescriptorPrep.init(
         allocator,
-        &gc,
+        gc,
         swapchain_len,
         gftx.baked.uniform_frag_vert,
         .{
@@ -218,7 +261,7 @@ pub fn main() !void {
     const instance_num = 64;
     var storage_dset = try addons.DescriptorPrep.init(
         allocator,
-        &gc,
+        gc,
         swapchain_len,
         gftx.baked.storage_frag_vert,
         .{
@@ -231,7 +274,7 @@ pub fn main() !void {
 
     var texture_dset = try addons.DescriptorPrep.init(
         allocator,
-        &gc,
+        gc,
         swapchain_len,
         gftx.baked.texture_frag,
         .{
@@ -259,20 +302,20 @@ pub fn main() !void {
     }, null);
     defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
 
-    const render_pass = try createRenderPass(&gc, swapchain, scene_depth);
+    const render_pass = try createRenderPass(gc, swapchain, scene_depth);
     defer gc.dev.destroyRenderPass(render_pass, null);
 
-    const pipeline = try createPipeline(&gc, pipeline_layout, render_pass);
+    const pipeline = try createPipeline(gc, pipeline_layout, render_pass);
     defer gc.dev.destroyPipeline(pipeline, null);
 
     var framebuffers = try createFramebuffers(
-        &gc,
+        gc,
         allocator,
         render_pass,
         swapchain,
         scene_depth,
     );
-    defer destroyFramebuffers(&gc, allocator, framebuffers);
+    defer destroyFramebuffers(gc, allocator, framebuffers);
 
     // const triangle = vertex.
     var shape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, 32);
@@ -288,7 +331,7 @@ pub fn main() !void {
     defer gc.dev.freeMemory(memory, null);
     try gc.dev.bindBufferMemory(buffer, memory, 0);
 
-    try uploadVertices(&gc, pool_cmd, buffer, as_slice);
+    try uploadVertices(gc, pool_cmd, buffer, as_slice);
 
     const draw_instanced_attempt: ShaderRelated = .{
         .instance_count = instance_num,
@@ -299,7 +342,7 @@ pub fn main() !void {
     };
 
     var cmdbufs = try createCommandBuffers(
-        &gc,
+        gc,
         pool_cmd,
         allocator,
         buffer,
@@ -310,7 +353,7 @@ pub fn main() !void {
         as_slice,
         &draw_instanced_attempt,
     );
-    defer destroyCommandBuffers(&gc, pool_cmd, allocator, cmdbufs);
+    defer destroyCommandBuffers(gc, pool_cmd, allocator, cmdbufs);
 
     _ = glfw.setKeyCallback(window, key_callback);
 
@@ -388,30 +431,13 @@ pub fn main() !void {
         // }
     }
 
-    const len = 16;
-    const radius = 1.3;
-    var inspect_ring: std.ArrayList(m.vec3) = .empty;
-    try inspect_ring.resize(allocator, len);
-    defer inspect_ring.deinit(allocator);
-    for (0..len) |i| {
-        const total: f32 = @floatFromInt(len - 1);
-        const hmm: f32 = @floatFromInt(i);
-        const progres = hmm / total;
-
-        const phi = std.math.tau * progres;
-        const point = m.vec3{
-            -std.math.sin(phi) * radius,
-            0.5,
-            -std.math.cos(phi) * radius,
-        };
-        inspect_ring.items[i] = point;
-    }
-
-    var slid_a = addons.Slider(m.vec3).init(&inspect_ring.items);
     timeline1.arm(std.time.us_per_s / 2);
 
+    var phi: f32 = 0;
+    const orbit_r: f32 = 2;
+    const speed: f32 = 1000;
     const IVec3 = p.InertiaPack(m.vec3);
-    var inertia = IVec3.Inertia.init(inspect_ring.items[0]);
+    var inertia = IVec3.Inertia.init(orbit(phi));
     inertia.phx = IVec3.InertiaCfg.default();
 
     while (!glfw.windowShouldClose(window)) {
@@ -425,14 +451,17 @@ pub fn main() !void {
         if (timeline1.triggerd()) {
             // std.debug.print("+++ interval info:D\n", .{});
         }
-        _ = switch (movement) {
-            Moves.left => slid_a.next(),
-            Moves.right => slid_a.prev(),
-            else => {},
+
+        const phi_delt: f32 = switch (movement) {
+            Moves.left => 1,
+            Moves.right => -1,
+            else => 0,
         };
-        if (movement != .none) inertia.in(slid_a.curr());
         movement = .none;
 
+        phi += phi_delt * timeline.deltaS() * std.math.tau * speed;
+
+        inertia.in(orbit(phi) * m.splat3d(orbit_r));
         inertia.simulate(timeline1.delta_ms);
 
         //minimalized
@@ -467,18 +496,18 @@ pub fn main() !void {
             resolution_extent = win_size;
             try swapchain.recreate(resolution_extent);
 
-            destroyFramebuffers(&gc, allocator, framebuffers);
+            destroyFramebuffers(gc, allocator, framebuffers);
             framebuffers = try createFramebuffers(
-                &gc,
+                gc,
                 allocator,
                 render_pass,
                 swapchain,
                 scene_depth,
             );
 
-            destroyCommandBuffers(&gc, pool_cmd, allocator, cmdbufs);
+            destroyCommandBuffers(gc, pool_cmd, allocator, cmdbufs);
             cmdbufs = try createCommandBuffers(
-                &gc,
+                gc,
                 pool_cmd,
                 allocator,
                 buffer,

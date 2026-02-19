@@ -109,6 +109,10 @@ pub const Timeline = struct {
 
         return false;
     }
+
+    pub fn deltaS(self: *Timeline) f32 {
+        return self.delta_ms / 1000;
+    }
 };
 
 pub const DescriptorPrep = struct {
@@ -328,3 +332,8 @@ pub fn Slider(vecTpy: type) type {
         }
     };
 }
+
+const EasyAcces = struct {
+    window: ?*c_long,
+    vkctx: ?*const gftx.GraphicsContext = null,
+};
