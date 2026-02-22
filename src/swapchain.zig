@@ -1,7 +1,8 @@
 const std = @import("std");
 const vk = @import("third_party/vk.zig");
 const gfctx = @import("graphics_context.zig");
-const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
+const gftx = @import("graphics_context.zig");
+const GraphicsContext = gftx.GraphicsContext;
 
 const Allocator = std.mem.Allocator;
 
@@ -20,6 +21,7 @@ pub const Swapchain = struct {
     handle: vk.SwapchainKHR,
 
     swap_images: []SwapImage,
+    depth_image: gftx.DepthImage,
     image_index: u32,
     next_image_acquired: vk.Semaphore,
 
@@ -96,6 +98,7 @@ pub const Swapchain = struct {
             return error.ImageAcquireFailed;
         }
 
+        const depth_img = try gftx.DepthImage.init(gc, extent);
         std.mem.swap(vk.Semaphore, &swap_images[result.image_index].image_acquired, &next_image_acquired);
         return Swapchain{
             .gc = gc,
@@ -105,6 +108,7 @@ pub const Swapchain = struct {
             .extent = actual_extent,
             .handle = handle,
             .swap_images = swap_images,
+            .depth_image = depth_img,
             .image_index = result.image_index,
             .next_image_acquired = next_image_acquired,
         };
@@ -112,6 +116,7 @@ pub const Swapchain = struct {
 
     fn deinitExceptSwapchain(self: Swapchain) void {
         for (self.swap_images) |si| si.deinit(self.gc);
+        self.depth_image.deinit(self.gc);
         self.allocator.free(self.swap_images);
         self.gc.dev.destroySemaphore(self.next_image_acquired, null);
     }
@@ -123,6 +128,7 @@ pub const Swapchain = struct {
     pub fn deinit(self: Swapchain) void {
         // if we have no swapchain none of these should exist and we can just return
         if (self.handle == .null_handle) return;
+
         self.deinitExceptSwapchain();
         self.gc.dev.destroySwapchainKHR(self.handle, null);
     }

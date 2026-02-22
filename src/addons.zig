@@ -337,3 +337,19 @@ const EasyAcces = struct {
     window: ?*c_long,
     vkctx: ?*const gftx.GraphicsContext = null,
 };
+
+pub const Caped = struct {
+    min: f32,
+    max: f32,
+
+    pub fn init(min: f32, max: f32) Caped {
+        return Caped{
+            .min = min,
+            .max = max,
+        };
+    }
+
+    pub fn cap(self: Caped, val: f32) f32 {
+        return @min(@max(val, self.min), self.max);
+    }
+};

@@ -74,12 +74,8 @@ const KeyAction = struct {
     key: c_int,
     action: c_int,
 
-    fn press(self: *const KeyAction, key: glfw.Key) bool {
-        return self.action == glfw.Press and self.key == key;
-    }
-
     fn down(self: *const KeyAction, key: glfw.Key) bool {
-        return self.action == glfw.Down and self.key == key;
+        return self.action == glfw.Press and self.key == key;
     }
 
     fn up(self: *const KeyAction, key: glfw.Key) bool {
@@ -90,22 +86,45 @@ const KeyAction = struct {
 const Hold = struct {
     active: bool = false,
 
-    pub fn hold(self: *Hold, ka: *const KeyAction, key: glfw.Key) bool {
+    pub fn hold(self: *Hold, ka: *const KeyAction, key: glfw.Key) void {
+        if (ka.action == glfw.Repeat) return;
         self.active = !self.active and ka.down(key);
         self.active = self.active and ka.up(key);
-        return self.active;
+        // std.debug.print("well {} {} {}\n", .{ self.active, ka.press(key), ka.up(key) });
     }
 };
 
-const Moves = enum(u8) {
+const MovesA = enum(u8) {
     none = 0,
     left = 1,
     right = 2,
 };
+const MovesB = enum(u8) {
+    none = 0,
+    near = 1,
+    far = 2,
+};
+const MovesC = enum(u8) {
+    none = 0,
+    down = 1,
+    up = 2,
+};
 
-var movement: Moves = .none;
+var movement_a: MovesA = .none;
+var movement_b: MovesB = .none;
+var movement_c: MovesC = .none;
+fn clear() void {
+    movement_a = .none;
+    movement_b = .none;
+    movement_c = .none;
+}
+
 var hold_l = Hold{};
 var hold_r = Hold{};
+var hold_n = Hold{};
+var hold_f = Hold{};
+var hold_u = Hold{};
+var hold_d = Hold{};
 fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
     _ = scancode;
     _ = mods;
@@ -113,22 +132,30 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
         .action = action,
         .key = key,
     };
-    if (x.press(glfw.KeyEscape)) {
-        std.debug.print("key down\n", .{});
+    if (x.down(glfw.KeyEscape)) {
+        std.debug.print("exititng\n", .{});
         glfw.setWindowShouldClose(win, true);
     }
-    if (x.press(glfw.KeySpace)) {
+    if (x.down(glfw.KeySpace)) {
         if (time_glob) |hey| {
-            std.debug.print("timeline toggled", .{});
             hey.time_passage = !hey.time_passage;
         }
     }
-    if (x.press(glfw.KeyD)) {
-        movement = .right;
-    }
-    if (x.press(glfw.KeyA)) {
-        movement = .left;
-    }
+    hold_r.hold(&x, glfw.KeyD);
+    hold_l.hold(&x, glfw.KeyA);
+    hold_n.hold(&x, glfw.KeyW);
+    hold_f.hold(&x, glfw.KeyS);
+    hold_u.hold(&x, glfw.KeyR);
+    hold_d.hold(&x, glfw.KeyF);
+}
+
+fn input_continue() void {
+    if (hold_l.active) movement_a = .left;
+    if (hold_r.active) movement_a = .right;
+    if (hold_n.active) movement_b = .near;
+    if (hold_f.active) movement_b = .far;
+    if (hold_d.active) movement_c = .down;
+    if (hold_u.active) movement_c = .up;
 }
 
 fn windowExtext(window: *c_long) vk.Extent2D {
@@ -213,6 +240,7 @@ pub fn main() !void {
     };
     try deeper(access);
 }
+
 fn deeper(access: EasyAcces) !void {
     var swapchain_len: u8 = undefined;
     // const gc = access.vkctx.?.*;
@@ -221,13 +249,12 @@ fn deeper(access: EasyAcces) !void {
     const allocator = access.alloc;
 
     var resolution_extent = windowExtext(window);
-    const scene_depth = try gftx.DepthImage.init(gc, resolution_extent);
-    defer scene_depth.deinit(gc);
+
     var swapchain = try Swapchain.init(gc, allocator, resolution_extent);
     defer swapchain.deinit();
 
-    std.debug.print("+++ Serial frames {}\n", .{swapchain_len});
     swapchain_len = @intCast(swapchain.swap_images.len);
+    std.debug.print("+++ Serial frames {}\n", .{swapchain_len});
 
     // texture image
     const pool_cmd = try gc.dev.createCommandPool(&.{
@@ -302,7 +329,7 @@ fn deeper(access: EasyAcces) !void {
     }, null);
     defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
 
-    const render_pass = try createRenderPass(gc, swapchain, scene_depth);
+    const render_pass = try createRenderPass(gc, swapchain);
     defer gc.dev.destroyRenderPass(render_pass, null);
 
     const pipeline = try createPipeline(gc, pipeline_layout, render_pass);
@@ -313,7 +340,6 @@ fn deeper(access: EasyAcces) !void {
         allocator,
         render_pass,
         swapchain,
-        scene_depth,
     );
     defer destroyFramebuffers(gc, allocator, framebuffers);
 
@@ -433,15 +459,21 @@ fn deeper(access: EasyAcces) !void {
 
     timeline1.arm(std.time.us_per_s / 2);
 
+    var prox_lim = addons.Caped.init(1, 5);
+    var high_lim = addons.Caped.init(0, 3);
+
     var phi: f32 = 0;
-    const orbit_r: f32 = 2;
-    const speed: f32 = 1000;
+    var orbit_r: f32 = 2;
+    var height: f32 = 0;
+
+    const speed: f32 = 1;
     const IVec3 = p.InertiaPack(m.vec3);
     var inertia = IVec3.Inertia.init(orbit(phi));
     inertia.phx = IVec3.InertiaCfg.default();
 
     while (!glfw.windowShouldClose(window)) {
-        const win_size = addons.getWindowSize(window);
+        const win_size = windowExtext(window);
+        input_continue();
 
         // Don't present or resize swapchain while the window is minimized
         perf_stats.messure();
@@ -452,16 +484,29 @@ fn deeper(access: EasyAcces) !void {
             // std.debug.print("+++ interval info:D\n", .{});
         }
 
-        const phi_delt: f32 = switch (movement) {
-            Moves.left => 1,
-            Moves.right => -1,
+        const td = timeline.deltaS();
+        const phi_delt: f32 = switch (movement_a) {
+            MovesA.left => 1,
+            MovesA.right => -1,
             else => 0,
         };
-        movement = .none;
 
-        phi += phi_delt * timeline.deltaS() * std.math.tau * speed;
+        orbit_r = switch (movement_b) {
+            MovesB.near => prox_lim.cap(orbit_r - speed * td),
+            MovesB.far => prox_lim.cap(orbit_r + speed * td),
+            else => orbit_r,
+        };
 
-        inertia.in(orbit(phi) * m.splat3d(orbit_r));
+        height = switch (movement_c) {
+            MovesC.up => high_lim.cap(height + speed * td),
+            MovesC.down => high_lim.cap(height - speed * td),
+            else => height,
+        };
+        clear();
+
+        phi += phi_delt * td * std.math.tau * speed;
+
+        inertia.in(orbit(phi) * m.splat3d(orbit_r) + m.vec3{ 0, height, 0 });
         inertia.simulate(timeline1.delta_ms);
 
         //minimalized
@@ -491,20 +536,22 @@ fn deeper(access: EasyAcces) !void {
         // std.debug.print("+++ img_idx {d}\n", .{swapchain.image_index});
 
         if (state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {
-
             // std.debug.assert(false); //cuz it will throw error due to bad depth_img resolution
             resolution_extent = win_size;
+            std.debug.print("+++ a\n", .{});
+            try gc.dev.deviceWaitIdle();
             try swapchain.recreate(resolution_extent);
 
+            std.debug.print("+++ b\n", .{});
             destroyFramebuffers(gc, allocator, framebuffers);
             framebuffers = try createFramebuffers(
                 gc,
                 allocator,
                 render_pass,
                 swapchain,
-                scene_depth,
             );
 
+            std.debug.print("+++ c\n", .{});
             destroyCommandBuffers(gc, pool_cmd, allocator, cmdbufs);
             cmdbufs = try createCommandBuffers(
                 gc,
@@ -843,7 +890,7 @@ fn destroyCommandBuffers(gc: *const GraphicsContext, pool: vk.CommandPool, alloc
     allocator.free(cmdbufs);
 }
 
-fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_pass: vk.RenderPass, swapchain: Swapchain, depth_img: ?gftx.DepthImage) ![]vk.Framebuffer {
+fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_pass: vk.RenderPass, swapchain: Swapchain) ![]vk.Framebuffer {
     const framebuffers = try allocator.alloc(vk.Framebuffer, swapchain.swap_images.len);
     errdefer allocator.free(framebuffers);
 
@@ -853,7 +900,7 @@ fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_p
     for (framebuffers) |*fb| {
         const att_arr: []const vk.ImageView = &.{
             swapchain.swap_images[i].view,
-            depth_img.?.dvk_img_view,
+            swapchain.depth_image.dvk_img_view,
         };
 
         fb.* = try gc.dev.createFramebuffer(&.{
@@ -875,7 +922,7 @@ fn destroyFramebuffers(gc: *const GraphicsContext, allocator: Allocator, framebu
     allocator.free(framebuffers);
 }
 
-fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain, depth_img: ?gftx.DepthImage) !vk.RenderPass {
+fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain) !vk.RenderPass {
     const color_attachment = vk.AttachmentDescription{
         .format = swapchain.surface_format.format,
         .samples = .{ .@"1_bit" = true },
@@ -888,7 +935,7 @@ fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain, depth_img:
     };
     // const depth_attachment = vk.AttachmentDescription{};
     const depth_attachment = vk.AttachmentDescription{
-        .format = depth_img.?.vk_format,
+        .format = swapchain.depth_image.vk_format,
         .samples = .{ .@"1_bit" = true },
         .load_op = .clear,
         .store_op = .dont_care,
