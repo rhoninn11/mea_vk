@@ -280,86 +280,8 @@ pub const RGBImage = struct {
         devk.destroyImage(self.dvk_img, null);
     }
 };
-
-pub const DepthImage = struct {
-    const Self = @This();
-    vk_format: vk.Format,
-    dvk_img: vk.Image,
-    dvk_mem: vk.DeviceMemory,
-    dvk_img_view: vk.ImageView,
-
-    fn getDepthFormat(gc: *const GraphicsContext) !vk.Format {
-        return swpchn.findSupportedFormat(
-            gc,
-            &.{ vk.Format.d32_sfloat, vk.Format.d32_sfloat_s8_uint, vk.Format.d24_unorm_s8_uint },
-            vk.ImageTiling.optimal,
-            .{ .depth_stencil_attachment_bit = true },
-        );
-    }
-    fn hasSetncilComponent(format: vk.Format) bool {
-        return format == .d32_sfloat_s8_uint or format == .d24_unorm_s8_uint;
-    }
-
-    pub fn init(gc: *const GraphicsContext, extent: vk.Extent2D) !Self {
-        const devk = gc.dev;
-        const depth_format = try Self.getDepthFormat(gc);
-        _ = hasSetncilComponent(depth_format);
-
-        const d_img_create_info: vk.ImageCreateInfo = .{
-            .image_type = .@"2d",
-            .format = depth_format,
-            .extent = .{
-                .height = extent.height,
-                .width = extent.width,
-                .depth = 1,
-            },
-            .tiling = .optimal,
-            .mip_levels = 1,
-            .array_layers = 1,
-            .samples = .{ .@"1_bit" = true },
-            .usage = .{
-                .depth_stencil_attachment_bit = true,
-            },
-            .sharing_mode = .exclusive,
-            .initial_layout = .undefined,
-        };
-
-        const d_img = try devk.createImage(&d_img_create_info, null);
-        errdefer devk.destroyImage(d_img, null);
-
-        const mem_req = devk.getImageMemoryRequirements(d_img);
-        const vk_mem = try gc.allocate(
-            mem_req,
-            baked.dev_local_memory,
-        );
-        errdefer devk.freeMemory(vk_mem, null);
-
-        try devk.bindImageMemory(d_img, vk_mem, 0);
-
-        const img_viu_info: vk.ImageViewCreateInfo = .{
-            .view_type = .@"2d",
-            .format = depth_format,
-            .subresource_range = baked.depth_img_subrng,
-            .image = d_img,
-            .components = baked.identity_mapping,
-        };
-
-        const img_viu = try gc.dev.createImageView(&img_viu_info, null);
-
-        return Self{
-            .dvk_img_view = img_viu,
-            .dvk_mem = vk_mem,
-            .dvk_img = d_img,
-            .vk_format = depth_format,
-        };
-    }
-    pub fn deinit(self: Self, gc: *const GraphicsContext) void {
-        const devk = gc.dev;
-        devk.destroyImageView(self.dvk_img_view, null);
-        devk.destroyImage(self.dvk_img, null);
-        devk.freeMemory(self.dvk_mem, null);
-    }
-};
+const imgs = @import("imgs.zig");
+pub const DepthImage = imgs.DepthImage;
 
 pub const OneShotCommanded = struct {
     gc: *const GraphicsContext,

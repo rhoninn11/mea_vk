@@ -15,6 +15,7 @@ const vertex = @import("vertex.zig");
 const m = @import("math.zig");
 const t = @import("types.zig");
 const p = @import("phys.zig");
+const imgs = @import("imgs.zig");
 
 const InertiaVec2 = p.InertiaPack(m.vec3);
 const Vertex = vertex.Vertex;
@@ -267,7 +268,7 @@ fn deeper(access: EasyAcces) !void {
         .pool = pool_cmd,
     };
 
-    var image = try vulkanTexture(cmd_ctx.gc, cmd_ctx.pool);
+    var image = try imgs.vulkanTexture(cmd_ctx.gc, cmd_ctx.pool);
     defer image.deinit();
 
     // gpu mat4 alignment is 16B
@@ -459,12 +460,12 @@ fn deeper(access: EasyAcces) !void {
 
     timeline1.arm(std.time.us_per_s / 2);
 
-    var prox_lim = addons.Caped.init(1, 5);
+    var r_lim = addons.Caped.init(1, 5);
     var high_lim = addons.Caped.init(0, 3);
 
     var phi: f32 = 0;
-    var orbit_r: f32 = 2;
-    var height: f32 = 0;
+    var orbit_r: f32 = r_lim.cap(1.74);
+    var height: f32 = high_lim.cap(1.74);
 
     const speed: f32 = 1;
     const IVec3 = p.InertiaPack(m.vec3);
@@ -492,8 +493,8 @@ fn deeper(access: EasyAcces) !void {
         };
 
         orbit_r = switch (movement_b) {
-            MovesB.near => prox_lim.cap(orbit_r - speed * td),
-            MovesB.far => prox_lim.cap(orbit_r + speed * td),
+            MovesB.near => r_lim.cap(orbit_r - speed * td),
+            MovesB.far => r_lim.cap(orbit_r + speed * td),
             else => orbit_r,
         };
 
@@ -576,130 +577,6 @@ fn deeper(access: EasyAcces) !void {
 
     try swapchain.waitForAllFences();
     try gc.dev.deviceWaitIdle();
-}
-
-fn imgLTrans(cmd_ctx: *const gftx.PoolInCtx, cfg: t.ImgLTranConfig) !void {
-    const devk = cmd_ctx.gc.dev;
-    const family_ignored: u32 = 0;
-    // const zero_mask: u32 = 0;
-
-    const one_shot = try gftx.OneShotCommanded.init(cmd_ctx);
-
-    const img_lyr_barriers: []const vk.ImageMemoryBarrier = &.{
-        vk.ImageMemoryBarrier{
-            .s_type = .image_memory_barrier,
-            .old_layout = cfg.old_layout,
-            .new_layout = cfg.new_layout,
-            .src_queue_family_index = family_ignored,
-            .dst_queue_family_index = family_ignored,
-            .image = cfg.image,
-            .subresource_range = gftx.baked.color_img_subrng,
-            .src_access_mask = cfg.flags.accesses.src,
-            .dst_access_mask = cfg.flags.accesses.dst,
-        },
-    };
-    devk.cmdPipelineBarrier(
-        one_shot.cbfr,
-        cfg.flags.stages.src,
-        cfg.flags.stages.dst,
-        .{},
-        0,
-        null,
-        0,
-        null,
-        @intCast(img_lyr_barriers.len),
-        img_lyr_barriers.ptr,
-    );
-
-    try one_shot.resolve();
-}
-
-const BfrToImgCpyCfg = struct {
-    image: vk.Image,
-    buffer: vk.Buffer,
-    layout: vk.ImageLayout,
-};
-
-fn bfr2ImgCopy(cmd_ctx: *const gftx.PoolInCtx, cfg: BfrToImgCpyCfg) !void {
-    const devk = cmd_ctx.gc.dev;
-
-    const one_shot = try gftx.OneShotCommanded.init(cmd_ctx);
-
-    const bfr_img_cpy: vk.BufferImageCopy = .{
-        .buffer_offset = 0,
-        .buffer_row_length = 0,
-        .buffer_image_height = 0,
-        .image_extent = .{
-            .width = baked.img_side,
-            .height = baked.img_side,
-            .depth = 1,
-        },
-        .image_subresource = gftx.baked.color_bfr2img_sublyr,
-        .image_offset = .{ .x = 0, .y = 0, .z = 0 },
-    };
-    devk.cmdCopyBufferToImage(
-        one_shot.cbfr,
-        cfg.buffer,
-        cfg.image,
-        cfg.layout,
-        1,
-        @ptrCast(&bfr_img_cpy),
-    );
-
-    try one_shot.resolve();
-}
-
-fn vulkanTexture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gftx.RGBImage {
-    const devk = gc.dev;
-    const cmd_ctx = gftx.PoolInCtx{
-        .gc = gc,
-        .pool = with_pool,
-    };
-
-    var test_img = try gftx.RGBImage.init(gc, 64, 64);
-
-    const buff_size = test_img.dvk_size;
-    const src_buff = try gftx.createBuffer(
-        gc,
-        gftx.baked.cpu_accesible_memory,
-        buff_size,
-        .{ .transfer_src_bit = true },
-    );
-    defer src_buff.deinit(devk);
-
-    const src_data = baked.rgb_tex;
-    const src_mapping: [*]u8 = @ptrCast(@alignCast(src_buff.mapping));
-    @memcpy(src_mapping[0..src_data.len], src_data[0..src_data.len]);
-
-    const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
-    const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
-
-    try imgLTrans(&cmd_ctx, .{
-        .old_layout = .undefined,
-        .new_layout = dst_layout,
-        .image = test_img.dvk_img,
-        .format = test_img.vk_format,
-        .flags = gftx.baked.undefined_to_transfered,
-    });
-
-    try bfr2ImgCopy(&cmd_ctx, .{
-        .buffer = src_buff.dvk_bfr,
-        .image = test_img.dvk_img,
-        .layout = dst_layout,
-    });
-
-    try imgLTrans(&cmd_ctx, .{
-        .old_layout = dst_layout,
-        .new_layout = shader_read_layout,
-        .image = test_img.dvk_img,
-        .format = test_img.vk_format,
-        .flags = gftx.baked.transfered_to_fragment_readed,
-    });
-
-    try test_img.createImageView(gc);
-    try test_img.createSampler(gc);
-
-    return test_img;
 }
 
 // przykład przesyłania danych na gpu
