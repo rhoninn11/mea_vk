@@ -2,6 +2,7 @@ const std = @import("std");
 
 const glfw = @import("third_party/glfw.zig");
 const vk = @import("third_party/vk.zig");
+const sht = @import("shaders/types.zig");
 const gftx = @import("graphics_context.zig");
 
 const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
@@ -16,6 +17,7 @@ const m = @import("math.zig");
 const t = @import("types.zig");
 const p = @import("phys.zig");
 const imgs = @import("imgs.zig");
+const utils = @import("utils.zig");
 
 const InertiaVec2 = p.InertiaPack(m.vec3);
 const Vertex = vertex.Vertex;
@@ -287,6 +289,12 @@ fn deeper(access: EasyAcces) !void {
     defer uniform_dset.deinit(allocator);
 
     const instance_num = 64;
+    const grid = t.GridSize{
+        .cell_num = 64,
+        .col_num = 16,
+        .row_num = 16,
+    };
+
     var storage_dset = try addons.DescriptorPrep.init(
         allocator,
         gc,
@@ -299,6 +307,7 @@ fn deeper(access: EasyAcces) !void {
         null,
     );
     defer storage_dset.deinit(allocator);
+    addons.storagePrefil(storage_dset, grid);
 
     var texture_dset = try addons.DescriptorPrep.init(
         allocator,
@@ -390,78 +399,9 @@ fn deeper(access: EasyAcces) !void {
     var perf_stats = addons.PerfStats.init();
     var state: Swapchain.PresentState = .optimal;
 
-    const spatial_base = 0;
-    const spatial_delta = 0.2;
-    const along = 1 / @as(f32, @floatFromInt(instance_num - 1));
-    const phase_delta = along * std.math.tau;
-    const spread_base = 0;
-    const spread_delta = along * 0.2;
-
-    const seed: u64 = @intCast(std.time.timestamp()); // more random
-    // const seed: u64 = 42; // deterministic?
-    var rng = std.Random.DefaultPrng.init(seed);
-    var rnd_gen = rng.random();
-
-    // const hmm = rnd_gen.float(f32);
-    var storage_baker: std.ArrayList(f32) = .empty;
-    var storage_baker2: std.ArrayList(f32) = .empty;
-    try storage_baker.resize(allocator, instance_num);
-    try storage_baker2.resize(allocator, instance_num);
-
-    for (0..instance_num) |i| {
-        //random
-        storage_baker.items[i] = rnd_gen.float(f32);
-        //progression
-        const progress = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(instance_num - 1));
-        storage_baker2.items[i] = progress;
-        //constant wins
-        storage_baker.items[i] = -0.125;
-    }
-
-    {
-        defer storage_baker.deinit(allocator);
-        defer storage_baker2.deinit(allocator);
-        for (storage_dset.buff_arr.items) |possible_buffer| {
-            const storage = possible_buffer.?;
-            const storagePtr: *[instance_num]t.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
-            for (0..instance_num) |i| {
-                const xi = @mod(i, 8);
-                const yi = i / 8;
-                const i_f: f32 = @floatFromInt(i);
-                const x_f: f32 = @floatFromInt(xi);
-                const y_f: f32 = @floatFromInt(yi);
-
-                const x_center: f32 = (@as(f32, 8) - 1) / 2;
-                const y_center: f32 = (@as(f32, 8) - 1) / 2;
-
-                const x_d = (x_center - x_f) / 3.5;
-                const y_d = (y_center - y_f) / 3.5;
-
-                const dist = std.math.sqrt(x_d * x_d + y_d * y_d);
-
-                var fresh_one: t.PerInstance = undefined;
-                fresh_one.offset_2d[0] = spatial_base + x_f * spatial_delta;
-                fresh_one.offset_2d[1] = spatial_base + y_f * spatial_delta;
-                fresh_one.other_offsets[0] = i_f * phase_delta;
-                fresh_one.other_offsets[1] = spread_base + i_f * spread_delta;
-                fresh_one.new_usage[0] = storage_baker.items[i]; //offset on ring
-                fresh_one.new_usage[1] = dist;
-                fresh_one.new_usage[2] = x_f;
-                fresh_one.new_usage[3] = x_d;
-                storagePtr.*[i] = fresh_one;
-            }
-        }
-        // const hey = storage_dset.buff_arr.items[0].?.mapping.?;
-        // const storagePtr: *[instance_num]t.PerInstance = @ptrCast(@alignCast(hey));
-        // for (0..instance_num) |i| {
-        //     std.debug.print("dist: {d}\n", .{ i, storagePtr[i].new_usage[1] });
-        // }
-    }
-
     timeline1.arm(std.time.us_per_s / 2);
-
-    var r_lim = addons.Caped.init(1, 5);
-    var high_lim = addons.Caped.init(0, 3);
+    var r_lim = utils.Caped.init(1, 5);
+    var high_lim = utils.Caped.init(0, 3);
 
     var phi: f32 = 0;
     var orbit_r: f32 = r_lim.cap(1.74);
@@ -473,6 +413,7 @@ fn deeper(access: EasyAcces) !void {
     inertia.phx = IVec3.InertiaCfg.default();
 
     while (!glfw.windowShouldClose(window)) {
+        const img_idx = swapchain.image_index;
         const win_size = windowExtext(window);
         input_continue();
 
@@ -515,32 +456,20 @@ fn deeper(access: EasyAcces) !void {
             glfw.pollEvents();
             continue;
         }
-
-        const particle_scale = 0.2;
-
-        const this_frame_uniform = uniform_dset.buff_arr.items[swapchain.image_index].?;
-        const as_group_data: *t.GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
-
-        const scale_osc = std.math.sin(timeline.total_s) * 0.2 + 2;
-        _ = scale_osc;
-
-        as_group_data.*.osc_scale = .{ 0.1, 0.1 };
-        as_group_data.*.scale_2d = .{ particle_scale, particle_scale };
-        as_group_data.*.termoral = .{ timeline.total_s, 0, 1, 2 };
-        as_group_data.*.matrices = try addons.paramatricVariation(
-            1,
+        try addons.perFrameUniformFill(
+            uniform_dset,
+            @intCast(img_idx),
+            timeline.total_s,
             inertia.out(),
-            .{ 0, 0, 0 },
         );
 
-        const cmdbuf = cmdbufs[swapchain.image_index];
-        // std.debug.print("+++ img_idx {d}\n", .{swapchain.image_index});
+        const cmdbuf = cmdbufs[img_idx];
 
         if (state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {
             // std.debug.assert(false); //cuz it will throw error due to bad depth_img resolution
             resolution_extent = win_size;
             std.debug.print("+++ a\n", .{});
-            try gc.dev.deviceWaitIdle();
+            // try gc.dev.deviceWaitIdle();
             try swapchain.recreate(resolution_extent);
 
             std.debug.print("+++ b\n", .{});

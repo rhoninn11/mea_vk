@@ -82,9 +82,6 @@ pub const Swapchain = struct {
             for (swap_images) |si| si.deinit(gc);
             allocator.free(swap_images);
         }
-        // const depth_image = try DepthImage.init(gc);
-        // _ = depth_image;
-        // TODO: init depth atachment?
 
         var next_image_acquired = try gc.dev.createSemaphore(&.{}, null);
         errdefer gc.dev.destroySemaphore(next_image_acquired, null);

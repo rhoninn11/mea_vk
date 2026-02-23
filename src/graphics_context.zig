@@ -136,7 +136,7 @@ pub const baked = struct {
         .layer_count = 1,
     };
 
-    pub const undefined_to_transfered: t.LTransRelated = .{
+    pub const undefined_to_transfered: t.TransitPrep = .{
         .accesses = .{
             .src = .{},
             .dst = .{
@@ -153,7 +153,7 @@ pub const baked = struct {
         },
     };
 
-    pub const transfered_to_fragment_readed: t.LTransRelated = .{
+    pub const transfered_to_fragment_readed: t.TransitPrep = .{
         .accesses = .{
             .src = .{
                 .transfer_write_bit = true,

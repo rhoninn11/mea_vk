@@ -1,31 +1,11 @@
 const vk = @import("third_party/vk.zig");
 const m = @import("math.zig");
+const gput = @import("shaders/types.zig");
 
-pub const MatPack = struct {
-    model: [16]f32 = m.mat_identity().arr,
-    view: [16]f32 = m.mat_identity().arr,
-    proj: [16]f32 = m.mat_identity().arr,
-};
+pub const GroupData = gput.GroupData;
+pub const PerInstance = gput.PerInstance;
 
-pub const GroupData = struct {
-    // ||| added uniform, storage and texture
-    osc_scale: [2]f32 = undefined,
-    scale_2d: [2]f32 = undefined,
-    not_used_4d_0: [4]f32 = undefined,
-    termoral: [4]f32 = undefined,
-    not_used_4d_1: [4]f32 = undefined,
-    // 16B alignment
-    matrices: MatPack = undefined,
-};
-
-pub const PerInstance = struct {
-    offset_2d: [2]f32 = undefined,
-    other_offsets: [2]f32 = undefined,
-    new_usage: [4]f32 = undefined,
-    empty_rest: [8]f32 = undefined,
-};
-
-pub const LTransRelated = struct {
+pub const TransitPrep = struct {
     const Stages = struct {
         src: vk.PipelineStageFlags,
         dst: vk.PipelineStageFlags,
@@ -44,5 +24,11 @@ pub const ImgLTranConfig = struct {
     old_layout: vk.ImageLayout,
     new_layout: vk.ImageLayout,
     format: ?vk.Format = null,
-    flags: LTransRelated,
+    flags: TransitPrep,
+};
+
+pub const GridSize = struct {
+    cell_num: u16,
+    col_num: u8,
+    row_num: u8,
 };

@@ -14,14 +14,14 @@ const PerInstanceData = extern struct {
     not_used_4d_1: [4]f32,
 };
 
-const m = @import("math.zig");
-pub const MatPack = struct {
+const m = @import("../math.zig");
+pub const MatPack = extern struct {
     model: [16]f32 = m.mat_identity().arr,
     view: [16]f32 = m.mat_identity().arr,
     proj: [16]f32 = m.mat_identity().arr,
 };
 
-pub const GroupData = struct {
+pub const GroupData = extern struct {
     // ||| added uniform, storage and texture
     osc_scale: [2]f32 = undefined,
     scale_2d: [2]f32 = undefined,

@@ -1,4 +1,5 @@
 const std = @import("std");
+const typse = @import("types.zig");
 const gpu = std.gpu;
 
 extern const a_pos: @Vector(2, f32) addrspace(.input);

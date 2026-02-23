@@ -4,117 +4,16 @@ const glfw = @import("third_party/glfw.zig");
 const gftx = @import("graphics_context.zig");
 
 const t = @import("types.zig");
+const sht = @import("shaders/types.zig");
 const m = @import("math.zig");
+const utils = @import("utils.zig");
+const time = @import("time.zig");
 
 const Allocator = std.mem.Allocator;
 
-pub const PerfStats = struct {
-    t0: i64,
-    frame_num: u32,
+pub const PerfStats = utils.PerfStats;
 
-    pub fn init() PerfStats {
-        std.debug.print("--- empty line ---\n", .{});
-        return PerfStats{
-            .t0 = std.time.milliTimestamp(),
-            .frame_num = 0,
-        };
-    }
-
-    pub fn messure(s: *PerfStats) void {
-        const now = std.time.milliTimestamp();
-        const delta = now - s.t0;
-
-        const messure_interval = 1000.0;
-        const update_interval = 500;
-        const update_interval_i: u32 = @intFromFloat(update_interval);
-
-        const scale: f32 = messure_interval / update_interval;
-        if (delta > update_interval_i) {
-            // std.debug.print("\x1B[A\x1B[2K", .{});
-            var fps: f32 = @floatFromInt(s.frame_num);
-            fps *= scale;
-
-            if (fps > 9000) {
-                // A first i didnt expected speed like 12k fps are even possible while window rendering
-                // but switching to linux from windows enabled such an improvement xD
-
-                // std.debug.print("+++ omg is over 9000 {d}\n", .{fps});
-            }
-            // std.debug.print("+++ rendering hit {d} fps\n", .{fps});
-            s.t0 += update_interval_i;
-            s.frame_num = 0;
-        }
-
-        s.frame_num += 1;
-    }
-};
-
-pub const IntervalInfo = struct {
-    _t_interval: i64,
-    interval: i64,
-};
-
-pub const Timeline = struct {
-    _t0: i64,
-    _t_last: i64,
-    interval: ?IntervalInfo = null,
-
-    total_s: f32,
-    delta_ms: f32,
-
-    time_passage: bool = true,
-
-    pub fn init() Timeline {
-        const now = std.time.microTimestamp();
-        return Timeline{
-            ._t0 = now,
-            ._t_last = now,
-            .total_s = 0,
-            .delta_ms = 0.0001,
-        };
-    }
-
-    pub fn update(self: *Timeline) void {
-        const now = std.time.microTimestamp();
-
-        const delta = @as(f32, @floatFromInt(now - self._t_last));
-
-        self._t_last = now;
-        self.delta_ms = delta / 1000;
-        if (self.time_passage) {
-            self.total_s += self.delta_ms / 1000;
-        }
-    }
-
-    pub fn arm(self: *Timeline, us: i32) void {
-        self.interval = IntervalInfo{
-            ._t_interval = self._t_last,
-            .interval = us,
-        };
-    }
-
-    pub fn triggerd(self: *Timeline) bool {
-        var intv: *IntervalInfo = undefined;
-        if (self.interval) |_| {
-            intv = &self.interval.?;
-        } else {
-            return false;
-        }
-
-        const delta = self._t_last - intv._t_interval;
-        if (delta > intv.interval) {
-            intv._t_interval += intv.interval;
-            return true;
-        }
-
-        return false;
-    }
-
-    pub fn deltaS(self: *Timeline) f32 {
-        return self.delta_ms / 1000;
-    }
-};
-
+pub const Timeline = time.Timeline;
 pub const DescriptorPrep = struct {
     const Self = @This();
     d_set_layout_arr: std.ArrayList(vk.DescriptorSetLayout) = .empty,
@@ -265,7 +164,103 @@ pub const DescriptorPrep = struct {
     }
 };
 
-pub fn paramatricVariation(scale: f32, pos: m.vec3, targ: m.vec3) !t.MatPack {
+pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s: f32, center: m.vec3) !void {
+    const particle_scale = 0.2;
+
+    const this_frame_uniform = uniform_dset.buff_arr.items[frame_idx].?;
+    const as_group_data: *sht.GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
+
+    const scale_osc = std.math.sin(total_s) * 0.2 + 2;
+    _ = scale_osc;
+
+    as_group_data.*.osc_scale = .{ 0.1, 0.1 };
+    as_group_data.*.scale_2d = .{ particle_scale, particle_scale };
+    as_group_data.*.termoral = .{ total_s, 0, 1, 2 };
+    as_group_data.*.matrices = try paramatricVariation(
+        1,
+        center,
+        .{ 0, 0, 0 },
+    );
+}
+
+pub fn storagePrefil(storage_dset: DescriptorPrep, grid: t.GridSize) void {
+    const instance_num = grid.cell_num;
+    const lim_num = 8096;
+    std.debug.assert(instance_num <= lim_num);
+
+    const along = 1 / @as(f32, @floatFromInt(instance_num - 1));
+    const phase_delta = along * std.math.tau;
+    const spread_base = 0;
+    const spread_delta = along * 0.2;
+
+    const seed: u64 = @intCast(std.time.timestamp()); // more random
+    // const seed: u64 = 42; // deterministic?
+    var rng = std.Random.DefaultPrng.init(seed);
+    var rnd_gen = rng.random();
+
+    var stack_mem: [lim_num * 4]u8 = undefined;
+    var local: std.heap.FixedBufferAllocator = .init(&stack_mem);
+    const allocator = local.allocator();
+
+    // const hmm = rnd_gen.float(f32);
+    var storage_baker: std.ArrayList(f32) = .empty;
+    var storage_baker2: std.ArrayList(f32) = .empty;
+    storage_baker.resize(allocator, instance_num) catch unreachable;
+    storage_baker2.resize(allocator, instance_num) catch unreachable;
+
+    for (0..instance_num) |i| {
+        //random
+        storage_baker.items[i] = rnd_gen.float(f32);
+        //progression
+        const progress = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(instance_num - 1));
+        storage_baker2.items[i] = progress;
+        //constant wins
+        storage_baker.items[i] = -0.125;
+    }
+
+    const x_center: f32 = (@as(f32, 8) - 1) / 2;
+    const y_center: f32 = (@as(f32, 8) - 1) / 2;
+
+    const spatial_base = m.vec2{ 0, 0 };
+    const spatial_delta = 0.2;
+    {
+        defer storage_baker.deinit(allocator);
+        defer storage_baker2.deinit(allocator);
+        for (storage_dset.buff_arr.items) |possible_buffer| {
+            const storage = possible_buffer.?;
+            const storagePtr: [*]t.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
+            for (0..instance_num) |i| {
+                const xi = @mod(i, 8);
+                const yi = i / 8;
+                const i_f: f32 = @floatFromInt(i);
+                const x_f: f32 = @floatFromInt(xi);
+                const y_f: f32 = @floatFromInt(yi);
+
+                const x_d = (x_center - x_f) / 3.5;
+                const y_d = (y_center - y_f) / 3.5;
+
+                const dist = std.math.sqrt(x_d * x_d + y_d * y_d);
+
+                var fresh_one: t.PerInstance = undefined;
+                fresh_one.offset_2d[0] = spatial_base[0] + x_f * spatial_delta;
+                fresh_one.offset_2d[1] = spatial_base[1] + y_f * spatial_delta;
+
+                fresh_one.other_offsets[0] = i_f * phase_delta;
+                fresh_one.other_offsets[1] = spread_base + i_f * spread_delta;
+                fresh_one.new_usage[0] = storage_baker.items[i]; //offset on ring
+                fresh_one.new_usage[1] = dist;
+                fresh_one.new_usage[2] = x_f;
+                fresh_one.new_usage[3] = x_d;
+                storagePtr[i] = fresh_one;
+            }
+        }
+    }
+}
+
+// ------------------------------------------------
+
+const MatPack = sht.MatPack;
+pub fn paramatricVariation(scale: f32, pos: m.vec3, targ: m.vec3) !MatPack {
     const persp_window = m.mat_persp(1, 0.75, std.math.pi / 2.0, 0.1, 20);
     const ortho_window = m.mat_ortho(scale, -scale, scale, -scale, 20, -20);
     _ = ortho_window;
@@ -273,14 +268,14 @@ pub fn paramatricVariation(scale: f32, pos: m.vec3, targ: m.vec3) !t.MatPack {
     const ref_up: m.vec3 = .{ 0, 1, 0 };
     const trans = m.mat_translate(-pos);
     const rot = m.lookRotation(pos, targ, ref_up);
-    const look_at_combinged = m.matXmat(rot.mat, trans.mat);
+    const camera_mat = m.matXmat(rot.mat, trans.mat);
 
-    const model_rot = m.lookRotation(m.zero3(), .{ 0, 1, 0 }, .{ 0, 0, 1 });
+    const model_mat = m.lookRotation(m.zero3(), .{ 1, 0, 0 }, .{ 0, 1, 0 });
 
-    const interm = t.MatPack{
+    const interm = MatPack{
         .proj = persp_window.arr,
-        .view = look_at_combinged.arr,
-        .model = model_rot.arr,
+        .view = camera_mat.arr,
+        .model = model_mat.arr,
         // .view = m.mat_translate(-pos).arr,
         // .view = m.lookRotation(.{ 0, 0, -1 }, pos).arr,
     };
@@ -305,51 +300,7 @@ pub fn visible(a: vk.Extent2D) bool {
     return a.width != 0 and a.height != 0;
 }
 
-pub fn Slider(vecTpy: type) type {
-    return struct {
-        const Self = @This();
-        hmm: *const []const vecTpy,
-        len: u8,
-        idx: u8,
-        pub fn init(point: *const []const vecTpy) Self {
-            std.debug.assert(point.len < std.math.maxInt(u8));
-            return .{
-                .hmm = point,
-                .len = @intCast(point.len),
-                .idx = 0,
-            };
-        }
-        pub fn curr(self: *Self) vecTpy {
-            return self.hmm.ptr[self.idx];
-        }
-        pub fn next(self: *Self) vecTpy {
-            self.idx = @mod(self.idx + 1, self.len);
-            return self.hmm.ptr[self.idx];
-        }
-        pub fn prev(self: *Self) vecTpy {
-            self.idx = if (self.idx == 0) self.len - 1 else self.idx - 1;
-            return self.hmm.ptr[self.idx];
-        }
-    };
-}
-
 const EasyAcces = struct {
     window: ?*c_long,
     vkctx: ?*const gftx.GraphicsContext = null,
-};
-
-pub const Caped = struct {
-    min: f32,
-    max: f32,
-
-    pub fn init(min: f32, max: f32) Caped {
-        return Caped{
-            .min = min,
-            .max = max,
-        };
-    }
-
-    pub fn cap(self: Caped, val: f32) f32 {
-        return @min(@max(val, self.min), self.max);
-    }
 };
