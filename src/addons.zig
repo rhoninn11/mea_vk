@@ -183,6 +183,19 @@ pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s:
     );
 }
 
+fn gridMiddle(grid: *const t.GridSize) m.vec3 {
+    std.debug.print("grid is: {} {}\n", .{ grid.row_num, grid.col_num });
+    const x_mid = @as(f32, @floatFromInt(grid.row_num - 1)) * 0.5;
+    const z_mid = @as(f32, @floatFromInt(grid.col_num - 1)) * 0.5;
+    return .{ x_mid, 0, z_mid };
+}
+
+fn gridDelta(grid: *const t.GridSize) m.vec3 {
+    const a: f32 = 0.0;
+    _ = grid;
+    return .{ a, 0, 0 };
+}
+
 pub fn storagePrefil(storage_dset: DescriptorPrep, grid: t.GridSize) void {
     const instance_num = grid.cell_num;
     const lim_num = 8096;
@@ -226,6 +239,12 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: t.GridSize) void {
     {
         defer storage_baker.deinit(allocator);
         defer storage_baker2.deinit(allocator);
+
+        const middle = gridMiddle(&grid);
+        const delt_ = gridDelta(&grid);
+        std.debug.print("middle is: {}\n", .{middle});
+        std.debug.print("delta is: {}\n", .{delt_});
+
         for (storage_dset.buff_arr.items) |possible_buffer| {
             const storage = possible_buffer.?;
             const storagePtr: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
@@ -236,6 +255,8 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: t.GridSize) void {
                 const x_f: f32 = @floatFromInt(xi);
                 const y_f: f32 = @floatFromInt(yi);
 
+                // const x_d = (middle[m.X] - x_f) / middle[m.X];
+                // const y_d = (middle[m.Z] - y_f) / middle[m.Z];
                 const x_d = (x_center - x_f) / 3.5;
                 const y_d = (y_center - y_f) / 3.5;
 

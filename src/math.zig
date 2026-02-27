@@ -11,9 +11,9 @@ const hmm_a: vec3 = .{ 1, 1, 1 };
 const hmm_b: vec3 = .{ 2, 2, 2 };
 const hmm_c = hmm_a + hmm_b;
 
-const X = 0;
-const Y = 1;
-const Z = 2;
+pub const X = 0;
+pub const Y = 1;
+pub const Z = 2;
 
 pub fn sum(a: [2]f32) f32 {
     return a[0] + a[1];
@@ -342,4 +342,11 @@ test "is_matrix_looking" {
 
     try std.testing.expect(outs[M][X] < outs[R][X]); //should be on right
     try std.testing.expect(outs[M][Y] < outs[U][Y]); //should be higher
+}
+
+pub inline fn orbit(phi: f32) vec3 {
+    return .{ std.math.cos(phi), 0, -std.math.sin(phi) };
+}
+pub inline fn orbit_r(phi: f32, r: f32) vec3 {
+    return vec3{ std.math.cos(phi), 0, -std.math.sin(phi) } * splat3d(r);
 }

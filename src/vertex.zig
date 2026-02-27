@@ -57,18 +57,18 @@ pub const TriangleArray = std.ArrayList(Vertex);
 // };
 
 pub const Utils = struct {
-    pub fn Ring(alloc: Allocator, len: u8) !TriangleArray {
+    pub fn Ring(alloc: Allocator, len: u8, flat: bool) !TriangleArray {
         const vert_num: usize = @as(usize, len) * 2;
 
         var pair_arr: PairArray = .empty;
         try pair_arr.resize(alloc, vert_num);
         defer pair_arr.deinit(alloc); //intermediate cals
 
-        ringPairs(pair_arr.items);
+        ringPairs(pair_arr.items, flat);
         return try triangulateSegments(alloc, pair_arr.items);
     }
 
-    fn ringPairs(pair_points: []PairPoint) void {
+    fn ringPairs(pair_points: []PairPoint, flat: bool) void {
         std.debug.assert(@mod(pair_points.len, 2) == 0);
         const segments = pair_points.len / 2;
 
@@ -100,7 +100,8 @@ pub const Utils = struct {
             const stage_i = pre_i * 2;
             const base: [2]f32 = pair_points[stage_i].pos[0..2].*;
 
-            pair_points[stage_i].pos = m.stack(m.mul2D(base, r), 0.5);
+            const height: f32 = if (flat) 0.0 else 0.5;
+            pair_points[stage_i].pos = m.stack(m.mul2D(base, r), height);
             pair_points[stage_i + 1].pos = m.stack(m.mul2D(base, r + r_delta), 0);
         }
     }

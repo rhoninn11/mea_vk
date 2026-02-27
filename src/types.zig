@@ -29,3 +29,9 @@ pub const GridSize = struct {
     col_num: u8,
     row_num: u8,
 };
+
+pub const Player = struct {
+    phi: f32,
+    h: f32,
+    r: f32,
+};

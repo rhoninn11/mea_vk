@@ -15,11 +15,11 @@ const helpers = @import("helpers.zig");
 const vertex = @import("vertex.zig");
 const m = @import("math.zig");
 const t = @import("types.zig");
-const p = @import("phys.zig");
+const phx = @import("phys.zig");
 const imgs = @import("imgs.zig");
 const utils = @import("utils.zig");
 
-const InertiaVec2 = p.InertiaPack(m.vec3);
+const InertiaVec2 = phx.InertiaPack(m.vec3);
 const Vertex = vertex.Vertex;
 
 const BufforingVert = Buffering(Vertex);
@@ -183,9 +183,6 @@ const BasicErrs = error{
     NoCtx,
 };
 
-fn orbit(phi: f32) m.vec3 {
-    return .{ std.math.cos(phi), 0, -std.math.sin(phi) };
-}
 pub fn main() !void {
     vertex.probing();
 
@@ -242,6 +239,10 @@ pub fn main() !void {
         .alloc = allocator,
     };
     try deeper(access);
+}
+
+fn playerPos(p: *t.Player) m.vec3 {
+    return m.orbit_r(p.phi, p.r) + m.vec3{ 0, p.h, 0 };
 }
 
 fn deeper(access: EasyAcces) !void {
@@ -354,10 +355,12 @@ fn deeper(access: EasyAcces) !void {
     defer destroyFramebuffers(gc, allocator, framebuffers);
 
     // const triangle = vertex.
-    var shape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, 32);
+    var shape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, 32, false);
     defer shape.deinit(allocator);
+    var nextShape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, 5, true);
+    defer nextShape.deinit(allocator);
 
-    const as_slice: []const Vertex = shape.items;
+    const as_slice: []const Vertex = nextShape.items;
 
     const buffer = try BufforingVert.easyBuffer(&gc.dev, as_slice, false);
     defer gc.dev.destroyBuffer(buffer, null);
@@ -403,14 +406,19 @@ fn deeper(access: EasyAcces) !void {
     var r_lim = utils.Caped.init(1, 5);
     var high_lim = utils.Caped.init(0, 3);
 
-    var phi: f32 = 0;
-    var orbit_r: f32 = r_lim.cap(1.74);
-    var height: f32 = high_lim.cap(1.74);
+    var plr = t.Player{
+        .phi = 0,
+        .r = r_lim.cap(1.74),
+        .h = high_lim.cap(1.74),
+    };
 
     const speed: f32 = 1;
-    const IVec3 = p.InertiaPack(m.vec3);
-    var inertia = IVec3.Inertia.init(orbit(phi));
+    const IVec3 = phx.InertiaPack(m.vec3);
+    var inertia = IVec3.Inertia.init(playerPos(&plr));
+    var inertia1 = IVec3.Inertia.init(.{ plr.phi, 0, 0 });
+
     inertia.phx = IVec3.InertiaCfg.default();
+    inertia1.phx = inertia.phx;
 
     while (!glfw.windowShouldClose(window)) {
         const img_idx = swapchain.image_index;
@@ -433,24 +441,35 @@ fn deeper(access: EasyAcces) !void {
             else => 0,
         };
 
-        orbit_r = switch (movement_b) {
-            MovesB.near => r_lim.cap(orbit_r - speed * td),
-            MovesB.far => r_lim.cap(orbit_r + speed * td),
-            else => orbit_r,
+        plr.r = switch (movement_b) {
+            MovesB.near => r_lim.cap(plr.r - speed * td),
+            MovesB.far => r_lim.cap(plr.r + speed * td),
+            else => plr.r,
         };
 
-        height = switch (movement_c) {
-            MovesC.up => high_lim.cap(height + speed * td),
-            MovesC.down => high_lim.cap(height - speed * td),
-            else => height,
+        plr.h = switch (movement_c) {
+            MovesC.up => high_lim.cap(plr.h + speed * td),
+            MovesC.down => high_lim.cap(plr.h - speed * td),
+            else => plr.h,
         };
         clear();
 
-        phi += phi_delt * td * std.math.tau * speed;
+        const phi_a = plr.phi + phi_delt * td * std.math.tau * speed;
+        inertia1.in(.{ phi_a, 0, 0 });
 
-        inertia.in(orbit(phi) * m.splat3d(orbit_r) + m.vec3{ 0, height, 0 });
+        var plr_clone = plr;
+
+        plr.phi = phi_a;
+        inertia.in(playerPos(&plr));
+
         inertia.simulate(timeline1.delta_ms);
+        inertia1.simulate(timeline1.delta_ms);
 
+        plr_clone.phi = inertia1.out()[0];
+        const player_pos_warm_new = playerPos(&plr_clone);
+
+        const prev = inertia.out();
+        _ = prev;
         //minimalized
         if (!addons.visible(win_size)) {
             glfw.pollEvents();
@@ -460,7 +479,7 @@ fn deeper(access: EasyAcces) !void {
             uniform_dset,
             @intCast(img_idx),
             timeline.total_s,
-            inertia.out(),
+            player_pos_warm_new,
         );
 
         const cmdbuf = cmdbufs[img_idx];
