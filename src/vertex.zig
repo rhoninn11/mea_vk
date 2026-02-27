@@ -89,7 +89,6 @@ pub const Utils = struct {
             };
             var stamp_b = stamp_a;
             stamp_b.v = 1.0;
-            stamp_b.pos[Z] = 0.75;
 
             pair_points[i * 2] = stamp_a;
             pair_points[i * 2 + 1] = stamp_b;
@@ -101,7 +100,7 @@ pub const Utils = struct {
             const stage_i = pre_i * 2;
             const base: [2]f32 = pair_points[stage_i].pos[0..2].*;
 
-            pair_points[stage_i].pos = m.stack(m.mul2D(base, r), 0.1);
+            pair_points[stage_i].pos = m.stack(m.mul2D(base, r), 0.5);
             pair_points[stage_i + 1].pos = m.stack(m.mul2D(base, r + r_delta), 0);
         }
     }
@@ -128,8 +127,8 @@ pub const Utils = struct {
                 const v = Vertex{
                     .pos = .{
                         stage.pos[X],
-                        stage.pos[Y],
                         stage.pos[Z],
+                        stage.pos[Y],
                     },
                     .color = .{ stage.progress, stage.v, 0 },
                 };

@@ -282,7 +282,7 @@ fn deeper(access: EasyAcces) !void {
         gftx.baked.uniform_frag_vert,
         .{
             .location = 0,
-            .size = @sizeOf(t.GroupData),
+            .size = @sizeOf(sht.GroupData),
         },
         null,
     );
@@ -302,7 +302,7 @@ fn deeper(access: EasyAcces) !void {
         gftx.baked.storage_frag_vert,
         .{
             .location = 0,
-            .size = @sizeOf(t.PerInstance) * instance_num,
+            .size = @sizeOf(sht.PerInstance) * instance_num,
         },
         null,
     );

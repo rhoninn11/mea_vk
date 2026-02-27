@@ -228,7 +228,7 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: t.GridSize) void {
         defer storage_baker2.deinit(allocator);
         for (storage_dset.buff_arr.items) |possible_buffer| {
             const storage = possible_buffer.?;
-            const storagePtr: [*]t.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
+            const storagePtr: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
             for (0..instance_num) |i| {
                 const xi = @mod(i, 8);
                 const yi = i / 8;
@@ -241,7 +241,7 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: t.GridSize) void {
 
                 const dist = std.math.sqrt(x_d * x_d + y_d * y_d);
 
-                var fresh_one: t.PerInstance = undefined;
+                var fresh_one: sht.PerInstance = undefined;
                 fresh_one.offset_2d[0] = spatial_base[0] + x_f * spatial_delta;
                 fresh_one.offset_2d[1] = spatial_base[1] + y_f * spatial_delta;
 
@@ -251,6 +251,9 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: t.GridSize) void {
                 fresh_one.new_usage[1] = dist;
                 fresh_one.new_usage[2] = x_f;
                 fresh_one.new_usage[3] = x_d;
+                fresh_one.offset_4d[0] = fresh_one.offset_2d[0];
+                fresh_one.offset_4d[1] = 0;
+                fresh_one.offset_4d[2] = fresh_one.offset_2d[1];
                 storagePtr[i] = fresh_one;
             }
         }

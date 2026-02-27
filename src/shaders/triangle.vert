@@ -23,7 +23,7 @@ struct Instance{
     vec2 offset_2d;
     vec2 other_offsets;
     vec4 new_usage;
-    vec4 not_used_4d_1;
+    vec4 offset_4d;
     vec4 not_used_4d_2;
 };
 layout(set = 1, binding = 0) buffer readonly InstanceData{
@@ -41,23 +41,22 @@ void main() {
     Instance m_inst = _storage.per_instance[gl_InstanceIndex];
     MatPack ems = _group.matrices;
 
-    vec2 instance_offset = m_inst.offset_2d;
-    vec2 prescaled_pos = a_pos.xy * _group.scale_2d;
+    vec3 instance_offset = m_inst.offset_4d.xyz;
+    vec3 prescaled_pos = a_pos * vec3(_group.scale_2d.x);
 
     float phase_offset = m_inst.other_offsets.x;
     float spread_offset = m_inst.other_offsets.y;
     
     float phase = _group.temporal.x + phase_offset;
-    vec2 osc_offset = vec2(cos(phase), sin(phase)) * _group.osc_scale;
-    osc_offset = vec2(0,0);
 
 //  should be visible after depth testing
     float depth_osc = sin(_group.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
     depth_osc += gl_InstanceIndex*0.001;
 
     float depth_anim = depth_osc;
+    vec3 base = prescaled_pos + instance_offset + vec3(0, depth_osc, 0);
 
-    vec4 before_transform = vec4(prescaled_pos + instance_offset + osc_offset, a_pos.z + depth_osc, 1.0);
+    vec4 before_transform = vec4(base, 1.0);
     gl_Position = ems.proj * ems.view * ems.model * before_transform;
     // gl_Position = before_transform; 
     v_color.rg = a_color.rg;

@@ -2,9 +2,6 @@ const vk = @import("third_party/vk.zig");
 const m = @import("math.zig");
 const gput = @import("shaders/types.zig");
 
-pub const GroupData = gput.GroupData;
-pub const PerInstance = gput.PerInstance;
-
 pub const TransitPrep = struct {
     const Stages = struct {
         src: vk.PipelineStageFlags,
