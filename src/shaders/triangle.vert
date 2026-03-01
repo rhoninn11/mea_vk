@@ -37,11 +37,12 @@ layout(location = 0) out vec4 v_color;
 layout(location = 1) out float v_progress;
 
 // group locked at the middle of the screan
+// group gives info to precalculate surface
 void main() {
     Instance m_inst = _storage.per_instance[gl_InstanceIndex];
     MatPack ems = _group.matrices;
 
-    vec3 instance_offset = m_inst.offset_4d.xyz;
+    vec3 pose_on_surface = m_inst.offset_4d.xyz;
     vec3 prescaled_pos = a_pos * vec3(_group.scale_2d.x);
 
     float phase_offset = m_inst.other_offsets.x;
@@ -51,17 +52,16 @@ void main() {
 
 //  should be visible after depth testing
     float depth_osc = sin(_group.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
-    depth_osc += gl_InstanceIndex*0.001;
+    float float_anim = depth_osc + gl_InstanceIndex*0.001; // to combat depth flickering
 
-    float depth_anim = depth_osc;
-    vec3 base = prescaled_pos + instance_offset + vec3(0, depth_osc, 0);
+    vec3 base = prescaled_pos + pose_on_surface + vec3(0, float_anim, 0);
 
     vec4 before_transform = vec4(base, 1.0);
     gl_Position = ems.proj * ems.view * ems.model * before_transform;
     // gl_Position = before_transform; 
     v_color.rg = a_color.rg;
     v_color.b = spread_offset;
-    v_color.a = depth_anim;
+    v_color.a = float_anim;
 
     v_progress = a_color.r + m_inst.new_usage.x;
 }

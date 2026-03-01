@@ -94,7 +94,7 @@ pub const Utils = struct {
             pair_points[i * 2 + 1] = stamp_b;
         }
 
-        const r = 0.6;
+        const r = 0.7;
         const r_delta = 0.3;
         for (0..segments) |pre_i| {
             const stage_i = pre_i * 2;

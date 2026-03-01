@@ -276,6 +276,9 @@ fn deeper(access: EasyAcces) !void {
 
     // gpu mat4 alignment is 16B
 
+    const spacing = 0.1;
+    const size = 0.1;
+
     var uniform_dset = try addons.DescriptorPrep.init(
         allocator,
         gc,
@@ -289,13 +292,7 @@ fn deeper(access: EasyAcces) !void {
     );
     defer uniform_dset.deinit(allocator);
 
-    const instance_num = 64;
-    const grid = t.GridSize{
-        .cell_num = 64,
-        .col_num = 16,
-        .row_num = 16,
-    };
-
+    const grid = addons.Gridor.xyGrid(32, 32);
     var storage_dset = try addons.DescriptorPrep.init(
         allocator,
         gc,
@@ -303,12 +300,12 @@ fn deeper(access: EasyAcces) !void {
         gftx.baked.storage_frag_vert,
         .{
             .location = 0,
-            .size = @sizeOf(sht.PerInstance) * instance_num,
+            .size = @sizeOf(sht.PerInstance) * @as(u32, grid.total),
         },
         null,
     );
     defer storage_dset.deinit(allocator);
-    addons.storagePrefil(storage_dset, grid);
+    addons.storagePrefil(storage_dset, grid, spacing);
 
     var texture_dset = try addons.DescriptorPrep.init(
         allocator,
@@ -373,7 +370,7 @@ fn deeper(access: EasyAcces) !void {
     try uploadVertices(gc, pool_cmd, buffer, as_slice);
 
     const draw_instanced_attempt: ShaderRelated = .{
-        .instance_count = instance_num,
+        .instance_count = grid.total,
         .pipeline_layout = pipeline_layout,
         .uniform_dsets = uniform_dset.d_set_arr,
         .storage_dsets = storage_dset.d_set_arr,
@@ -480,6 +477,7 @@ fn deeper(access: EasyAcces) !void {
             @intCast(img_idx),
             timeline.total_s,
             player_pos_warm_new,
+            size,
         );
 
         const cmdbuf = cmdbufs[img_idx];

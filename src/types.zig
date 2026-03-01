@@ -25,7 +25,7 @@ pub const ImgLTranConfig = struct {
 };
 
 pub const GridSize = struct {
-    cell_num: u16,
+    total: u16,
     col_num: u8,
     row_num: u8,
 };

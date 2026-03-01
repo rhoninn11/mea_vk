@@ -164,9 +164,42 @@ pub const DescriptorPrep = struct {
     }
 };
 
-pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s: f32, center: m.vec3) !void {
-    const particle_scale = 0.2;
+pub const Gridor = struct {
+    pub fn gridMiddle(grid: *const t.GridSize) m.vec3 {
+        std.debug.print("grid is: {} {}\n", .{ grid.row_num, grid.col_num });
+        const x_mid = @as(f32, @floatFromInt(grid.row_num - 1)) * 0.5;
+        const z_mid = @as(f32, @floatFromInt(grid.col_num - 1)) * 0.5;
+        return .{ x_mid, 0, z_mid };
+    }
 
+    pub fn gridDelta(grid: *const t.GridSize) m.vec3 {
+        const a: f32 = 0.0;
+        _ = grid;
+        return .{ a, 0, 0 };
+    }
+
+    pub fn gridIdx(grid: *const t.GridSize, i: usize) m.vec3 {
+        return .{
+            @as(f32, @floatFromInt(@mod(i, grid.col_num))),
+            0,
+            @as(f32, @floatFromInt(i / grid.row_num)),
+        };
+    }
+
+    pub fn defaultGrid() t.GridSize {
+        return xyGrid(8, 8);
+    }
+
+    pub fn xyGrid(x: u8, y: u8) t.GridSize {
+        return t.GridSize{
+            .total = @as(u16, x) * @as(u16, y),
+            .col_num = x,
+            .row_num = y,
+        };
+    }
+};
+
+pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s: f32, center: m.vec3, size: f32) !void {
     const this_frame_uniform = uniform_dset.buff_arr.items[frame_idx].?;
     const as_group_data: *sht.GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
 
@@ -174,7 +207,7 @@ pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s:
     _ = scale_osc;
 
     as_group_data.*.osc_scale = .{ 0.1, 0.1 };
-    as_group_data.*.scale_2d = .{ particle_scale, particle_scale };
+    as_group_data.*.scale_2d = .{ size, size };
     as_group_data.*.termoral = .{ total_s, 0, 1, 2 };
     as_group_data.*.matrices = try paramatricVariation(
         1,
@@ -183,23 +216,12 @@ pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s:
     );
 }
 
-fn gridMiddle(grid: *const t.GridSize) m.vec3 {
-    std.debug.print("grid is: {} {}\n", .{ grid.row_num, grid.col_num });
-    const x_mid = @as(f32, @floatFromInt(grid.row_num - 1)) * 0.5;
-    const z_mid = @as(f32, @floatFromInt(grid.col_num - 1)) * 0.5;
-    return .{ x_mid, 0, z_mid };
-}
-
-fn gridDelta(grid: *const t.GridSize) m.vec3 {
-    const a: f32 = 0.0;
-    _ = grid;
-    return .{ a, 0, 0 };
-}
-
-pub fn storagePrefil(storage_dset: DescriptorPrep, grid: t.GridSize) void {
-    const instance_num = grid.cell_num;
+pub fn storagePrefil(storage_dset: DescriptorPrep, grid: t.GridSize, spacing: f32) void {
+    const instance_num = grid.total;
     const lim_num = 8096;
     std.debug.assert(instance_num <= lim_num);
+
+    std.debug.print("is possible to print? {}\n", .{grid});
 
     const along = 1 / @as(f32, @floatFromInt(instance_num - 1));
     const phase_delta = along * std.math.tau;
@@ -231,52 +253,36 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: t.GridSize) void {
         storage_baker.items[i] = -0.125;
     }
 
-    const x_center: f32 = (@as(f32, 8) - 1) / 2;
-    const y_center: f32 = (@as(f32, 8) - 1) / 2;
-
-    const spatial_base = m.vec2{ 0, 0 };
-    const spatial_delta = 0.2;
     {
         defer storage_baker.deinit(allocator);
         defer storage_baker2.deinit(allocator);
 
-        const middle = gridMiddle(&grid);
-        const delt_ = gridDelta(&grid);
-        std.debug.print("middle is: {}\n", .{middle});
-        std.debug.print("delta is: {}\n", .{delt_});
-
+        const middle = Gridor.gridMiddle(&grid);
         for (storage_dset.buff_arr.items) |possible_buffer| {
             const storage = possible_buffer.?;
             const storagePtr: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
             for (0..instance_num) |i| {
-                const xi = @mod(i, 8);
-                const yi = i / 8;
                 const i_f: f32 = @floatFromInt(i);
-                const x_f: f32 = @floatFromInt(xi);
-                const y_f: f32 = @floatFromInt(yi);
 
-                // const x_d = (middle[m.X] - x_f) / middle[m.X];
-                // const y_d = (middle[m.Z] - y_f) / middle[m.Z];
-                const x_d = (x_center - x_f) / 3.5;
-                const y_d = (y_center - y_f) / 3.5;
+                // const y_d = (middle_alt[m.Z] - y_f) / middle_alt[m.Z];
+                const g_idx = Gridor.gridIdx(&grid, i);
 
-                const dist = std.math.sqrt(x_d * x_d + y_d * y_d);
+                const delt = ((middle - g_idx) / middle) * m.splat3d(6);
+                const dist = std.math.sqrt(delt[m.X] * delt[m.X] + delt[m.Z] * delt[m.Z]);
 
                 var fresh_one: sht.PerInstance = undefined;
-                fresh_one.offset_2d[0] = spatial_base[0] + x_f * spatial_delta;
-                fresh_one.offset_2d[1] = spatial_base[1] + y_f * spatial_delta;
+                const pos_1 = (g_idx - middle) * m.splat3d(spacing);
 
                 fresh_one.other_offsets[0] = i_f * phase_delta;
                 fresh_one.other_offsets[1] = spread_base + i_f * spread_delta;
                 fresh_one.new_usage[0] = storage_baker.items[i]; //offset on ring
                 fresh_one.new_usage[1] = dist;
-                fresh_one.new_usage[2] = x_f;
-                fresh_one.new_usage[3] = x_d;
-                fresh_one.offset_4d[0] = fresh_one.offset_2d[0];
-                fresh_one.offset_4d[1] = 0;
-                fresh_one.offset_4d[2] = fresh_one.offset_2d[1];
+                fresh_one.new_usage[2] = g_idx[m.X];
+                fresh_one.new_usage[3] = delt[m.X];
+                fresh_one.offset_4d = m.stack4d(pos_1, 1);
                 storagePtr[i] = fresh_one;
             }
+            std.debug.print("\n", .{});
         }
     }
 }
