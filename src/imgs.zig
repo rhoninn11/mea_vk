@@ -116,7 +116,6 @@ pub const DepthImage = struct {
 };
 
 pub fn vulkanTexture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gm.RGBImage {
-    const devk = gc.dev;
     const cmd_ctx = gm.PoolInCtx{
         .gc = gc,
         .pool = with_pool,
@@ -128,10 +127,10 @@ pub fn vulkanTexture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gm.
     const src_buff = try gm.createBuffer(
         gc,
         gm.baked.cpu_accesible_memory,
+        gm.baked.usage_cpu_src,
         buff_size,
-        .{ .transfer_src_bit = true },
     );
-    defer src_buff.deinit(devk);
+    defer src_buff.deinit(gc);
 
     const src_data = m_rgb_tex;
     const src_mapping: [*]u8 = @ptrCast(@alignCast(src_buff.mapping));

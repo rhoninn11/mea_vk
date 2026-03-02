@@ -49,14 +49,14 @@ fn Buffering(Base: type) type {
             if (staging) {
                 return dev.createBuffer(&.{
                     .size = buff_size,
-                    .usage = .{ .transfer_src_bit = true },
+                    .usage = gftx.baked.usage_cpu_src,
                     .sharing_mode = .exclusive,
                 }, null);
             }
 
             return dev.createBuffer(&.{
                 .size = buff_size,
-                .usage = .{ .transfer_dst_bit = true, .vertex_buffer_bit = true },
+                .usage = gftx.baked.usage_gpu_dst,
                 .sharing_mode = .exclusive,
             }, null);
         }
@@ -68,7 +68,7 @@ fn Buffering(Base: type) type {
             defer gc.dev.freeMemory(memory, null);
             try gc.dev.bindBufferMemory(here, memory, 0);
 
-            try uploadVertices(&gc, gctx.pool, here, to_upload);
+            try uploadVertices(gc, gctx.pool, here, to_upload);
         }
     };
 }
@@ -358,15 +358,17 @@ fn deeper(access: EasyAcces) !void {
     defer nextShape.deinit(allocator);
 
     const as_slice: []const Vertex = nextShape.items;
+    const mem_size = @sizeOf(Vertex) * as_slice.len;
 
-    const buffer = try BufforingVert.easyBuffer(&gc.dev, as_slice, false);
-    defer gc.dev.destroyBuffer(buffer, null);
+    const vert_buffering = try gftx.createBuffer(
+        gc,
+        gftx.baked.dev_local_memory,
+        gftx.baked.usage_gpu_dst,
+        mem_size,
+    );
+    defer vert_buffering.deinit(gc);
 
-    const mem_reqs = gc.dev.getBufferMemoryRequirements(buffer);
-    const memory = try gc.allocate(mem_reqs, .{ .device_local_bit = true });
-    defer gc.dev.freeMemory(memory, null);
-    try gc.dev.bindBufferMemory(buffer, memory, 0);
-
+    const buffer = vert_buffering.dvk_bfr;
     try uploadVertices(gc, pool_cmd, buffer, as_slice);
 
     const draw_instanced_attempt: ShaderRelated = .{
@@ -432,11 +434,16 @@ fn deeper(access: EasyAcces) !void {
         }
 
         const td = timeline.deltaS();
+
         const phi_delt: f32 = switch (movement_a) {
             MovesA.left => 1,
             MovesA.right => -1,
             else => 0,
         };
+        const phi_a = plr.phi + phi_delt * td * std.math.tau * speed;
+        inertia1.in(.{ phi_a, 0, 0 });
+        inertia1.simulate(timeline1.delta_ms);
+        plr.phi = inertia1.out()[0];
 
         plr.r = switch (movement_b) {
             MovesB.near => r_lim.cap(plr.r - speed * td),
@@ -451,22 +458,6 @@ fn deeper(access: EasyAcces) !void {
         };
         clear();
 
-        const phi_a = plr.phi + phi_delt * td * std.math.tau * speed;
-        inertia1.in(.{ phi_a, 0, 0 });
-
-        var plr_clone = plr;
-
-        plr.phi = phi_a;
-        inertia.in(playerPos(&plr));
-
-        inertia.simulate(timeline1.delta_ms);
-        inertia1.simulate(timeline1.delta_ms);
-
-        plr_clone.phi = inertia1.out()[0];
-        const player_pos_warm_new = playerPos(&plr_clone);
-
-        const prev = inertia.out();
-        _ = prev;
         //minimalized
         if (!addons.visible(win_size)) {
             glfw.pollEvents();
@@ -476,7 +467,7 @@ fn deeper(access: EasyAcces) !void {
             uniform_dset,
             @intCast(img_idx),
             timeline.total_s,
-            player_pos_warm_new,
+            playerPos(&plr),
             size,
         );
 

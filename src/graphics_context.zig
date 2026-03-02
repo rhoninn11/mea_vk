@@ -48,23 +48,22 @@ pub const baked = struct {
         descriptor_type: vk.DescriptorType,
     };
 
+    pub const usage_cpu_src: vk.BufferUsageFlags = .{ .transfer_src_bit = true };
+    pub const usage_gpu_dst: vk.BufferUsageFlags = .{ .transfer_dst_bit = true, .vertex_buffer_bit = true };
+    pub const usage_as_uniform: vk.BufferUsageFlags = .{ .uniform_buffer_bit = true };
+    pub const usage_as_storage: vk.BufferUsageFlags = .{ .storage_buffer_bit = true };
+
     const uniform_usage: UsageType = .{
-        .usage_flag = .{
-            .uniform_buffer_bit = true,
-        },
+        .usage_flag = usage_as_uniform,
         .descriptor_type = .uniform_buffer,
     };
     const storage_usage: UsageType = .{
-        .usage_flag = .{
-            .storage_buffer_bit = true,
-        },
+        .usage_flag = usage_as_storage,
         .descriptor_type = .storage_buffer,
     };
     const texture_usage: UsageType = .{
         // buffer in descriptor is not used by texture btw.
-        .usage_flag = .{
-            .storage_buffer_bit = true,
-        },
+        .usage_flag = usage_as_storage,
         .descriptor_type = .combined_image_sampler,
     };
 
@@ -77,28 +76,24 @@ pub const baked = struct {
         .device_local_bit = true,
     };
 
+    pub const shader_both: vk.ShaderStageFlags = .{ .vertex_bit = true, .fragment_bit = true };
+    pub const shader_vert_only: vk.ShaderStageFlags = .{ .vertex_bit = true };
+    pub const shader_frag_only: vk.ShaderStageFlags = .{ .fragment_bit = true };
+
     pub const uniform_frag_vert = DSetInit{
         .usage = uniform_usage,
         .memory_property = cpu_accesible_memory,
-        .shader_stage = .{
-            .vertex_bit = true,
-            .fragment_bit = true,
-        },
+        .shader_stage = shader_both,
     };
     pub const storage_frag_vert = DSetInit{
         .usage = storage_usage,
         .memory_property = cpu_accesible_memory,
-        .shader_stage = .{
-            .vertex_bit = true,
-            .fragment_bit = true,
-        },
+        .shader_stage = shader_both,
     };
     pub const texture_frag = DSetInit{
         .usage = texture_usage,
         .memory_property = cpu_accesible_memory,
-        .shader_stage = .{
-            .fragment_bit = true,
-        },
+        .shader_stage = shader_frag_only,
     };
 
     pub const UniformInfo = struct {
@@ -331,7 +326,8 @@ pub const BufferData = struct {
     dvk_mem: vk.DeviceMemory,
     mapping: ?*anyopaque,
 
-    pub fn deinit(self: *const BufferData, dev: vk.DeviceProxy) void {
+    pub fn deinit(self: *const BufferData, gc: *const GraphicsContext) void {
+        const dev = gc.dev;
         dev.destroyBuffer(self.dvk_bfr, null);
         dev.freeMemory(self.dvk_mem, null);
     }
@@ -340,17 +336,16 @@ pub const BufferData = struct {
 pub fn createBuffer(
     gc: *const GraphicsContext,
     mem_flags: vk.MemoryPropertyFlags,
-    bsize: u64,
     usage: vk.BufferUsageFlags,
+    bsize: u64,
 ) !BufferData {
     const devk = gc.dev;
     const default_size = bsize;
 
     const bfr = try devk.createBuffer(&vk.BufferCreateInfo{
-        .s_type = .buffer_create_info,
         .size = default_size,
-        .sharing_mode = .exclusive,
         .usage = usage,
+        .sharing_mode = .exclusive,
     }, null);
 
     const r = devk.getBufferMemoryRequirements(bfr);
@@ -359,12 +354,17 @@ pub fn createBuffer(
     }
 
     const memory = try gc.allocate(r, mem_flags);
+
     try gc.dev.bindBufferMemory(bfr, memory, 0);
 
+    var mapping: ?*anyopaque = null;
+    if (mem_flags.host_visible_bit) {
+        mapping = try devk.mapMemory(memory, 0, r.size, .{});
+    }
     return BufferData{
         .dvk_bfr = bfr,
         .dvk_mem = memory,
-        .mapping = try devk.mapMemory(memory, 0, r.size, .{}),
+        .mapping = mapping,
     };
 }
 pub const PoolInCtx = struct {
@@ -491,7 +491,7 @@ pub const GraphicsContext = struct {
         const usage = vk.BufferUsageFlags{
             .transfer_src_bit = true,
         };
-        const test_buffer = try createBuffer(&self, default_memory_flags, 4, usage);
+        const test_buffer = try createBuffer(&self, default_memory_flags, usage, 4);
         std.debug.print("+++ test buffor created\n", .{});
         self.dev.destroyBuffer(test_buffer.dvk_bfr, null);
         self.dev.freeMemory(test_buffer.dvk_mem, null);

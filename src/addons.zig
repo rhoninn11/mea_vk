@@ -67,8 +67,8 @@ pub const DescriptorPrep = struct {
             self.buff_arr.items[i] = try gftx.createBuffer(
                 self.gc,
                 using.memory_property,
-                with.size,
                 using.usage.usage_flag,
+                with.size,
             );
         }
 
@@ -150,7 +150,7 @@ pub const DescriptorPrep = struct {
 
         for (self.buff_arr.items) |possible_buff| {
             if (possible_buff) |buff| {
-                buff.deinit(self.gc.dev);
+                buff.deinit(self.gc);
             }
         }
 
