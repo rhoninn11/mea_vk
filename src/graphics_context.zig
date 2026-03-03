@@ -48,8 +48,8 @@ pub const baked = struct {
         descriptor_type: vk.DescriptorType,
     };
 
-    pub const usage_cpu_src: vk.BufferUsageFlags = .{ .transfer_src_bit = true };
-    pub const usage_gpu_dst: vk.BufferUsageFlags = .{ .transfer_dst_bit = true, .vertex_buffer_bit = true };
+    pub const usage_src: vk.BufferUsageFlags = .{ .transfer_src_bit = true };
+    pub const usage_vert_dst: vk.BufferUsageFlags = .{ .transfer_dst_bit = true, .vertex_buffer_bit = true };
     pub const usage_as_uniform: vk.BufferUsageFlags = .{ .uniform_buffer_bit = true };
     pub const usage_as_storage: vk.BufferUsageFlags = .{ .storage_buffer_bit = true };
 
@@ -67,12 +67,12 @@ pub const baked = struct {
         .descriptor_type = .combined_image_sampler,
     };
 
-    pub const cpu_accesible_memory: vk.MemoryPropertyFlags = .{
+    pub const memory_cpu: vk.MemoryPropertyFlags = .{
         .host_visible_bit = true,
         .host_coherent_bit = true,
     };
 
-    pub const dev_local_memory: vk.MemoryPropertyFlags = .{
+    pub const memory_gpu: vk.MemoryPropertyFlags = .{
         .device_local_bit = true,
     };
 
@@ -82,17 +82,17 @@ pub const baked = struct {
 
     pub const uniform_frag_vert = DSetInit{
         .usage = uniform_usage,
-        .memory_property = cpu_accesible_memory,
+        .memory_property = memory_cpu,
         .shader_stage = shader_both,
     };
     pub const storage_frag_vert = DSetInit{
         .usage = storage_usage,
-        .memory_property = cpu_accesible_memory,
+        .memory_property = memory_cpu,
         .shader_stage = shader_both,
     };
     pub const texture_frag = DSetInit{
         .usage = texture_usage,
-        .memory_property = cpu_accesible_memory,
+        .memory_property = memory_cpu,
         .shader_stage = shader_frag_only,
     };
 
@@ -212,7 +212,7 @@ pub const RGBImage = struct {
         const mem_req = devk.getImageMemoryRequirements(vk_img);
         const vk_mem = try gc.allocate(
             mem_req,
-            baked.dev_local_memory,
+            baked.memory_gpu,
         );
         errdefer devk.freeMemory(vk_mem, null);
 
@@ -328,8 +328,9 @@ pub const BufferData = struct {
 
     pub fn deinit(self: *const BufferData, gc: *const GraphicsContext) void {
         const dev = gc.dev;
-        dev.destroyBuffer(self.dvk_bfr, null);
+        if (self.mapping) |_| dev.unmapMemory(self.dvk_mem);
         dev.freeMemory(self.dvk_mem, null);
+        dev.destroyBuffer(self.dvk_bfr, null);
     }
 };
 

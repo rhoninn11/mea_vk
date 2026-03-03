@@ -84,7 +84,7 @@ pub const DepthImage = struct {
         const mem_req = devk.getImageMemoryRequirements(d_img);
         const vk_mem = try gc.allocate(
             mem_req,
-            gm.baked.dev_local_memory,
+            gm.baked.memory_gpu,
         );
         errdefer devk.freeMemory(vk_mem, null);
 
@@ -126,8 +126,8 @@ pub fn vulkanTexture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gm.
     const buff_size = test_img.dvk_size;
     const src_buff = try gm.createBuffer(
         gc,
-        gm.baked.cpu_accesible_memory,
-        gm.baked.usage_cpu_src,
+        gm.baked.memory_cpu,
+        gm.baked.usage_src,
         buff_size,
     );
     defer src_buff.deinit(gc);

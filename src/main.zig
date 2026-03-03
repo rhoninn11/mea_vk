@@ -25,6 +25,8 @@ const Vertex = vertex.Vertex;
 const BufforingVert = Buffering(Vertex);
 const Allocator = std.mem.Allocator;
 
+const motion = @import("motion.zig");
+
 const vert_spv align(@alignOf(u32)) = @embedFile("vertex_shader").*;
 const frag_spv align(@alignOf(u32)) = @embedFile("fragment_shader").*;
 
@@ -42,92 +44,12 @@ fn Buffering(Base: type) type {
             const unit_size = @sizeOf(@TypeOf(based_on[0]));
             return unit_size * based_on.len;
         }
-
-        pub fn easyBuffer(dev: *const vk.DeviceProxy, based_on: []const Base, staging: bool) !vk.Buffer {
-            const buff_size = memSize(based_on);
-
-            if (staging) {
-                return dev.createBuffer(&.{
-                    .size = buff_size,
-                    .usage = gftx.baked.usage_cpu_src,
-                    .sharing_mode = .exclusive,
-                }, null);
-            }
-
-            return dev.createBuffer(&.{
-                .size = buff_size,
-                .usage = gftx.baked.usage_gpu_dst,
-                .sharing_mode = .exclusive,
-            }, null);
-        }
-
-        pub fn vertUpload(gctx: *const gftx.PoolInCtx, to_upload: []const Vertex, here: vk.Buffer) !void {
-            const gc = gctx.gc;
-            const mem_reqs = gc.dev.getBufferMemoryRequirements(here);
-            const memory = try gc.allocate(mem_reqs, .{ .device_local_bit = true });
-            defer gc.dev.freeMemory(memory, null);
-            try gc.dev.bindBufferMemory(here, memory, 0);
-
-            try uploadVertices(gc, gctx.pool, here, to_upload);
-        }
     };
 }
 
-const KeyAction = struct {
-    key: c_int,
-    action: c_int,
+var holds: motion.Holds = undefined;
 
-    fn down(self: *const KeyAction, key: glfw.Key) bool {
-        return self.action == glfw.Press and self.key == key;
-    }
-
-    fn up(self: *const KeyAction, key: glfw.Key) bool {
-        return self.action == glfw.Up and self.key == key;
-    }
-};
-
-const Hold = struct {
-    active: bool = false,
-
-    pub fn hold(self: *Hold, ka: *const KeyAction, key: glfw.Key) void {
-        if (ka.action == glfw.Repeat) return;
-        self.active = !self.active and ka.down(key);
-        self.active = self.active and ka.up(key);
-        // std.debug.print("well {} {} {}\n", .{ self.active, ka.press(key), ka.up(key) });
-    }
-};
-
-const MovesA = enum(u8) {
-    none = 0,
-    left = 1,
-    right = 2,
-};
-const MovesB = enum(u8) {
-    none = 0,
-    near = 1,
-    far = 2,
-};
-const MovesC = enum(u8) {
-    none = 0,
-    down = 1,
-    up = 2,
-};
-
-var movement_a: MovesA = .none;
-var movement_b: MovesB = .none;
-var movement_c: MovesC = .none;
-fn clear() void {
-    movement_a = .none;
-    movement_b = .none;
-    movement_c = .none;
-}
-
-var hold_l = Hold{};
-var hold_r = Hold{};
-var hold_n = Hold{};
-var hold_f = Hold{};
-var hold_u = Hold{};
-var hold_d = Hold{};
+const KeyAction = motion.KeyAction;
 fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
     _ = scancode;
     _ = mods;
@@ -144,21 +66,25 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
             hey.time_passage = !hey.time_passage;
         }
     }
-    hold_r.hold(&x, glfw.KeyD);
-    hold_l.hold(&x, glfw.KeyA);
-    hold_n.hold(&x, glfw.KeyW);
-    hold_f.hold(&x, glfw.KeyS);
-    hold_u.hold(&x, glfw.KeyR);
-    hold_d.hold(&x, glfw.KeyF);
+
+    holds.passKeyAction(&x);
 }
 
+var movement_a: motion.MovesA = .none;
+var movement_b: motion.MovesB = .none;
+var movement_c: motion.MovesC = .none;
+fn clear() void {
+    movement_a = .none;
+    movement_b = .none;
+    movement_c = .none;
+}
 fn input_continue() void {
-    if (hold_l.active) movement_a = .left;
-    if (hold_r.active) movement_a = .right;
-    if (hold_n.active) movement_b = .near;
-    if (hold_f.active) movement_b = .far;
-    if (hold_d.active) movement_c = .down;
-    if (hold_u.active) movement_c = .up;
+    if (holds.holds[0].active) movement_a = .left;
+    if (holds.holds[1].active) movement_a = .right;
+    if (holds.holds[2].active) movement_b = .near;
+    if (holds.holds[3].active) movement_b = .far;
+    if (holds.holds[4].active) movement_c = .down;
+    if (holds.holds[5].active) movement_c = .up;
 }
 
 fn windowExtext(window: *c_long) vk.Extent2D {
@@ -184,6 +110,11 @@ const BasicErrs = error{
 };
 
 pub fn main() !void {
+    holds = try motion.Holds.init(&.{
+        glfw.KeyA, glfw.KeyD, //
+        glfw.KeyW, glfw.KeyS,
+        glfw.KeyF, glfw.KeyR,
+    });
     vertex.probing();
 
     std.debug.print("+++ vertex info: {d}\n", .{Vertex.s_fields_num});
@@ -362,8 +293,8 @@ fn deeper(access: EasyAcces) !void {
 
     const vert_buffering = try gftx.createBuffer(
         gc,
-        gftx.baked.dev_local_memory,
-        gftx.baked.usage_gpu_dst,
+        gftx.baked.memory_gpu,
+        gftx.baked.usage_vert_dst,
         mem_size,
     );
     defer vert_buffering.deinit(gc);
@@ -413,11 +344,8 @@ fn deeper(access: EasyAcces) !void {
 
     const speed: f32 = 1;
     const IVec3 = phx.InertiaPack(m.vec3);
-    var inertia = IVec3.Inertia.init(playerPos(&plr));
-    var inertia1 = IVec3.Inertia.init(.{ plr.phi, 0, 0 });
-
+    var inertia = IVec3.Inertia.init(.{ plr.phi, 0, 0 });
     inertia.phx = IVec3.InertiaCfg.default();
-    inertia1.phx = inertia.phx;
 
     while (!glfw.windowShouldClose(window)) {
         const img_idx = swapchain.image_index;
@@ -436,24 +364,25 @@ fn deeper(access: EasyAcces) !void {
         const td = timeline.deltaS();
 
         const phi_delt: f32 = switch (movement_a) {
-            MovesA.left => 1,
-            MovesA.right => -1,
+            motion.MovesA.left => 1,
+            motion.MovesA.right => -1,
             else => 0,
         };
         const phi_a = plr.phi + phi_delt * td * std.math.tau * speed;
-        inertia1.in(.{ phi_a, 0, 0 });
-        inertia1.simulate(timeline1.delta_ms);
-        plr.phi = inertia1.out()[0];
+        inertia.in(.{ phi_a, 0, 0 });
+        inertia.simulate(timeline1.delta_ms);
+        plr.phi = inertia.out()[0];
+        plr.phi = phi_a;
 
         plr.r = switch (movement_b) {
-            MovesB.near => r_lim.cap(plr.r - speed * td),
-            MovesB.far => r_lim.cap(plr.r + speed * td),
+            motion.MovesB.near => r_lim.cap(plr.r - speed * td),
+            motion.MovesB.far => r_lim.cap(plr.r + speed * td),
             else => plr.r,
         };
 
         plr.h = switch (movement_c) {
-            MovesC.up => high_lim.cap(plr.h + speed * td),
-            MovesC.down => high_lim.cap(plr.h - speed * td),
+            motion.MovesC.up => high_lim.cap(plr.h + speed * td),
+            motion.MovesC.down => high_lim.cap(plr.h - speed * td),
             else => plr.h,
         };
         clear();
@@ -519,26 +448,19 @@ fn deeper(access: EasyAcces) !void {
 // przykład przesyłania danych na gpu
 fn uploadVertices(gc: *const GraphicsContext, pool: vk.CommandPool, buffer: vk.Buffer, vert_slice: []const Vertex) !void {
     const buff_size = BufforingVert.memSize(vert_slice);
-    const staging_buffer = try BufforingVert.easyBuffer(&gc.dev, vert_slice, true);
 
-    defer gc.dev.destroyBuffer(staging_buffer, null);
-    const mem_reqs = gc.dev.getBufferMemoryRequirements(staging_buffer);
-    const staging_memory = try gc.allocate(
-        mem_reqs,
-        .{ .host_visible_bit = true, .host_coherent_bit = true },
+    var buffer_ = try gftx.createBuffer(
+        gc, //
+        gftx.baked.memory_cpu,
+        gftx.baked.usage_src,
+        buff_size,
     );
-    defer gc.dev.freeMemory(staging_memory, null);
-    try gc.dev.bindBufferMemory(staging_buffer, staging_memory, 0);
+    defer buffer_.deinit(gc);
 
-    {
-        const data = try gc.dev.mapMemory(staging_memory, 0, vk.WHOLE_SIZE, .{});
-        defer gc.dev.unmapMemory(staging_memory);
+    const gpu_vertices: [*]Vertex = @ptrCast(@alignCast(buffer_.mapping));
+    @memcpy(gpu_vertices, vert_slice);
 
-        const gpu_vertices: [*]Vertex = @ptrCast(@alignCast(data));
-        @memcpy(gpu_vertices, vert_slice);
-    }
-
-    try copyBuffer(gc, pool, buffer, staging_buffer, buff_size);
+    try copyBuffer(gc, pool, buffer, buffer_.dvk_bfr, buff_size);
 }
 
 // Z tego co rozumiem to... nie tego jeszcze nie rozumiem xD
