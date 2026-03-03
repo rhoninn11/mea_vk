@@ -11,8 +11,11 @@ const swpchn = @import("swapchain.zig");
 
 const required_layer_names = [_][*:0]const u8{"VK_LAYER_KHRONOS_validation"};
 
-const required_device_extensions = [_][*:0]const u8{vk.extensions.khr_swapchain.name};
-// TODO: multiview rendering: https://claude.ai/chat/2d2c56f2-1939-4c4c-ba23-234fc24feac2
+// TODO: https://claude.ai/chat/a8727d87-0510-44f0-a8af-664e93844a26
+const required_device_extensions = [_][*:0]const u8{
+    vk.extensions.khr_swapchain.name,
+    vk.extensions.khr_multiview.name,
+};
 
 /// There are 3 levels of bindings in vulkan-zig:
 /// - The Dispatch types (vk.BaseDispatch, vk.InstanceDispatch, vk.DeviceDispatch)
@@ -35,145 +38,6 @@ const DeviceWrapper = vk.DeviceWrapper;
 
 const Instance = vk.InstanceProxy;
 const Device = vk.DeviceProxy;
-
-pub const baked = struct {
-    pub const DSetInit = struct {
-        usage: UsageType,
-        memory_property: vk.MemoryPropertyFlags,
-        shader_stage: vk.ShaderStageFlags,
-    };
-
-    pub const UsageType = struct {
-        usage_flag: vk.BufferUsageFlags,
-        descriptor_type: vk.DescriptorType,
-    };
-
-    pub const usage_src: vk.BufferUsageFlags = .{ .transfer_src_bit = true };
-    pub const usage_vert_dst: vk.BufferUsageFlags = .{ .transfer_dst_bit = true, .vertex_buffer_bit = true };
-    pub const usage_as_uniform: vk.BufferUsageFlags = .{ .uniform_buffer_bit = true };
-    pub const usage_as_storage: vk.BufferUsageFlags = .{ .storage_buffer_bit = true };
-
-    const uniform_usage: UsageType = .{
-        .usage_flag = usage_as_uniform,
-        .descriptor_type = .uniform_buffer,
-    };
-    const storage_usage: UsageType = .{
-        .usage_flag = usage_as_storage,
-        .descriptor_type = .storage_buffer,
-    };
-    const texture_usage: UsageType = .{
-        // buffer in descriptor is not used by texture btw.
-        .usage_flag = usage_as_storage,
-        .descriptor_type = .combined_image_sampler,
-    };
-
-    pub const memory_cpu: vk.MemoryPropertyFlags = .{
-        .host_visible_bit = true,
-        .host_coherent_bit = true,
-    };
-
-    pub const memory_gpu: vk.MemoryPropertyFlags = .{
-        .device_local_bit = true,
-    };
-
-    pub const shader_both: vk.ShaderStageFlags = .{ .vertex_bit = true, .fragment_bit = true };
-    pub const shader_vert_only: vk.ShaderStageFlags = .{ .vertex_bit = true };
-    pub const shader_frag_only: vk.ShaderStageFlags = .{ .fragment_bit = true };
-
-    pub const uniform_frag_vert = DSetInit{
-        .usage = uniform_usage,
-        .memory_property = memory_cpu,
-        .shader_stage = shader_both,
-    };
-    pub const storage_frag_vert = DSetInit{
-        .usage = storage_usage,
-        .memory_property = memory_cpu,
-        .shader_stage = shader_both,
-    };
-    pub const texture_frag = DSetInit{
-        .usage = texture_usage,
-        .memory_property = memory_cpu,
-        .shader_stage = shader_frag_only,
-    };
-
-    pub const UniformInfo = struct {
-        location: u32,
-        size: u32,
-    };
-
-    const depth_flag: vk.ImageAspectFlags = .{
-        .depth_bit = true,
-    };
-    const color_flag: vk.ImageAspectFlags = .{
-        .color_bit = true,
-    };
-
-    pub const depth_img_subrng: vk.ImageSubresourceRange = .{
-        .aspect_mask = depth_flag,
-        .base_mip_level = 0,
-        .level_count = 1,
-        .base_array_layer = 0,
-        .layer_count = 1,
-    };
-
-    pub const color_img_subrng: vk.ImageSubresourceRange = .{
-        .aspect_mask = color_flag,
-        .base_mip_level = 0,
-        .level_count = 1,
-        .base_array_layer = 0,
-        .layer_count = 1,
-    };
-
-    pub const color_bfr2img_sublyr: vk.ImageSubresourceLayers = .{
-        .aspect_mask = color_flag,
-        .mip_level = 0,
-        .base_array_layer = 0,
-        .layer_count = 1,
-    };
-
-    pub const undefined_to_transfered: t.TransitPrep = .{
-        .accesses = .{
-            .src = .{},
-            .dst = .{
-                .transfer_write_bit = true,
-            },
-        },
-        .stages = .{
-            .src = .{
-                .top_of_pipe_bit = true,
-            },
-            .dst = .{
-                .transfer_bit = true,
-            },
-        },
-    };
-
-    pub const transfered_to_fragment_readed: t.TransitPrep = .{
-        .accesses = .{
-            .src = .{
-                .transfer_write_bit = true,
-            },
-            .dst = .{
-                .shader_read_bit = true,
-            },
-        },
-        .stages = .{
-            .src = .{
-                .transfer_bit = true,
-            },
-            .dst = .{
-                .fragment_shader_bit = true,
-            },
-        },
-    };
-
-    pub const identity_mapping: vk.ComponentMapping = .{
-        .a = .identity,
-        .b = .identity,
-        .g = .identity,
-        .r = .identity,
-    };
-};
 
 // imgs
 pub const RGBImage = struct {
@@ -413,9 +277,8 @@ pub const GraphicsContext = struct {
 
         var glfw_exts_count: u32 = 0;
         const glfw_exts0 = glfw.getRequiredInstanceExtensions(&glfw_exts_count).?;
-        _ = glfw_exts0;
-        const glfw_exts = c.glfwGetRequiredInstanceExtensions(&glfw_exts_count);
-        try extension_names.appendSlice(allocator, @ptrCast(glfw_exts[0..glfw_exts_count]));
+        try extension_names.appendSlice(allocator, @ptrCast(glfw_exts0[0..glfw_exts_count]));
+
         for (extension_names.items) |name| {
             std.debug.print("+++ we are looking for {s} exension\n", .{name});
         }
@@ -435,6 +298,7 @@ pub const GraphicsContext = struct {
             // enumerate_portability_bit_khr to support vulkan in mac os
             // see https://github.com/glfw/glfw/issues/2335
             .flags = .{ .enumerate_portability_bit_khr = true },
+            // should be commented but it just warns so no big deal
         }, null);
 
         const vki = try allocator.create(InstanceWrapper);
@@ -737,3 +601,142 @@ fn checkExtensionSupport(
 
     return true;
 }
+
+pub const baked = struct {
+    pub const DSetInit = struct {
+        usage: UsageType,
+        memory_property: vk.MemoryPropertyFlags,
+        shader_stage: vk.ShaderStageFlags,
+    };
+
+    pub const UsageType = struct {
+        usage_flag: vk.BufferUsageFlags,
+        descriptor_type: vk.DescriptorType,
+    };
+
+    pub const usage_src: vk.BufferUsageFlags = .{ .transfer_src_bit = true };
+    pub const usage_vert_dst: vk.BufferUsageFlags = .{ .transfer_dst_bit = true, .vertex_buffer_bit = true };
+    pub const usage_as_uniform: vk.BufferUsageFlags = .{ .uniform_buffer_bit = true };
+    pub const usage_as_storage: vk.BufferUsageFlags = .{ .storage_buffer_bit = true };
+
+    const uniform_usage: UsageType = .{
+        .usage_flag = usage_as_uniform,
+        .descriptor_type = .uniform_buffer,
+    };
+    const storage_usage: UsageType = .{
+        .usage_flag = usage_as_storage,
+        .descriptor_type = .storage_buffer,
+    };
+    const texture_usage: UsageType = .{
+        // buffer in descriptor is not used by texture btw.
+        .usage_flag = usage_as_storage,
+        .descriptor_type = .combined_image_sampler,
+    };
+
+    pub const memory_cpu: vk.MemoryPropertyFlags = .{
+        .host_visible_bit = true,
+        .host_coherent_bit = true,
+    };
+
+    pub const memory_gpu: vk.MemoryPropertyFlags = .{
+        .device_local_bit = true,
+    };
+
+    pub const shader_both: vk.ShaderStageFlags = .{ .vertex_bit = true, .fragment_bit = true };
+    pub const shader_vert_only: vk.ShaderStageFlags = .{ .vertex_bit = true };
+    pub const shader_frag_only: vk.ShaderStageFlags = .{ .fragment_bit = true };
+
+    pub const uniform_frag_vert = DSetInit{
+        .usage = uniform_usage,
+        .memory_property = memory_cpu,
+        .shader_stage = shader_both,
+    };
+    pub const storage_frag_vert = DSetInit{
+        .usage = storage_usage,
+        .memory_property = memory_cpu,
+        .shader_stage = shader_both,
+    };
+    pub const texture_frag = DSetInit{
+        .usage = texture_usage,
+        .memory_property = memory_cpu,
+        .shader_stage = shader_frag_only,
+    };
+
+    pub const UniformInfo = struct {
+        location: u32,
+        size: u32,
+    };
+
+    const depth_flag: vk.ImageAspectFlags = .{
+        .depth_bit = true,
+    };
+    const color_flag: vk.ImageAspectFlags = .{
+        .color_bit = true,
+    };
+
+    pub const depth_img_subrng: vk.ImageSubresourceRange = .{
+        .aspect_mask = depth_flag,
+        .base_mip_level = 0,
+        .level_count = 1,
+        .base_array_layer = 0,
+        .layer_count = 1,
+    };
+
+    pub const color_img_subrng: vk.ImageSubresourceRange = .{
+        .aspect_mask = color_flag,
+        .base_mip_level = 0,
+        .level_count = 1,
+        .base_array_layer = 0,
+        .layer_count = 1,
+    };
+
+    pub const color_bfr2img_sublyr: vk.ImageSubresourceLayers = .{
+        .aspect_mask = color_flag,
+        .mip_level = 0,
+        .base_array_layer = 0,
+        .layer_count = 1,
+    };
+
+    pub const undefined_to_transfered: t.TransitPrep = .{
+        .accesses = .{
+            .src = .{},
+            .dst = .{
+                .transfer_write_bit = true,
+            },
+        },
+        .stages = .{
+            .src = .{
+                .top_of_pipe_bit = true,
+            },
+            .dst = .{
+                .transfer_bit = true,
+            },
+        },
+    };
+
+    pub const transfered_to_fragment_readed: t.TransitPrep = .{
+        .accesses = .{
+            .src = .{
+                .transfer_write_bit = true,
+            },
+            .dst = .{
+                .shader_read_bit = true,
+            },
+        },
+        .stages = .{
+            .src = .{
+                .transfer_bit = true,
+            },
+            .dst = .{
+                .fragment_shader_bit = true,
+            },
+        },
+    };
+
+    pub const identity_mapping: vk.ComponentMapping = .{
+        .a = .identity,
+        .b = .identity,
+        .g = .identity,
+        .r = .identity,
+    };
+};
