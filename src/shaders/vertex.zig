@@ -1,5 +1,5 @@
 const std = @import("std");
-const typse = @import("types.zig");
+const sht = @import("types.zig");
 const gpu = std.gpu;
 
 extern const a_pos: @Vector(2, f32) addrspace(.input);
@@ -15,16 +15,8 @@ const UniformData = extern struct {
     not_used_4d_1: [4]f32,
 };
 
-const PerInstanceData = extern struct {
-    offset_2d: [2]f32,
-    other_offsets: [2]f32,
-    new_usage: [4]f32,
-    not_used_4d_0: [4]f32,
-    not_used_4d_1: [4]f32,
-};
-
 extern const u_data: UniformData addrspace(.uniform);
-extern const s_data: [*]PerInstanceData addrspace(.storage_buffer);
+extern const s_data: [*]sht.PerInstance addrspace(.storage_buffer);
 
 //but for texture sampling i need to use asm inline (spirv asm?)
 

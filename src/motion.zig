@@ -40,6 +40,11 @@ pub const MovesC = enum(u8) {
     down = 1,
     up = 2,
 };
+pub const Axis = enum(u8) {
+    none = 0,
+    positive = 1,
+    negative = 2,
+};
 
 const Allocator = std.mem.Allocator;
 
@@ -55,6 +60,7 @@ pub const Holds = struct {
 
     pub fn init(keys: []const c_int) !Holds {
         const len = keys.len;
+        std.debug.assert(@mod(len, 2) == 0);
         if (len > MaxHolds) {
             return MoveErrs.HoldSizeExceded;
         }
@@ -71,6 +77,51 @@ pub const Holds = struct {
     pub fn passKeyAction(self: *Holds, ka: *const KeyAction) void {
         for (0..self.len) |i| {
             self.holds[i].hold(ka, self.keys[i]);
+        }
+    }
+};
+
+pub const HoldsAxis = struct {
+    holds: [MaxHolds]Hold = undefined,
+    keys: [MaxHolds]c_int = undefined,
+    states: [MaxHolds / 2]Axis = undefined,
+    len: u8,
+
+    pub fn init(keys: []const c_int) !HoldsAxis {
+        const len = keys.len;
+        std.debug.assert(@mod(len, 2) == 0);
+        if (len > MaxHolds) {
+            return MoveErrs.HoldSizeExceded;
+        }
+
+        var act = HoldsAxis{ .len = @intCast(len) };
+        for (keys, 0..) |k, i| {
+            act.holds[i] = Hold{};
+            act.keys[i] = k;
+        }
+
+        for (0..len / 2) |i| {
+            act.states[i] = .none;
+        }
+
+        return act;
+    }
+
+    pub fn passKeyAction(self: *HoldsAxis, ka: *const KeyAction) void {
+        for (0..self.len) |i| {
+            self.holds[i].hold(ka, self.keys[i]);
+        }
+    }
+
+    pub fn clear(self: *HoldsAxis) void {
+        for (0..(self.len / 2)) |i| {
+            self.states[i] = .none;
+        }
+    }
+    pub fn input_continue(self: *HoldsAxis) void {
+        for (0..(self.len / 2)) |i| {
+            if (self.holds[i * 2].active) self.states[i] = .negative;
+            if (self.holds[i * 2 + 1].active) self.states[i] = .positive;
         }
     }
 };

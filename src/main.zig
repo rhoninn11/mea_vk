@@ -48,6 +48,7 @@ fn Buffering(Base: type) type {
 }
 
 var holds: motion.Holds = undefined;
+var holds_alt: motion.HoldsAxis = undefined;
 
 const KeyAction = motion.KeyAction;
 fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
@@ -68,6 +69,7 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
     }
 
     holds.passKeyAction(&x);
+    holds_alt.passKeyAction(&x);
 }
 
 var movement_a: motion.MovesA = .none;
@@ -109,12 +111,19 @@ const BasicErrs = error{
     NoCtx,
 };
 
+const proto = @import("proto.zig");
+
 pub fn main() !void {
     holds = try motion.Holds.init(&.{
         glfw.KeyA, glfw.KeyD, //
         glfw.KeyW, glfw.KeyS,
         glfw.KeyF, glfw.KeyR,
     });
+    holds_alt = try motion.HoldsAxis.init(&.{
+        glfw.KeyK, glfw.KeyJ, //
+        glfw.KeyH, glfw.KeyL,
+    });
+
     vertex.probing();
 
     std.debug.print("+++ vertex info: {d}\n", .{Vertex.s_fields_num});
@@ -177,6 +186,12 @@ fn playerPos(p: *t.Player) m.vec3 {
 }
 
 fn deeper(access: EasyAcces) !void {
+    const local_alloc = std.heap.page_allocator;
+    var img = try proto.check(local_alloc);
+    defer img.deinit(local_alloc);
+
+    var glass = proto.LookingGlass.init(&img);
+
     var swapchain_len: u8 = undefined;
     // const gc = access.vkctx.?.*;
     const gc = access.vkctx;
@@ -351,6 +366,7 @@ fn deeper(access: EasyAcces) !void {
         const img_idx = swapchain.image_index;
         const win_size = windowExtext(window);
         input_continue();
+        holds_alt.input_continue();
 
         // Don't present or resize swapchain while the window is minimized
         perf_stats.messure();
@@ -385,7 +401,10 @@ fn deeper(access: EasyAcces) !void {
             motion.MovesC.down => high_lim.cap(plr.h - speed * td),
             else => plr.h,
         };
+        glass.update(holds_alt.states[0], holds_alt.states[1]);
+
         clear();
+        holds_alt.clear();
 
         //minimalized
         if (!addons.visible(win_size)) {

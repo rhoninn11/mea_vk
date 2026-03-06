@@ -1,3 +1,4 @@
 fs
 zig-out
 .zig-cache
+src/gen

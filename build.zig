@@ -2,13 +2,17 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const vkgen = @import("vulkan_zig");
+const protobuf = @import("protobuf");
+const Dependency = std.Build.Dependency;
 
+var scope_target: ?std.Build.ResolvedTarget = null;
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const maybe_override_registry = b.option([]const u8, "override-registry", "Override the path to the Vulkan registry used for the examples");
     const use_zig_shaders = b.option(bool, "zig-shader", "Use Zig shaders instead of GLSL") orelse false;
 
+    scope_target = target;
     const triangle_exe = b.addExecutable(.{
         .name = "vk_exp",
         .root_module = b.createModule(.{
@@ -30,6 +34,13 @@ pub fn build(b: *std.Build) !void {
         }),
         .use_llvm = true,
     });
+
+    const pbDep = b.dependency("protobuf", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    protoGen(b, pbDep, target);
+    triangle_exe.root_module.addImport("protobuf", pbDep.module("protobuf"));
 
     const glfw_lib_fmt: []const u8 = if (builtin.target.os.tag == .windows) "{s}/bin" else "{s}/lib";
     const glfw_name: []const u8 = if (builtin.target.os.tag == .windows) "glfw3" else "glfw";
@@ -150,4 +161,19 @@ fn find_glsl_files(prefix: []const u8) []const []const u8 {
         "triangle.vert",
         "triangle.frag",
     };
+}
+fn protoGen(b: *std.Build, dep: *Dependency, target: std.Build.ResolvedTarget) void {
+    const gen_step = protobuf.RunProtocStep.create(
+        dep.builder,
+        target,
+        .{
+            .destination_directory = b.path("src/gen"),
+            .source_files = &.{"proto/comfy.proto"},
+            .include_directories = &.{},
+        },
+    );
+
+    const run_step = b.step("gen-proto", "compilation of .proto file in proto/");
+    run_step.dependOn(&gen_step.step);
+    std.debug.print("protoGen called\n", .{});
 }

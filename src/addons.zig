@@ -280,6 +280,8 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: t.GridSize, spacing: f3
                 fresh_one.new_usage[2] = g_idx[m.X];
                 fresh_one.new_usage[3] = delt[m.X];
                 fresh_one.offset_4d = m.stack4d(pos_1, 1);
+                fresh_one.empty_rest[0] = 1;
+                fresh_one.empty_rest[1] = i_f * 0.001;
                 storagePtr[i] = fresh_one;
             }
             std.debug.print("\n", .{});
