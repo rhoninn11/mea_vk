@@ -1,4 +1,6 @@
 const std = @import("std");
+const t = @import("types.zig");
+const motion = @import("motion.zig");
 
 pub fn Slider(vecTpy: type) type {
     return struct {
@@ -84,3 +86,28 @@ pub const PerfStats = struct {
         s.frame_num += 1;
     }
 };
+
+var r_lim = Caped.init(1, 5);
+var high_lim = Caped.init(0, 3);
+
+pub fn PlayerUpdate(player: *t.Player, input: *const motion.HoldsAxis, td: f32) void {
+    const plr = player;
+
+    const r_speed: f32 = 1;
+    const proximity = input.axes[1];
+    player.r = switch (proximity) {
+        motion.Axis.negative => plr.r + r_speed * td,
+        motion.Axis.positive => plr.r - r_speed * td,
+        else => plr.r,
+    };
+    plr.r = r_lim.cap(plr.r);
+
+    const h_speed: f32 = 1;
+    const height = input.axes[2];
+    plr.h = switch (height) {
+        motion.Axis.negative => plr.h - h_speed * td,
+        motion.Axis.positive => plr.h + h_speed * td,
+        else => plr.h,
+    };
+    plr.h = high_lim.cap(plr.h);
+}

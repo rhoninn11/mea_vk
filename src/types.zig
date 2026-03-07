@@ -24,12 +24,6 @@ pub const ImgLTranConfig = struct {
     flags: TransitPrep,
 };
 
-pub const GridSize = struct {
-    total: u16,
-    col_num: u8,
-    row_num: u8,
-};
-
 pub const Player = struct {
     phi: f32,
     h: f32,

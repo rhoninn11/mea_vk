@@ -18,6 +18,7 @@ const t = @import("types.zig");
 const phx = @import("phys.zig");
 const imgs = @import("imgs.zig");
 const utils = @import("utils.zig");
+const prefils = @import("prefills.zig");
 
 const InertiaVec2 = phx.InertiaPack(m.vec3);
 const Vertex = vertex.Vertex;
@@ -48,7 +49,8 @@ fn Buffering(Base: type) type {
 }
 
 var holds: motion.Holds = undefined;
-var holds_alt: motion.HoldsAxis = undefined;
+var glass_input: motion.HoldsAxis = undefined;
+var plr_input: motion.HoldsAxis = undefined;
 
 const KeyAction = motion.KeyAction;
 fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
@@ -69,24 +71,25 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
     }
 
     holds.passKeyAction(&x);
-    holds_alt.passKeyAction(&x);
+    glass_input.passKeyAction(&x);
+    plr_input.passKeyAction(&x);
 }
 
-var movement_a: motion.MovesA = .none;
-var movement_b: motion.MovesB = .none;
-var movement_c: motion.MovesC = .none;
+var movement_a: motion.Axis = .none;
+var movement_b: motion.Axis = .none;
+var movement_c: motion.Axis = .none;
 fn clear() void {
     movement_a = .none;
     movement_b = .none;
     movement_c = .none;
 }
 fn input_continue() void {
-    if (holds.holds[0].active) movement_a = .left;
-    if (holds.holds[1].active) movement_a = .right;
-    if (holds.holds[2].active) movement_b = .near;
-    if (holds.holds[3].active) movement_b = .far;
-    if (holds.holds[4].active) movement_c = .down;
-    if (holds.holds[5].active) movement_c = .up;
+    if (holds.holds[0].active) movement_a = .negative;
+    if (holds.holds[1].active) movement_a = .positive;
+    if (holds.holds[2].active) movement_b = .negative;
+    if (holds.holds[3].active) movement_b = .positive;
+    if (holds.holds[4].active) movement_c = .negative;
+    if (holds.holds[5].active) movement_c = .positive;
 }
 
 fn windowExtext(window: *c_long) vk.Extent2D {
@@ -119,9 +122,14 @@ pub fn main() !void {
         glfw.KeyW, glfw.KeyS,
         glfw.KeyF, glfw.KeyR,
     });
-    holds_alt = try motion.HoldsAxis.init(&.{
+    glass_input = try motion.HoldsAxis.init(&.{
         glfw.KeyK, glfw.KeyJ, //
         glfw.KeyH, glfw.KeyL,
+    });
+    plr_input = try motion.HoldsAxis.init(&.{
+        glfw.KeyA, glfw.KeyD, //
+        glfw.KeyS, glfw.KeyW,
+        glfw.KeyF, glfw.KeyR,
     });
 
     vertex.probing();
@@ -251,7 +259,7 @@ fn deeper(access: EasyAcces) !void {
         null,
     );
     defer storage_dset.deinit(allocator);
-    addons.storagePrefil(storage_dset, grid, spacing);
+    prefils.storagePrefil(storage_dset, grid, spacing);
 
     var texture_dset = try addons.DescriptorPrep.init(
         allocator,
@@ -365,8 +373,9 @@ fn deeper(access: EasyAcces) !void {
     while (!glfw.windowShouldClose(window)) {
         const img_idx = swapchain.image_index;
         const win_size = windowExtext(window);
-        input_continue();
-        holds_alt.input_continue();
+        // input_continue();
+        glass_input.input_continue();
+        plr_input.input_continue();
 
         // Don't present or resize swapchain while the window is minimized
         perf_stats.messure();
@@ -379,39 +388,31 @@ fn deeper(access: EasyAcces) !void {
 
         const td = timeline.deltaS();
 
-        const phi_delt: f32 = switch (movement_a) {
-            motion.MovesA.left => 1,
-            motion.MovesA.right => -1,
+        const phi_delt: f32 = switch (plr_input.axes[0]) {
+            motion.Axis.positive => 1,
+            motion.Axis.negative => -1,
             else => 0,
         };
-        const phi_a = plr.phi + phi_delt * td * std.math.tau * speed;
+
+        const phi_a = plr.phi + (-phi_delt) * td * std.math.tau * speed;
         inertia.in(.{ phi_a, 0, 0 });
         inertia.simulate(timeline1.delta_ms);
         plr.phi = inertia.out()[0];
         plr.phi = phi_a;
 
-        plr.r = switch (movement_b) {
-            motion.MovesB.near => r_lim.cap(plr.r - speed * td),
-            motion.MovesB.far => r_lim.cap(plr.r + speed * td),
-            else => plr.r,
-        };
+        utils.PlayerUpdate(&plr, &plr_input, td);
 
-        plr.h = switch (movement_c) {
-            motion.MovesC.up => high_lim.cap(plr.h + speed * td),
-            motion.MovesC.down => high_lim.cap(plr.h - speed * td),
-            else => plr.h,
-        };
-        glass.update(holds_alt.states[0], holds_alt.states[1]);
+        glass.update(&glass_input);
 
-        clear();
-        holds_alt.clear();
+        // clear();
+        // holds_alt.clear();
 
         //minimalized
         if (!addons.visible(win_size)) {
             glfw.pollEvents();
             continue;
         }
-        try addons.perFrameUniformFill(
+        try prefils.perFrameUniformFill(
             uniform_dset,
             @intCast(img_idx),
             timeline.total_s,
@@ -464,7 +465,7 @@ fn deeper(access: EasyAcces) !void {
     try gc.dev.deviceWaitIdle();
 }
 
-// przykład przesyłania danych na gpu
+// przykład przesyłania danych na gpu, też jest potrze kolejka dla tej operacji
 fn uploadVertices(gc: *const GraphicsContext, pool: vk.CommandPool, buffer: vk.Buffer, vert_slice: []const Vertex) !void {
     const buff_size = BufforingVert.memSize(vert_slice);
 
@@ -477,6 +478,7 @@ fn uploadVertices(gc: *const GraphicsContext, pool: vk.CommandPool, buffer: vk.B
     defer buffer_.deinit(gc);
 
     const gpu_vertices: [*]Vertex = @ptrCast(@alignCast(buffer_.mapping));
+    //does one @memcpy operation is more effective then #storagePrefill
     @memcpy(gpu_vertices, vert_slice);
 
     try copyBuffer(gc, pool, buffer, buffer_.dvk_bfr, buff_size);
@@ -489,6 +491,7 @@ fn uploadVertices(gc: *const GraphicsContext, pool: vk.CommandPool, buffer: vk.B
 // Kopiowanie jest po prostu rodzaje komendy, którą najpierw
 // musimy nagrać, a potem wysłać do kolejki na gpu
 // (a same kolejki są jakby wątkami gpu)
+// dane między bufferami
 fn copyBuffer(gc: *const GraphicsContext, pool: vk.CommandPool, dst: vk.Buffer, src: vk.Buffer, size: vk.DeviceSize) !void {
     var cmdbuf_handle: vk.CommandBuffer = undefined;
     try gc.dev.allocateCommandBuffers(&.{

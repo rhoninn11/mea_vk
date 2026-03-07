@@ -23,3 +23,15 @@ pub const PerInstance = struct {
     offset_4d: [4]f32 = undefined,
     empty_rest: [4]f32 = undefined,
 };
+
+pub const GridSize = struct {
+    total: u16,
+    col_num: u8,
+    row_num: u8,
+
+    pub const default: GridSize = .{
+        .total = 1024,
+        .col_num = 32,
+        .row_num = 32,
+    };
+};

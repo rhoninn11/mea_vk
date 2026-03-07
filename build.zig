@@ -173,7 +173,8 @@ fn protoGen(b: *std.Build, dep: *Dependency, target: std.Build.ResolvedTarget) v
         },
     );
 
-    const run_step = b.step("gen-proto", "compilation of .proto file in proto/");
+    const cmdname: []const u8 = "proto_gen";
+    std.debug.print("You can always call {s}! (wink, wink)\n", .{cmdname});
+    const run_step = b.step(cmdname, "compilation of .proto file in proto/");
     run_step.dependOn(&gen_step.step);
-    std.debug.print("protoGen called\n", .{});
 }

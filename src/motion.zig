@@ -84,7 +84,7 @@ pub const Holds = struct {
 pub const HoldsAxis = struct {
     holds: [MaxHolds]Hold = undefined,
     keys: [MaxHolds]c_int = undefined,
-    states: [MaxHolds / 2]Axis = undefined,
+    axes: [MaxHolds / 2]Axis = undefined,
     len: u8,
 
     pub fn init(keys: []const c_int) !HoldsAxis {
@@ -101,7 +101,7 @@ pub const HoldsAxis = struct {
         }
 
         for (0..len / 2) |i| {
-            act.states[i] = .none;
+            act.axes[i] = .none;
         }
 
         return act;
@@ -115,13 +115,16 @@ pub const HoldsAxis = struct {
 
     pub fn clear(self: *HoldsAxis) void {
         for (0..(self.len / 2)) |i| {
-            self.states[i] = .none;
+            self.axes[i] = .none;
         }
     }
     pub fn input_continue(self: *HoldsAxis) void {
         for (0..(self.len / 2)) |i| {
-            if (self.holds[i * 2].active) self.states[i] = .negative;
-            if (self.holds[i * 2 + 1].active) self.states[i] = .positive;
+            const neq = self.holds[i * 2].active;
+            const pos = self.holds[i * 2 + 1].active;
+            if (neq) self.axes[i] = .negative;
+            if (pos) self.axes[i] = .positive;
+            if (neq == pos) self.axes[i] = .none;
         }
     }
 };
