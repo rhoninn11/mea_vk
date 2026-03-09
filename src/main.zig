@@ -194,11 +194,11 @@ fn playerPos(p: *t.Player) m.vec3 {
 }
 
 fn deeper(access: EasyAcces) !void {
-    const local_alloc = std.heap.page_allocator;
-    var img = try proto.check(local_alloc);
-    defer img.deinit(local_alloc);
+    const deeper_allocator = std.heap.page_allocator;
+    var img = try proto.serdesLoad(deeper_allocator);
+    defer img.deinit(deeper_allocator);
 
-    var glass = proto.LookingGlass.init(&img);
+    var glass = proto.LookingGlass.init(&img, sht.GridSize.default);
 
     var swapchain_len: u8 = undefined;
     // const gc = access.vkctx.?.*;
@@ -225,13 +225,7 @@ fn deeper(access: EasyAcces) !void {
         .pool = pool_cmd,
     };
 
-    var image = try imgs.vulkanTexture(cmd_ctx.gc, cmd_ctx.pool);
-    defer image.deinit();
-
-    // gpu mat4 alignment is 16B
-
-    const spacing = 0.1;
-    const size = 0.1;
+    // fn theDeepest()
 
     var uniform_dset = try addons.DescriptorPrep.init(
         allocator,
@@ -259,8 +253,15 @@ fn deeper(access: EasyAcces) !void {
         null,
     );
     defer storage_dset.deinit(allocator);
-    prefils.storagePrefil(storage_dset, grid, spacing);
 
+    const spacing = 0.1;
+    const size = 0.1;
+    var m_img = try proto.serdesLoad(allocator);
+    defer m_img.deinit(allocator);
+    try prefils.storagePrefil(storage_dset, grid, spacing);
+
+    var image = try imgs.vulkanTexture(cmd_ctx.gc, cmd_ctx.pool);
+    defer image.deinit();
     var texture_dset = try addons.DescriptorPrep.init(
         allocator,
         gc,

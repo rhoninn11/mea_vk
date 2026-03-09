@@ -21,7 +21,14 @@ pub const PerInstance = struct {
     other_offsets: [2]f32 = undefined,
     new_usage: [4]f32 = undefined,
     offset_4d: [4]f32 = undefined,
-    empty_rest: [4]f32 = undefined,
+    depth_ctrl: [4]f32 = undefined,
+};
+
+const DepthControl = extern struct {
+    gate: f32,
+    level: f32,
+    not_used_0: f32,
+    not_used_1: f32,
 };
 
 pub const GridSize = struct {
@@ -30,8 +37,14 @@ pub const GridSize = struct {
     row_num: u8,
 
     pub const default: GridSize = .{
-        .total = 1024,
         .col_num = 32,
         .row_num = 32,
+        .total = 1024,
+    };
+
+    pub const g64: GridSize = .{
+        .col_num = 64,
+        .row_num = 64,
+        .total = 4096,
     };
 };

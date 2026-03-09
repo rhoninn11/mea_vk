@@ -24,7 +24,7 @@ struct Instance{
     vec2 other_offsets;
     vec4 new_usage;
     vec4 offset_4d;
-    vec4 height_control;
+    vec4 depth_control;
 };
 layout(set = 1, binding = 0) buffer readonly InstanceData{
     Instance per_instance[];
@@ -54,8 +54,8 @@ void main() {
     float depth_osc = sin(_group.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
     float float_anim = depth_osc + gl_InstanceIndex*0.001; // to combat depth flickering
 
-    float gate = m_inst.height_control.x;
-    float h = m_inst.height_control.y;
+    float gate = m_inst.depth_control.x;
+    float h = m_inst.depth_control.y;
     float_anim = gate*h + (1-gate)*float_anim;
 
     vec3 base = prescaled_pos + pose_on_surface + vec3(0, float_anim, 0);

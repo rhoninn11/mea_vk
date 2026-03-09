@@ -111,3 +111,12 @@ pub fn PlayerUpdate(player: *t.Player, input: *const motion.HoldsAxis, td: f32) 
     };
     plr.h = high_lim.cap(plr.h);
 }
+
+pub inline fn DefaultRng() !std.Random {
+    var prng: std.Random.DefaultPrng = .init(blk: {
+        var seed: u64 = 42; //for determinism xd
+        try std.posix.getrandom(std.mem.asBytes(&seed));
+        break :blk seed;
+    });
+    return prng.random();
+}

@@ -4,7 +4,12 @@ pub const vec2 = @Vector(2, f32);
 pub const vec3 = @Vector(3, f32);
 pub const vec4 = @Vector(4, f32);
 
-// column-major
+// glsl mat4 alignment is 16B
+test "equals gpu alligment" {
+    const like_in_mat4 = @alignOf(vec4) == 16;
+    try std.testing.expect(like_in_mat4);
+}
+
 pub const mat4 = [4]vec4;
 
 const hmm_a: vec3 = .{ 1, 1, 1 };
@@ -298,10 +303,8 @@ pub fn abs(a: f32) f32 {
 const minus_vec3 = @as(vec3, @splat(-1));
 
 pub fn mat_look_at(pos: vec3, target: vec3, ref_up: vec3) !mat4u {
-    _ = ref_up;
-
     const trans = mat_translate(-pos);
-    const rot = lookRotation(pos, target);
+    const rot = lookRotation(pos, target, ref_up);
     return matXmat(rot.mat, trans.mat);
 
     // const mat: mat4u = .{

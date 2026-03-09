@@ -3,6 +3,8 @@ const std = @import("std");
 const m = @import("math.zig");
 const sht = @import("shaders/types.zig");
 const addons = @import("addons.zig");
+const proto = @import("proto.zig");
+
 const DescriptorPrep = addons.DescriptorPrep;
 
 pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s: f32, center: m.vec3, size: f32) !void {
@@ -22,7 +24,7 @@ pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s:
     );
 }
 
-pub fn storagePrefil(storage_dset: DescriptorPrep, grid: sht.GridSize, spacing: f32) void {
+pub fn storagePrefil(storage_dset: DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {
     const instance_num = grid.total;
     const lim_num = 8096;
     std.debug.assert(instance_num <= lim_num);
@@ -32,38 +34,29 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: sht.GridSize, spacing: 
     const spread_base = 0;
     const spread_delta = along * 0.2;
 
-    const seed: u64 = @intCast(std.time.timestamp()); // more random
-    // const seed: u64 = 42; // deterministic?
-    var rng = std.Random.DefaultPrng.init(seed);
-    var rnd_gen = rng.random();
-
     const stack_size = lim_num * (8 + @sizeOf(sht.PerInstance));
     std.debug.print("+++ info: prefil stack ~ {d}B\n", .{stack_size});
     var stack_mem: [stack_size]u8 = undefined;
     var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
-    const alloc = provider.allocator();
+    const local_a = provider.allocator();
 
     // const hmm = rnd_gen.float(f32);
     var storage_baker: std.ArrayList(f32) = .empty;
-    var storage_baker2: std.ArrayList(f32) = .empty;
-    storage_baker.resize(alloc, instance_num) catch unreachable;
-    storage_baker2.resize(alloc, instance_num) catch unreachable;
-    defer storage_baker.deinit(alloc);
-    defer storage_baker2.deinit(alloc);
+    try storage_baker.resize(local_a, instance_num);
+    defer storage_baker.deinit(local_a);
 
     for (0..instance_num) |i| {
-        //random
-        storage_baker.items[i] = rnd_gen.float(f32);
-        //progression
         const progress = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(instance_num - 1));
-        storage_baker2.items[i] = progress;
-        //constant wins
+        storage_baker.items[i] = progress;
         storage_baker.items[i] = -0.125;
     }
 
-    const middle = addons.Gridor.gridMiddle(&grid);
+    const img = try proto.spawnMonoImg(local_a, grid);
 
-    var scratchpad = alloc.alloc(sht.PerInstance, instance_num) catch unreachable;
+    const middle = addons.Gridor.gridMiddle(&grid);
+    const wave_scale = 1.5;
+    var scratchpad = try local_a.alloc(sht.PerInstance, instance_num);
+    var pixmin: u8 = 255;
     for (storage_dset.buff_arr.items) |possible_buffer| {
         for (0..instance_num) |i| {
             const i_f: f32 = @floatFromInt(i);
@@ -71,7 +64,7 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: sht.GridSize, spacing: 
             // const y_d = (middle_alt[m.Z] - y_f) / middle_alt[m.Z];
             const g_idx = addons.Gridor.gridIdx(&grid, i);
 
-            const delt = ((middle - g_idx) / middle) * m.splat3d(6);
+            const delt = ((middle - g_idx) / middle) * m.splat3d(6 * wave_scale);
             const dist = std.math.sqrt(delt[m.X] * delt[m.X] + delt[m.Z] * delt[m.Z]);
 
             var fresh_one: sht.PerInstance = undefined;
@@ -85,11 +78,22 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: sht.GridSize, spacing: 
             fresh_one.new_usage[3] = delt[m.X];
             fresh_one.offset_4d = m.stack4d(pos_1, 1);
 
-            fresh_one.empty_rest[0] = 1;
-            fresh_one.empty_rest[1] = i_f * 0.001;
+            const pixval = img.pixels[i];
+            if (pixval < pixmin) pixmin = pixval;
+
+            //mask
+            if (pixval > 1) {
+                fresh_one.depth_ctrl[0] = 1;
+                const level = @as(f32, @floatFromInt(pixval)) / 256;
+                fresh_one.depth_ctrl[1] = level;
+            } else {
+                fresh_one.depth_ctrl[0] = 0;
+                fresh_one.depth_ctrl[1] = 0;
+            }
 
             scratchpad[i] = fresh_one;
         }
+        std.debug.print("+++ min pix val was {d}\n", .{pixmin});
         const storage = possible_buffer.?;
         const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
         @memcpy(mapping, scratchpad);
