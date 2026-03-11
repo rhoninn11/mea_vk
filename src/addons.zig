@@ -166,9 +166,9 @@ pub const DescriptorPrep = struct {
 
 pub const Gridor = struct {
     pub fn gridMiddle(grid: *const sht.GridSize) m.vec3 {
-        std.debug.print("grid is: {} {}\n", .{ grid.row_num, grid.col_num });
-        const x_mid = @as(f32, @floatFromInt(grid.row_num - 1)) * 0.5;
-        const z_mid = @as(f32, @floatFromInt(grid.col_num - 1)) * 0.5;
+        std.debug.print("grid is: {} {}\n", .{ grid.h, grid.w });
+        const x_mid = @as(f32, @floatFromInt(grid.h - 1)) * 0.5;
+        const z_mid = @as(f32, @floatFromInt(grid.w - 1)) * 0.5;
         return .{ x_mid, 0, z_mid };
     }
 
@@ -180,17 +180,9 @@ pub const Gridor = struct {
 
     pub fn gridIdx(grid: *const sht.GridSize, i: usize) m.vec3 {
         return .{
-            @as(f32, @floatFromInt(@mod(i, grid.col_num))),
+            @as(f32, @floatFromInt(@mod(i, grid.w))),
             0,
-            @as(f32, @floatFromInt(i / grid.row_num)),
-        };
-    }
-
-    pub fn xyGrid(x: u8, y: u8) sht.GridSize {
-        return sht.GridSize{
-            .total = @as(u16, x) * @as(u16, y),
-            .col_num = x,
-            .row_num = y,
+            @as(f32, @floatFromInt(i / grid.h)),
         };
     }
 };

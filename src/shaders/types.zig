@@ -32,19 +32,19 @@ const DepthControl = extern struct {
 };
 
 pub const GridSize = struct {
-    total: u16,
-    col_num: u8,
-    row_num: u8,
+    total: u32,
+    w: u16,
+    h: u16,
 
     pub const default: GridSize = .{
-        .col_num = 32,
-        .row_num = 32,
+        .w = 32,
+        .h = 32,
         .total = 1024,
     };
 
     pub const g64: GridSize = .{
-        .col_num = 64,
-        .row_num = 64,
+        .w = 64,
+        .h = 64,
         .total = 4096,
     };
 };

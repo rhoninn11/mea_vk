@@ -88,12 +88,12 @@ pub const PerfStats = struct {
 };
 
 var r_lim = Caped.init(1, 5);
-var high_lim = Caped.init(0, 3);
+var high_lim = Caped.init(0, 10);
 
 pub fn PlayerUpdate(player: *t.Player, input: *const motion.HoldsAxis, td: f32) void {
     const plr = player;
 
-    const r_speed: f32 = 1;
+    const r_speed: f32 = 3;
     const proximity = input.axes[1];
     player.r = switch (proximity) {
         motion.Axis.negative => plr.r + r_speed * td,
@@ -102,7 +102,7 @@ pub fn PlayerUpdate(player: *t.Player, input: *const motion.HoldsAxis, td: f32) 
     };
     plr.r = r_lim.cap(plr.r);
 
-    const h_speed: f32 = 1;
+    const h_speed: f32 = 3;
     const height = input.axes[2];
     plr.h = switch (height) {
         motion.Axis.negative => plr.h - h_speed * td,

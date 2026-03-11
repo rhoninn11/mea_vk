@@ -52,7 +52,7 @@ void main() {
 
 //  should be visible after depth testing
     float depth_osc = sin(_group.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
-    float float_anim = depth_osc + gl_InstanceIndex*0.001; // to combat depth flickering
+    float float_anim = depth_osc + gl_InstanceIndex*0.0001; // to combat depth flickering
 
     float gate = m_inst.depth_control.x;
     float h = m_inst.depth_control.y;

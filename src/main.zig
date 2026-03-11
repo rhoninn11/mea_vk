@@ -380,7 +380,7 @@ fn deeper(access: EasyAcces) !void {
         utils.PlayerUpdate(&plr, &plr_input, td);
 
         if (glass.update(&glass_input)) {
-            try glass.updateStorage(storage_dset, grid.total);
+            try glass.updateStorage(storage_dset);
         }
 
         //minimalized
