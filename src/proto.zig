@@ -64,22 +64,23 @@ pub fn serdesLoad(alloc: std.mem.Allocator) !meagen.Image {
 
 pub const LookingGlass = struct {
     pos: @Vector(2, i32),
-    size: @Vector(2, i32),
-    data: *meagen.Image,
+    size: sht.GridSize,
+    img: *meagen.Image,
 
     pub fn init(from: *meagen.Image, gsz: sht.GridSize) LookingGlass {
+        std.debug.assert(from.info.?.img_type == meagen.ImgType.DUO);
         return LookingGlass{
             .pos = .{ 0, 0 },
-            .size = .{ @intCast(gsz.col_num), @intCast(gsz.row_num) },
-            .data = from,
+            .size = gsz,
+            .img = from,
         };
     }
 
-    pub fn update(self: *LookingGlass, input: *const motion.HoldsAxis) void {
-        const src_size = self.data.info.?;
+    pub fn update(self: *LookingGlass, input: *const motion.HoldsAxis) bool {
+        const src_size = self.img.info.?;
 
-        const max_x = @as(i32, @intCast(src_size.width)) - self.size[0] - 1;
-        const max_y = @as(i32, @intCast(src_size.height)) - self.size[1] - 1;
+        const max_x = @as(i32, @intCast(src_size.width)) - @as(i32, @intCast(self.size.col_num)) - 1;
+        const max_y = @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.size.row_num)) - 1;
 
         const x_axis = input.axes[0];
         self.pos[0] = switch (x_axis) {
@@ -97,6 +98,57 @@ pub const LookingGlass = struct {
 
         if (x_axis != motion.Axis.none or y_axis != motion.Axis.none) {
             std.debug.print("new position at x:{} y:{}\n", .{ self.pos[0], self.pos[1] });
+            return true;
+        }
+        return false;
+    }
+
+    pub fn pixval(self: *LookingGlass, i: usize) u16 {
+        const x = @mod(i, @as(usize, @intCast(self.size.col_num)));
+        const y = i / @as(usize, @intCast(self.size.col_num));
+        std.debug.assert(y < self.size.row_num);
+
+        const img_x = @as(usize, @intCast(self.pos[0])) + x;
+        const img_y = @as(usize, @intCast(self.pos[1])) + y;
+
+        const info = self.img.info.?;
+        const idx = info.width * img_y + img_x;
+
+        const Conversion = extern union {
+            two: [2]u8,
+            one: u16,
+        };
+
+        var elo: Conversion = undefined;
+        elo.two[0] = self.img.pixels[idx * 2];
+        elo.two[1] = self.img.pixels[idx * 2 + 1];
+
+        return elo.one;
+    }
+    pub fn updateStorage(self: *LookingGlass, storage_dset: addon.DescriptorPrep, instance_num: u32) !void {
+        const lim_num = 8096;
+        std.debug.assert(instance_num <= lim_num);
+        const stack_size = lim_num * @sizeOf(sht.PerInstance);
+        var stack_mem: [stack_size]u8 = undefined;
+
+        var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
+        const local_a = provider.allocator();
+
+        var scratchpad = try local_a.alloc(sht.PerInstance, instance_num);
+        for (storage_dset.buff_arr.items) |possible_buffer| {
+            const storage = possible_buffer.?;
+            const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
+            @memcpy(scratchpad, mapping);
+            for (0..instance_num) |i| {
+                var prev_one: sht.PerInstance = scratchpad[i];
+                const h = @as(f32, @floatFromInt(self.pixval(i)));
+                const level = h / (256 * 256);
+                prev_one.depth_ctrl[0] = 1;
+                prev_one.depth_ctrl[1] = level * 4;
+
+                scratchpad[i] = prev_one;
+            }
+            @memcpy(mapping, scratchpad);
         }
     }
 };

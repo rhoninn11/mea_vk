@@ -51,12 +51,9 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: sht.GridSize, spacing: 
         storage_baker.items[i] = -0.125;
     }
 
-    const img = try proto.spawnMonoImg(local_a, grid);
-
     const middle = addons.Gridor.gridMiddle(&grid);
     const wave_scale = 1.5;
     var scratchpad = try local_a.alloc(sht.PerInstance, instance_num);
-    var pixmin: u8 = 255;
     for (storage_dset.buff_arr.items) |possible_buffer| {
         for (0..instance_num) |i| {
             const i_f: f32 = @floatFromInt(i);
@@ -78,22 +75,11 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: sht.GridSize, spacing: 
             fresh_one.new_usage[3] = delt[m.X];
             fresh_one.offset_4d = m.stack4d(pos_1, 1);
 
-            const pixval = img.pixels[i];
-            if (pixval < pixmin) pixmin = pixval;
-
-            //mask
-            if (pixval > 1) {
-                fresh_one.depth_ctrl[0] = 1;
-                const level = @as(f32, @floatFromInt(pixval)) / 256;
-                fresh_one.depth_ctrl[1] = level;
-            } else {
-                fresh_one.depth_ctrl[0] = 0;
-                fresh_one.depth_ctrl[1] = 0;
-            }
+            fresh_one.depth_ctrl[0] = 0;
+            fresh_one.depth_ctrl[1] = 0;
 
             scratchpad[i] = fresh_one;
         }
-        std.debug.print("+++ min pix val was {d}\n", .{pixmin});
         const storage = possible_buffer.?;
         const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
         @memcpy(mapping, scratchpad);

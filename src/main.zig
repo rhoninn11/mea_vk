@@ -48,7 +48,6 @@ fn Buffering(Base: type) type {
     };
 }
 
-var holds: motion.Holds = undefined;
 var glass_input: motion.HoldsAxis = undefined;
 var plr_input: motion.HoldsAxis = undefined;
 
@@ -70,26 +69,8 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
         }
     }
 
-    holds.passKeyAction(&x);
     glass_input.passKeyAction(&x);
     plr_input.passKeyAction(&x);
-}
-
-var movement_a: motion.Axis = .none;
-var movement_b: motion.Axis = .none;
-var movement_c: motion.Axis = .none;
-fn clear() void {
-    movement_a = .none;
-    movement_b = .none;
-    movement_c = .none;
-}
-fn input_continue() void {
-    if (holds.holds[0].active) movement_a = .negative;
-    if (holds.holds[1].active) movement_a = .positive;
-    if (holds.holds[2].active) movement_b = .negative;
-    if (holds.holds[3].active) movement_b = .positive;
-    if (holds.holds[4].active) movement_c = .negative;
-    if (holds.holds[5].active) movement_c = .positive;
 }
 
 fn windowExtext(window: *c_long) vk.Extent2D {
@@ -117,11 +98,6 @@ const BasicErrs = error{
 const proto = @import("proto.zig");
 
 pub fn main() !void {
-    holds = try motion.Holds.init(&.{
-        glfw.KeyA, glfw.KeyD, //
-        glfw.KeyW, glfw.KeyS,
-        glfw.KeyF, glfw.KeyR,
-    });
     glass_input = try motion.HoldsAxis.init(&.{
         glfw.KeyK, glfw.KeyJ, //
         glfw.KeyH, glfw.KeyL,
@@ -194,11 +170,12 @@ fn playerPos(p: *t.Player) m.vec3 {
 }
 
 fn deeper(access: EasyAcces) !void {
+    const grid = sht.GridSize.g64;
     const deeper_allocator = std.heap.page_allocator;
     var img = try proto.serdesLoad(deeper_allocator);
     defer img.deinit(deeper_allocator);
 
-    var glass = proto.LookingGlass.init(&img, sht.GridSize.default);
+    var glass = proto.LookingGlass.init(&img, grid);
 
     var swapchain_len: u8 = undefined;
     // const gc = access.vkctx.?.*;
@@ -240,7 +217,6 @@ fn deeper(access: EasyAcces) !void {
     );
     defer uniform_dset.deinit(allocator);
 
-    const grid = addons.Gridor.xyGrid(32, 32);
     var storage_dset = try addons.DescriptorPrep.init(
         allocator,
         gc,
@@ -255,7 +231,7 @@ fn deeper(access: EasyAcces) !void {
     defer storage_dset.deinit(allocator);
 
     const spacing = 0.1;
-    const size = 0.1;
+    const size = 0.05;
     var m_img = try proto.serdesLoad(allocator);
     defer m_img.deinit(allocator);
     try prefils.storagePrefil(storage_dset, grid, spacing);
@@ -403,10 +379,9 @@ fn deeper(access: EasyAcces) !void {
 
         utils.PlayerUpdate(&plr, &plr_input, td);
 
-        glass.update(&glass_input);
-
-        // clear();
-        // holds_alt.clear();
+        if (glass.update(&glass_input)) {
+            try glass.updateStorage(storage_dset, grid.total);
+        }
 
         //minimalized
         if (!addons.visible(win_size)) {
