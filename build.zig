@@ -78,6 +78,7 @@ pub fn build(b: *std.Build) !void {
     // triangle_exe.root_module.addImport("vulkan", vulkan);
 
     if (use_zig_shaders) {
+        // https://claude.ai/chat/77a20a99-779d-4ab5-9b05-55416f09f559
         const spirv_target = b.resolveTargetQuery(.{
             .cpu_arch = .spirv32,
             .os_tag = .vulkan,
@@ -88,7 +89,7 @@ pub fn build(b: *std.Build) !void {
         const vert_spv = b.addObject(.{
             .name = "vertex_shader",
             .root_module = b.createModule(.{
-                .root_source_file = b.path("shaders/vertex.zig"),
+                .root_source_file = b.path("src/shaders/ref_vert.zig"),
                 .target = spirv_target,
             }),
             .use_llvm = false,
@@ -101,7 +102,7 @@ pub fn build(b: *std.Build) !void {
         const frag_spv = b.addObject(.{
             .name = "fragment_shader",
             .root_module = b.createModule(.{
-                .root_source_file = b.path("shaders/fragment.zig"),
+                .root_source_file = b.path("src/shaders/ref_frag.zig"),
                 .target = spirv_target,
             }),
             .use_llvm = false,

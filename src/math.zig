@@ -5,9 +5,13 @@ pub const vec3 = @Vector(3, f32);
 pub const vec4 = @Vector(4, f32);
 
 // glsl mat4 alignment is 16B
-test "equals gpu alligment" {
-    const like_in_mat4 = @alignOf(vec4) == 16;
-    try std.testing.expect(like_in_mat4);
+test "allignment hurtles" {
+    const v4a = @alignOf(vec4);
+    // like in glsl
+    try std.testing.expect(v4a == 16);
+
+    const v4b = @alignOf([7]f32);
+    try std.testing.expect(v4b == 4);
 }
 
 pub const mat4 = [4]vec4;
