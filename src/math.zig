@@ -15,6 +15,7 @@ test "allignment hurtles" {
 }
 
 pub const mat4 = [4]vec4;
+pub const mat3 = [3]vec3;
 
 const hmm_a: vec3 = .{ 1, 1, 1 };
 const hmm_b: vec3 = .{ 2, 2, 2 };
@@ -95,7 +96,7 @@ test "if it even crossing" {
     try std.testing.expect(x[2] < 0.0001);
 }
 
-const vec3u = extern union {
+pub const vec3u = extern union {
     vec: vec3,
     arr: [3]f32,
 };
@@ -104,6 +105,15 @@ const mat4u = extern union {
     mat: mat4,
     arr: [16]f32,
 };
+const mat3u = extern union {
+    mat: mat3,
+    arr: [9]f32,
+};
+pub fn matXvec3(m: mat3, v: vec3) vec3 {
+    var out: vec3 = m[0] * splat3d(v[0]);
+    for (1..3) |i| out += m[i] * splat3d(v[i]);
+    return out;
+}
 
 pub fn matXvec(m: mat4, v: vec4) vec4 {
     var out: vec4 = m[0] * splat4d(v[0]);
@@ -118,6 +128,15 @@ test "|mat_mul_vec" {
     try std.testing.expect(len(v - trim3d(b)) < 0.001);
 }
 
+pub fn matXmat3(A: mat3, B: mat3) mat3u {
+    return .{
+        .mat = .{
+            matXvec3(A, B[0]), //column-major
+            matXvec3(A, B[1]),
+            matXvec3(A, B[2]),
+        },
+    };
+}
 pub fn matXmat(A: mat4, B: mat4) mat4u {
     return .{
         .mat = .{
@@ -310,16 +329,6 @@ pub fn mat_look_at(pos: vec3, target: vec3, ref_up: vec3) !mat4u {
     const trans = mat_translate(-pos);
     const rot = lookRotation(pos, target, ref_up);
     return matXmat(rot.mat, trans.mat);
-
-    // const mat: mat4u = .{
-    //     .mat = .{
-    //         stack4d(.{ right[X], up[X], forward[X] }, 0), //column-major
-    //         stack4d(.{ right[Y], up[Y], forward[Y] }, 0),
-    //         stack4d(.{ right[Z], up[Z], forward[Z] }, 0),
-    //         stack4d(trans, 1),
-    //     },
-    // };
-    // return mat;
 }
 
 const UP = vec3{ 0, 1, 0 };
@@ -356,4 +365,22 @@ pub inline fn orbit(phi: f32) vec3 {
 }
 pub inline fn orbit_r(phi: f32, r: f32) vec3 {
     return vec3{ std.math.cos(phi), 0, -std.math.sin(phi) } * splat3d(r);
+}
+
+pub fn rotMatY(part: f32) mat3 {
+    const x: vec3 = .{ 1, 0, 0 };
+    const z: vec3 = .{ 0, 0, 1 };
+
+    const radians = part * std.math.tau;
+
+    const sin = std.math.sin(radians);
+    const cos = std.math.cos(radians);
+
+    const x_ = splat3d(cos) * x + splat3d(sin) * z;
+    const z_ = -splat3d(sin) * x + splat3d(cos) * z;
+    return .{
+        x_,
+        .{ 0, 1, 0 },
+        z_,
+    };
 }

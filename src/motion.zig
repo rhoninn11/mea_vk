@@ -109,7 +109,9 @@ pub const HoldsAxis = struct {
 
     pub fn passKeyAction(self: *HoldsAxis, ka: *const KeyAction) void {
         for (0..self.len) |i| {
-            self.holds[i].hold(ka, self.keys[i]);
+            if (self.keys[i] == ka.key) {
+                self.holds[i].hold(ka, self.keys[i]);
+            }
         }
     }
 

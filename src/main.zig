@@ -99,7 +99,7 @@ const proto = @import("proto.zig");
 
 pub fn main() !void {
     glass_input = try motion.HoldsAxis.init(&.{
-        glfw.KeyK, glfw.KeyJ, //
+        glfw.KeyJ, glfw.KeyK, //
         glfw.KeyH, glfw.KeyL,
     });
     plr_input = try motion.HoldsAxis.init(&.{
@@ -282,11 +282,24 @@ fn deeper(access: EasyAcces) !void {
     );
     defer destroyFramebuffers(gc, allocator, framebuffers);
 
-    // const triangle = vertex.
-    var shape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, 32, false);
+    var param = vertex.RingParams.default;
+
+    param.len = 32;
+    param.flat = false;
+    var shape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, param);
     defer shape.deinit(allocator);
-    var nextShape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, 5, true);
+
+    param.len = 5;
+    param.flat = true;
+    var nextShape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, param);
     defer nextShape.deinit(allocator);
+
+    const rotmat = m.rotMatY(0.125);
+    for (0..nextShape.items.len) |i| {
+        const vert = m.vec3u{ .arr = nextShape.items[i].pos };
+        const newpos = m.vec3u{ .vec = m.matXvec3(rotmat, vert.vec) };
+        nextShape.items[i].pos = newpos.arr;
+    }
 
     const as_slice: []const Vertex = nextShape.items;
     const mem_size = @sizeOf(Vertex) * as_slice.len;

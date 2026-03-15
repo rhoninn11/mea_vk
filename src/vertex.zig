@@ -56,19 +56,33 @@ pub const TriangleArray = std.ArrayList(Vertex);
 //     Vertex{.pos = .{1, 1, 0}, .color = .{1, 0, 1}},
 // };
 
+pub const RingParams = struct {
+    len: u8,
+    inner_r: f32,
+    outer_r: f32,
+    flat: bool,
+
+    pub const default: RingParams = .{
+        .len = 9,
+        .inner_r = 0.7,
+        .outer_r = 1.0,
+        .flat = true,
+    };
+};
+
 pub const Utils = struct {
-    pub fn Ring(alloc: Allocator, len: u8, flat: bool) !TriangleArray {
-        const vert_num: usize = @as(usize, len) * 2;
+    pub fn Ring(alloc: Allocator, param: RingParams) !TriangleArray {
+        const vert_num: usize = @as(usize, param.len) * 2;
 
         var pair_arr: PairArray = .empty;
         try pair_arr.resize(alloc, vert_num);
         defer pair_arr.deinit(alloc); //intermediate cals
 
-        ringPairs(pair_arr.items, flat);
+        ringPairs(pair_arr.items, param);
         return try triangulateSegments(alloc, pair_arr.items);
     }
 
-    fn ringPairs(pair_points: []PairPoint, flat: bool) void {
+    fn ringPairs(pair_points: []PairPoint, param: RingParams) void {
         std.debug.assert(@mod(pair_points.len, 2) == 0);
         const segments = pair_points.len / 2;
 
@@ -94,15 +108,13 @@ pub const Utils = struct {
             pair_points[i * 2 + 1] = stamp_b;
         }
 
-        const r = 0.7;
-        const r_delta = 0.3;
         for (0..segments) |pre_i| {
             const stage_i = pre_i * 2;
             const base: [2]f32 = pair_points[stage_i].pos[0..2].*;
 
-            const height: f32 = if (flat) 0.0 else 0.5;
-            pair_points[stage_i].pos = m.stack(m.mul2D(base, r), height);
-            pair_points[stage_i + 1].pos = m.stack(m.mul2D(base, r + r_delta), 0);
+            const height: f32 = if (param.flat) 0.0 else 0.5;
+            pair_points[stage_i].pos = m.stack(m.mul2D(base, param.inner_r), height);
+            pair_points[stage_i + 1].pos = m.stack(m.mul2D(base, param.outer_r), 0);
         }
     }
 

@@ -103,14 +103,14 @@ pub const LookingGlass = struct {
         const max_x = @as(i32, @intCast(src_size.width)) - @as(i32, @intCast(self.size.w)) - 1;
         const max_y = @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.size.h)) - 1;
 
-        const x_axis = input.axes[0];
+        const x_axis = input.axes[1];
         self.pos[0] = switch (x_axis) {
             motion.Axis.positive => if (self.pos[0] < max_x) self.pos[0] + 1 else max_x,
             motion.Axis.negative => if (self.pos[0] > 0) self.pos[0] - 1 else 0,
             else => self.pos[0],
         };
 
-        const y_axis = input.axes[1];
+        const y_axis = input.axes[0];
         self.pos[1] = switch (y_axis) {
             motion.Axis.positive => if (self.pos[1] < max_y) self.pos[1] + 1 else max_y,
             motion.Axis.negative => if (self.pos[1] > 0) self.pos[1] - 1 else 0,
@@ -167,7 +167,7 @@ pub const LookingGlass = struct {
                 if (h > max_val) max_val = h;
                 if (h < min_val) min_val = h;
                 prev_one.depth_ctrl[0] = 1;
-                prev_one.depth_ctrl[1] = level * 4;
+                prev_one.depth_ctrl[1] = level * 1;
 
                 scratchpad[i] = prev_one;
             }
