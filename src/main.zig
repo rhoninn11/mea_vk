@@ -708,26 +708,41 @@ fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain) !vk.Render
         .p_depth_stencil_attachment = &depth_attachment_ref,
     };
 
-    const subpass_dependency = vk.SubpassDependency{ .dst_subpass = 0, .src_subpass = vk.SUBPASS_EXTERNAL, .src_stage_mask = .{
-        .color_attachment_output_bit = true,
-        .late_fragment_tests_bit = true,
-    }, .src_access_mask = .{
-        .depth_stencil_attachment_write_bit = true,
-    }, .dst_stage_mask = .{
-        .color_attachment_output_bit = true,
-        .early_fragment_tests_bit = true,
-    }, .dst_access_mask = .{
-        .color_attachment_write_bit = true,
-        .depth_stencil_attachment_write_bit = true,
-    } };
+    const subpass_dependency = vk.SubpassDependency{
+        .dst_subpass = 0,
+        .src_subpass = vk.SUBPASS_EXTERNAL,
+        .src_stage_mask = .{
+            .color_attachment_output_bit = true,
+            .late_fragment_tests_bit = true,
+        },
+        .src_access_mask = .{
+            .depth_stencil_attachment_write_bit = true,
+        },
+        .dst_stage_mask = .{
+            .color_attachment_output_bit = true,
+            .early_fragment_tests_bit = true,
+        },
+        .dst_access_mask = .{
+            .color_attachment_write_bit = true,
+            .depth_stencil_attachment_write_bit = true,
+        },
+    };
 
     const att_arr: []const vk.AttachmentDescription = &.{ color_attachment, depth_attachment };
-    const render_pass_create_info = vk.RenderPassCreateInfo{
+
+    const rpmvci: vk.RenderPassMultiviewCreateInfo = .{
+        .subpass_count = 1,
+    };
+    _ = rpmvci;
+
+    const render_pass_create_info: vk.RenderPassCreateInfo = .{
         .attachment_count = @intCast(att_arr.len),
         .p_attachments = att_arr.ptr,
         .subpass_count = 1,
         .p_subpasses = @ptrCast(&subpass),
         .p_dependencies = @ptrCast(&subpass_dependency),
+        // here we will pass multiview config
+        .p_next = null,
     };
 
     return try gc.dev.createRenderPass(&render_pass_create_info, null);

@@ -522,9 +522,24 @@ fn checkSuitable(
     if (!try checkSurfaceSupport(instance, pdev, surface)) {
         return null;
     }
+    const queue_allocation = try allocateQueues(instance, pdev, allocator, surface);
+    if (queue_allocation) |allocation| {
+        var mv_props: vk.PhysicalDeviceMultiviewProperties = .{
+            .max_multiview_instance_index = undefined,
+            .max_multiview_view_count = undefined,
+        };
 
-    if (try allocateQueues(instance, pdev, allocator, surface)) |allocation| {
-        const props = instance.getPhysicalDeviceProperties(pdev);
+        var phys_pros: vk.PhysicalDeviceProperties2 = .{
+            .properties = undefined,
+            .p_next = &mv_props,
+        };
+
+        instance.getPhysicalDeviceProperties2(pdev, &phys_pros);
+        std.debug.print("+++ multiview props: {d} - (views), {d} - (instances)\n", .{
+            mv_props.max_multiview_view_count,
+            mv_props.max_multiview_instance_index,
+        });
+
         const suppoted_features = instance.getPhysicalDeviceFeatures(pdev);
 
         const choose_cond = suppoted_features.sampler_anisotropy == .true;
@@ -534,7 +549,7 @@ fn checkSuitable(
 
         return DeviceCandidate{
             .pdev = pdev,
-            .props = props,
+            .props = phys_pros.properties,
             .queues = allocation,
         };
     }
@@ -545,6 +560,7 @@ fn checkSuitable(
 fn allocateQueues(instance: Instance, pdev: vk.PhysicalDevice, allocator: Allocator, surface: vk.SurfaceKHR) !?QueueAllocation {
     const families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(pdev, allocator);
     defer allocator.free(families);
+    std.debug.print("+++ device queue count {d}\n", .{families.len});
 
     var graphics_family: ?u32 = null;
     var present_family: ?u32 = null;
