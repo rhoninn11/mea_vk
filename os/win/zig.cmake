@@ -1,0 +1,12 @@
+find_program(ZIG_CC zigcc.cmd REQUIRED)
+find_program(ZIG_CXX zigcpp.cmd REQUIRED)
+find_program(ZIG_AR zigar.cmd REQUIRED)
+find_program(ZIG_RANLIB zigranlib.cmd REQUIRED)
+find_program(ZIG_RC zigrc.cmd REQUIRED)
+
+set(CMAKE_C_COMPILER "${ZIG_CC}" CACHE FILEPATH "" FORCE)
+set(CMAKE_CXX_COMPILER "${ZIG_CXX}" CACHE FILEPATH "" FORCE)
+set(CMAKE_AR "${ZIG_AR}" CACHE FILEPATH "" FORCE)
+set(CMAKE_RANLIB "${ZIG_RANLIB}" CACHE FILEPATH "" FORCE)
+set(CMAKE_RC_COMPILER "${ZIG_RC}" CACHE FILEPATH "" FORCE)
+
