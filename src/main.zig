@@ -547,7 +547,7 @@ fn createCommandBuffers(
 
     const clear_arr: []const vk.ClearValue = &.{
         vk.ClearValue{
-            .color = .{ .float_32 = .{ 0.1, 0, 0, 1 } },
+            .color = .{ .float_32 = .{ 0.05, 0, 0, 1 } },
         },
         vk.ClearValue{
             .depth_stencil = .{ .depth = 1.0, .stencil = 0 },

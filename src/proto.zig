@@ -68,7 +68,7 @@ pub fn spawHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
 }
 
 pub fn serdesLoad(alloc: std.mem.Allocator) !meagen.Image {
-    const filename = "fs/serdes/proto_53.serdes";
+    const filename = "fs/serdes/proto_0.serdes";
     const file = std.fs.cwd().openFile(filename, .{
         .mode = .read_only,
     }) catch {

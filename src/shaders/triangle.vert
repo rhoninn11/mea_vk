@@ -35,6 +35,8 @@ layout(location = 1) in vec3 a_color;
 
 layout(location = 0) out vec4 v_color;
 layout(location = 1) out float v_progress;
+layout(location = 2) out vec2 v_depth_shading;
+
 
 // group locked at the middle of the screan
 // group gives info to precalculate surface
@@ -56,7 +58,7 @@ void main() {
 
     float gate = m_inst.depth_control.x;
     float h = m_inst.depth_control.y;
-    float_anim = gate*h + (1-gate)*float_anim;
+    float_anim = gate*h*2 + (1-gate)*float_anim;
 
     vec3 base = prescaled_pos + pose_on_surface + vec3(0, float_anim, 0);
 
@@ -68,4 +70,6 @@ void main() {
     v_color.a = float_anim;
 
     v_progress = a_color.r + m_inst.new_usage.x;
+
+    v_depth_shading = m_inst.depth_control.xy;
 }
