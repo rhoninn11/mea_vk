@@ -53,12 +53,26 @@ pub const DescriptorPrep = struct {
             .p_immutable_samplers = null, // for textures ?
             .stage_flags = using.shader_stage,
         };
+        const binding_flgs: vk.DescriptorBindingFlags = .{
+            .partially_bound_bit = true,
+            .variable_descriptor_count_bit = true,
+            .update_after_bind_bit = true,
+        };
+        const flags_info: vk.DescriptorSetLayoutBindingFlagsCreateInfo = .{
+            .p_binding_flags = @ptrCast(&binding_flgs),
+            .binding_count = 1,
+        };
+        _ = flags_info;
+        // it should be extended with flags optionaly
+        // https://claude.ai/chat/59de4b64-073d-448f-8e03-a216c526e921
 
-        self._d_set_layout = try devk.createDescriptorSetLayout(&.{
-            .s_type = .descriptor_set_layout_create_info,
+        const cdsli: vk.DescriptorSetLayoutCreateInfo = .{
             .p_bindings = @ptrCast(&_bind),
             .binding_count = 1,
-        }, null);
+            .p_next = null,
+        };
+
+        self._d_set_layout = try devk.createDescriptorSetLayout(&cdsli, null);
 
         // duplicate
         for (0..len) |i| {

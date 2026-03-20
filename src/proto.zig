@@ -142,6 +142,7 @@ pub const LookingGlass = struct {
 
         return elo.hdr;
     }
+    const U16max: f32 = 1 << 16;
     pub fn updateStorage(self: *LookingGlass, storage_dset: addon.DescriptorPrep) !void {
         const total = self.size.total;
         const lim_num = 8096;
@@ -164,7 +165,7 @@ pub const LookingGlass = struct {
                 var prev_one: sht.PerInstance = scratchpad[i];
                 const h = @as(f32, @floatFromInt(self.pixval(i)));
 
-                const level = h / (256 * 256);
+                const level = h / U16max;
                 const tresholded = @max(0, ((level - trim_factor) / (1 - trim_factor)));
                 if (h > max_val) max_val = h;
                 if (h < min_val) min_val = h;

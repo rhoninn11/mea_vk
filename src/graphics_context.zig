@@ -540,9 +540,18 @@ fn checkSuitable(
             mv_props.max_multiview_instance_index,
         });
 
-        const suppoted_features = instance.getPhysicalDeviceFeatures(pdev);
+        var b: vk.PhysicalDeviceDescriptorIndexingFeatures = .{
+            .descriptor_binding_partially_bound = .true,
+            .descriptor_binding_variable_descriptor_count = .true,
+            .shader_sampled_image_array_non_uniform_indexing = .true,
+        };
 
-        const choose_cond = suppoted_features.sampler_anisotropy == .true;
+        var features2: vk.PhysicalDeviceFeatures2 = .{
+            .features = undefined,
+            .p_next = &b,
+        };
+        instance.getPhysicalDeviceFeatures2(pdev, &features2);
+        const choose_cond = features2.features.sampler_anisotropy == .true;
         if (!choose_cond) {
             return null;
         }
@@ -643,7 +652,7 @@ pub const baked = struct {
         .usage_flag = usage_as_storage,
         .descriptor_type = .storage_buffer,
     };
-    const texture_usage: UsageType = .{
+    const texture_usage: UsageType = .{ // also for bindles
         // buffer in descriptor is not used by texture btw.
         .usage_flag = usage_as_storage,
         .descriptor_type = .combined_image_sampler,
