@@ -46,7 +46,7 @@ void main() {
     f_color = vec4(emf_color_approx*v_color.a, 1.0);
     f_color = f_color*tex_color;
 
-    float trim_factor = 0.2;
+    float trim_factor = 0.0;
     float shifted = ((v_depth_shading.y - trim_factor)/(1-trim_factor));
     vec3 level_color = v_depth_shading.x * inferno(shifted) + (1-v_depth_shading.x)*f_color.xyz;
     f_color = vec4(level_color, 1.0);

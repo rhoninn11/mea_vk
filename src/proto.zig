@@ -155,6 +155,7 @@ pub const LookingGlass = struct {
         var scratchpad = try local_a.alloc(sht.PerInstance, total);
         var max_val: f32 = 1000000;
         var min_val: f32 = -1000000;
+        const trim_factor = 0.4;
         for (storage_dset.buff_arr.items) |possible_buffer| {
             const storage = possible_buffer.?;
             const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
@@ -164,10 +165,13 @@ pub const LookingGlass = struct {
                 const h = @as(f32, @floatFromInt(self.pixval(i)));
 
                 const level = h / (256 * 256);
+                const tresholded = @max(0, ((level - trim_factor) / (1 - trim_factor)));
                 if (h > max_val) max_val = h;
                 if (h < min_val) min_val = h;
                 prev_one.depth_ctrl[0] = 1;
-                prev_one.depth_ctrl[1] = level * 1;
+                prev_one.depth_ctrl[1] = tresholded;
+
+                // prev_one.depth_ctrl[1] = 0;
 
                 scratchpad[i] = prev_one;
             }

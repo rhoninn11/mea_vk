@@ -231,7 +231,7 @@ fn deeper(access: EasyAcces) !void {
     defer storage_dset.deinit(allocator);
 
     const spacing = 0.1;
-    const size = 0.05;
+    const size = 0.04;
     var m_img = try proto.serdesLoad(allocator);
     defer m_img.deinit(allocator);
     try prefils.storagePrefil(storage_dset, grid, spacing);
@@ -291,17 +291,22 @@ fn deeper(access: EasyAcces) !void {
 
     param.len = 5;
     param.flat = true;
-    var nextShape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, param);
-    defer nextShape.deinit(allocator);
+    var next_shape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, param);
+    defer next_shape.deinit(allocator);
 
     const rotmat = m.rotMatY(0.125);
-    for (0..nextShape.items.len) |i| {
-        const vert = m.vec3u{ .arr = nextShape.items[i].pos };
+    for (0..next_shape.items.len) |i| {
+        const vert = m.vec3u{ .arr = next_shape.items[i].pos };
         const newpos = m.vec3u{ .vec = m.matXvec3(rotmat, vert.vec) };
-        nextShape.items[i].pos = newpos.arr;
+        next_shape.items[i].pos = newpos.arr;
     }
 
-    const as_slice: []const Vertex = nextShape.items;
+    var next_next_shape: vertex.TriangleArray = try vertex.Utils.Blocky(allocator);
+    defer next_next_shape.deinit(allocator);
+
+    std.debug.print("+++ vert count {d}\n", .{next_next_shape.items.len});
+
+    const as_slice: []const Vertex = next_next_shape.items;
     const mem_size = @sizeOf(Vertex) * as_slice.len;
 
     const vert_buffering = try gftx.createBuffer(

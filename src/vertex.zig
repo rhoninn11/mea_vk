@@ -51,10 +51,12 @@ pub const PairPoint = struct {
 const PairArray = std.ArrayList(PairPoint);
 pub const TriangleArray = std.ArrayList(Vertex);
 
-// pub const hmm: []const Vertex = &.{
-//     Vertex{.pos = .{0, 0, 0}, .color = .{1, 0, 1}},
-//     Vertex{.pos = .{1, 1, 0}, .color = .{1, 0, 1}},
-// };
+const quad: []const Vertex = &.{
+    Vertex{ .pos = .{ 1, 0, -1 }, .color = .{ 1, 0, 0 } },
+    Vertex{ .pos = .{ -1, 0, -1 }, .color = .{ 0, 0, 0 } },
+    Vertex{ .pos = .{ 1, 0, 1 }, .color = .{ 1, 1, 0 } },
+    Vertex{ .pos = .{ -1, 0, 1 }, .color = .{ 0, 1, 0 } },
+};
 
 pub const RingParams = struct {
     len: u8,
@@ -80,6 +82,44 @@ pub const Utils = struct {
 
         ringPairs(pair_arr.items, param);
         return try triangulateSegments(alloc, pair_arr.items);
+    }
+
+    pub fn Blocky(alloc: Allocator) !TriangleArray {
+        var lid = try alloc.alloc(Vertex, 6);
+        defer alloc.free(lid);
+        var face = try alloc.alloc(Vertex, 6);
+        defer alloc.free(face);
+        var triangles: TriangleArray = try .initCapacity(alloc, 30);
+        errdefer triangles.deinit(alloc);
+
+        const pos_offs = [_]u8{ 0, 1, 2, 2, 1, 3 };
+        for (0.., pos_offs) |i, ti| {
+            lid[i] = quad[ti];
+            lid[i].color = .{ 1, 1, 0 };
+        }
+        try triangles.appendSlice(alloc, lid);
+
+        const rotX = m.rotMatX(0.25);
+        for (0.., pos_offs) |i, ti| {
+            face[i] = quad[ti];
+            face[i].color = .{ if (ti < 2) 0 else 1, 1, 0 };
+            const _pos: m.vec3u = .{ .arr = face[i].pos };
+            const rotated = m.matXvec3(rotX, _pos.vec);
+            const pos_: m.vec3u = .{ .vec = rotated + m.vec3{ 0, -1, -1 } };
+            face[i].pos = pos_.arr;
+        }
+        try triangles.appendSlice(alloc, face);
+
+        const rotY = m.rotMatY(0.25);
+        for (0..3) |_| {
+            for (0..6) |jj| {
+                const _pos: m.vec3u = .{ .arr = face[jj].pos };
+                const pos_: m.vec3u = .{ .vec = m.matXvec3(rotY, _pos.vec) };
+                face[jj].pos = pos_.arr;
+            }
+            try triangles.appendSlice(alloc, face);
+        }
+        return triangles;
     }
 
     fn ringPairs(pair_points: []PairPoint, param: RingParams) void {

@@ -384,3 +384,21 @@ pub fn rotMatY(part: f32) mat3 {
         z_,
     };
 }
+
+pub fn rotMatX(part: f32) mat3 {
+    const y: vec3 = .{ 0, 1, 0 };
+    const z: vec3 = .{ 0, 0, 1 };
+
+    const radians = part * std.math.tau;
+
+    const sin = std.math.sin(radians);
+    const cos = std.math.cos(radians);
+
+    const z_ = splat3d(cos) * z + splat3d(sin) * y;
+    const y_ = -splat3d(sin) * z + splat3d(cos) * y;
+    return .{
+        .{ 1, 0, 0 },
+        y_,
+        z_,
+    };
+}
