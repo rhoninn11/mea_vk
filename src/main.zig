@@ -231,7 +231,7 @@ fn deeper(access: EasyAcces) !void {
     defer storage_dset.deinit(allocator);
 
     const spacing = 0.1;
-    const size = 0.04;
+    const size = 0.025;
     var m_img = try proto.serdesLoad(allocator);
     defer m_img.deinit(allocator);
     try prefils.storagePrefil(storage_dset, grid, spacing);

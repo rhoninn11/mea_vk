@@ -8,7 +8,7 @@ pub const MatPack = extern struct {
 pub const GroupData = extern struct {
     // ||| added uniform, storage and texture
     osc_scale: [2]f32 = undefined,
-    scale_2d: [2]f32 = undefined,
+    scale: [2]f32 = undefined,
     not_used_4d_0: [4]f32 = undefined,
     termoral: [4]f32 = undefined,
     not_used_4d_1: [4]f32 = undefined,

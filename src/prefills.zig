@@ -15,7 +15,7 @@ pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s:
     _ = scale_osc;
 
     as_group_data.*.osc_scale = .{ 0.1, 0.1 };
-    as_group_data.*.scale_2d = .{ size, size };
+    as_group_data.*.scale = .{ size, size };
     as_group_data.*.termoral = .{ total_s, 0, 1, 2 };
     as_group_data.*.matrices = try addons.paramatricVariation(
         1,

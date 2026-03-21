@@ -102,7 +102,8 @@ pub const Utils = struct {
         const rotX = m.rotMatX(0.25);
         for (0.., pos_offs) |i, ti| {
             face[i] = quad[ti];
-            face[i].color = .{ if (ti < 2) 0 else 1, 1, 0 };
+            const u: f32 = if (ti < 2) 0 else 1;
+            face[i].color = .{ u, 1, 0 };
             const _pos: m.vec3u = .{ .arr = face[i].pos };
             const rotated = m.matXvec3(rotX, _pos.vec);
             const pos_: m.vec3u = .{ .vec = rotated + m.vec3{ 0, -1, -1 } };

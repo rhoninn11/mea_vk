@@ -12,7 +12,7 @@ struct MatPack {
 // whole data has is 16 x f32
 layout(set = 0, binding = 0) uniform GroupData{
     vec2 osc_scale; 
-    vec2 scale_2d;
+    vec2 scale;
     vec4 not_used_4d_0;
     vec4 temporal;
     vec4 not_used_4d_2;
@@ -43,9 +43,15 @@ layout(location = 2) out vec2 v_depth_shading;
 void main() {
     Instance m_inst = _storage.per_instance[gl_InstanceIndex];
     MatPack ems = _group.matrices;
+    float gate = m_inst.depth_control.x;
+    float h = m_inst.depth_control.y;
 
     vec3 pose_on_surface = m_inst.offset_4d.xyz;
-    vec3 prescaled_pos = a_pos * vec3(_group.scale_2d.x);
+    vec3 prescaled_pos = a_pos * vec3(_group.scale.x);
+    
+    if (gate > 0.5) {
+        prescaled_pos.y *= h * 10; 
+    }
 
     float phase_offset = m_inst.other_offsets.x;
     float spread_offset = m_inst.other_offsets.y;
@@ -56,8 +62,6 @@ void main() {
     float depth_osc = sin(_group.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
     float float_anim = depth_osc + gl_InstanceIndex*0.0001; // to combat depth flickering
 
-    float gate = m_inst.depth_control.x;
-    float h = m_inst.depth_control.y;
     float_anim = gate*h*2 + (1-gate)*float_anim;
 
     vec3 base = prescaled_pos + pose_on_surface + vec3(0, float_anim, 0);
