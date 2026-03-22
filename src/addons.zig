@@ -24,6 +24,9 @@ pub const DescriptorPrep = struct {
     _d_set_layout: ?vk.DescriptorSetLayout = null,
     _d_pool: ?vk.DescriptorPool = null,
 
+    set_binding: u32,
+    set_type: vk.DescriptorType,
+
     pub fn init(
         alloc: Allocator,
         gc: *const gftx.GraphicsContext,
@@ -36,6 +39,8 @@ pub const DescriptorPrep = struct {
 
         var self: Self = .{
             .gc = gc,
+            .set_binding = with.set_binding,
+            .set_type = using.usage.descriptor_type,
         };
 
         //dynamic arrays alloc
@@ -47,9 +52,9 @@ pub const DescriptorPrep = struct {
 
         //binding layout
         const _bind = vk.DescriptorSetLayoutBinding{
-            .binding = with.location, // w sensie, że lokacja 0?
+            .binding = self.set_binding, // w sensie, że lokacja 0?
             .descriptor_count = 1,
-            .descriptor_type = using.usage.descriptor_type,
+            .descriptor_type = self.set_type,
             .p_immutable_samplers = null, // for textures ?
             .stage_flags = using.shader_stage,
         };
@@ -88,7 +93,7 @@ pub const DescriptorPrep = struct {
 
         // allocate from pool
         const p_size: []const vk.DescriptorPoolSize = &.{.{
-            .type = using.usage.descriptor_type,
+            .type = self.set_type,
             .descriptor_count = len_u32,
         }};
 
@@ -115,7 +120,7 @@ pub const DescriptorPrep = struct {
         // var hmm: std.ArrayList(vk.WriteDescriptorSet) = .empty;
 
         for (0..len) |i| {
-            if (using.usage.descriptor_type == .combined_image_sampler) {
+            if (self.set_type == .combined_image_sampler) {
                 const img_info = vk.DescriptorImageInfo{
                     .image_layout = .shader_read_only_optimal,
                     .image_view = img.?.vk_img_view.?,
@@ -124,9 +129,9 @@ pub const DescriptorPrep = struct {
                 const write_image_dsc_set = vk.WriteDescriptorSet{
                     .s_type = .write_descriptor_set,
                     .dst_set = self.d_set_arr.items[i],
-                    .dst_binding = with.location,
+                    .dst_binding = with.set_binding,
                     .dst_array_element = 0,
-                    .descriptor_type = using.usage.descriptor_type,
+                    .descriptor_type = self.set_type,
                     .descriptor_count = 1,
                     .p_buffer_info = &.{},
                     .p_image_info = @ptrCast(&img_info),
@@ -142,7 +147,7 @@ pub const DescriptorPrep = struct {
                 const write_buffer_dsc_set = vk.WriteDescriptorSet{
                     .s_type = .write_descriptor_set,
                     .dst_set = self.d_set_arr.items[i],
-                    .dst_binding = with.location,
+                    .dst_binding = with.set_binding,
                     .dst_array_element = 0,
                     .descriptor_type = using.usage.descriptor_type,
                     .descriptor_count = 1,
@@ -155,6 +160,26 @@ pub const DescriptorPrep = struct {
         }
 
         return self;
+    }
+
+    fn updateTexture(self: *Self, idx: usize, img: gftx.RGBImage) void {
+        const img_info = vk.DescriptorImageInfo{
+            .image_layout = .shader_read_only_optimal,
+            .image_view = img.?.vk_img_view.?,
+            .sampler = img.?.vk_sampler.?,
+        };
+        const write_image_dsc_set = vk.WriteDescriptorSet{
+            .s_type = .write_descriptor_set,
+            .dst_set = self.d_set_arr.items[idx],
+            .dst_binding = self.set_binding,
+            .dst_array_element = 0,
+            .descriptor_type = self.set_type,
+            .descriptor_count = 1,
+            .p_buffer_info = &.{},
+            .p_image_info = @ptrCast(&img_info),
+            .p_texel_buffer_view = &.{},
+        };
+        self.gc.dev.updateDescriptorSets(1, @ptrCast(&write_image_dsc_set), 0, null);
     }
 
     pub fn deinit(self: *Self, alloc: Allocator) void {

@@ -51,6 +51,7 @@ pub const PairPoint = struct {
 const PairArray = std.ArrayList(PairPoint);
 pub const TriangleArray = std.ArrayList(Vertex);
 
+const tri_loops = [_]u8{ 0, 1, 2, 2, 1, 3 };
 const quad: []const Vertex = &.{
     Vertex{ .pos = .{ 1, 0, -1 }, .color = .{ 1, 0, 0 } },
     Vertex{ .pos = .{ -1, 0, -1 }, .color = .{ 0, 0, 0 } },
@@ -73,6 +74,17 @@ pub const RingParams = struct {
 };
 
 pub const Utils = struct {
+    pub const Math = struct {
+        pub fn rotate(mat: m.mat3, tris: *TriangleArray) void {
+            const len = tris.items.len;
+            for (0..len) |i| {
+                const vert = m.vec3u{ .arr = tris.items[i].pos };
+                const newpos = m.vec3u{ .vec = m.matXvec3(mat, vert.vec) };
+                tris.items[i].pos = newpos.arr;
+            }
+        }
+    };
+
     pub fn Ring(alloc: Allocator, param: RingParams) !TriangleArray {
         const vert_num: usize = @as(usize, param.len) * 2;
 
@@ -85,22 +97,43 @@ pub const Utils = struct {
     }
 
     pub fn Blocky(alloc: Allocator) !TriangleArray {
-        var lid = try alloc.alloc(Vertex, 6);
-        defer alloc.free(lid);
-        var face = try alloc.alloc(Vertex, 6);
-        defer alloc.free(face);
         var triangles: TriangleArray = try .initCapacity(alloc, 30);
         errdefer triangles.deinit(alloc);
 
-        const pos_offs = [_]u8{ 0, 1, 2, 2, 1, 3 };
-        for (0.., pos_offs) |i, ti| {
+        var lid: [6]Vertex = undefined;
+
+        for (0.., tri_loops) |i, ti| {
             lid[i] = quad[ti];
             lid[i].color = .{ 1, 1, 0 };
         }
-        try triangles.appendSlice(alloc, lid);
+        try triangles.appendSlice(alloc, lid[0..]);
+        try addSides(alloc, &triangles);
+        return triangles;
+    }
 
+    pub fn Ringy(alloc: Allocator) !TriangleArray {
+        const unit: f32 = @sqrt(2.0);
+
+        const hmm = RingParams{
+            .len = 5,
+            .flat = true,
+            .outer_r = unit,
+            .inner_r = unit * 0.5,
+        };
+
+        var ring_tris = try Ring(alloc, hmm);
+        for (0..ring_tris.items.len) |i| ring_tris.items[i].color[0] = 1;
+        const rotmat = m.rotMatY(0.125);
+
+        Math.rotate(rotmat, &ring_tris);
+        try addSides(alloc, &ring_tris);
+        return ring_tris;
+    }
+
+    fn addSides(alloc: Allocator, tris: *TriangleArray) !void {
         const rotX = m.rotMatX(0.25);
-        for (0.., pos_offs) |i, ti| {
+        var face: [6]Vertex = undefined;
+        for (0.., tri_loops) |i, ti| {
             face[i] = quad[ti];
             const u: f32 = if (ti < 2) 0 else 1;
             face[i].color = .{ u, 1, 0 };
@@ -109,7 +142,7 @@ pub const Utils = struct {
             const pos_: m.vec3u = .{ .vec = rotated + m.vec3{ 0, -1, -1 } };
             face[i].pos = pos_.arr;
         }
-        try triangles.appendSlice(alloc, face);
+        try tris.appendSlice(alloc, face[0..]);
 
         const rotY = m.rotMatY(0.25);
         for (0..3) |_| {
@@ -118,9 +151,8 @@ pub const Utils = struct {
                 const pos_: m.vec3u = .{ .vec = m.matXvec3(rotY, _pos.vec) };
                 face[jj].pos = pos_.arr;
             }
-            try triangles.appendSlice(alloc, face);
+            try tris.appendSlice(alloc, face[0..]);
         }
-        return triangles;
     }
 
     fn ringPairs(pair_points: []PairPoint, param: RingParams) void {

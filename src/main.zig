@@ -210,7 +210,7 @@ fn deeper(access: EasyAcces) !void {
         swapchain_len,
         gftx.baked.uniform_frag_vert,
         .{
-            .location = 0,
+            .set_binding = 0,
             .size = @sizeOf(sht.GroupData),
         },
         null,
@@ -223,7 +223,7 @@ fn deeper(access: EasyAcces) !void {
         swapchain_len,
         gftx.baked.storage_frag_vert,
         .{
-            .location = 0,
+            .set_binding = 0,
             .size = @sizeOf(sht.PerInstance) * @as(u32, grid.total),
         },
         null,
@@ -244,7 +244,7 @@ fn deeper(access: EasyAcces) !void {
         swapchain_len,
         gftx.baked.texture_frag,
         .{
-            .location = 0,
+            .set_binding = 0,
             .size = @as(u32, @intCast(image.dvk_size)),
         },
         image,
@@ -291,22 +291,18 @@ fn deeper(access: EasyAcces) !void {
 
     param.len = 5;
     param.flat = true;
-    var next_shape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, param);
+    var next_shape: vertex.TriangleArray = try vertex.Utils.Ringy(allocator);
     defer next_shape.deinit(allocator);
 
     const rotmat = m.rotMatY(0.125);
-    for (0..next_shape.items.len) |i| {
-        const vert = m.vec3u{ .arr = next_shape.items[i].pos };
-        const newpos = m.vec3u{ .vec = m.matXvec3(rotmat, vert.vec) };
-        next_shape.items[i].pos = newpos.arr;
-    }
+    vertex.Utils.Math.rotate(rotmat, &next_shape);
 
     var next_next_shape: vertex.TriangleArray = try vertex.Utils.Blocky(allocator);
     defer next_next_shape.deinit(allocator);
 
     std.debug.print("+++ vert count {d}\n", .{next_next_shape.items.len});
 
-    const as_slice: []const Vertex = next_next_shape.items;
+    const as_slice: []const Vertex = next_shape.items;
     const mem_size = @sizeOf(Vertex) * as_slice.len;
 
     const vert_buffering = try gftx.createBuffer(

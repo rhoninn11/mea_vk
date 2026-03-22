@@ -688,7 +688,7 @@ pub const baked = struct {
     };
 
     pub const UniformInfo = struct {
-        location: u32,
+        set_binding: u32,
         size: u32,
     };
 
