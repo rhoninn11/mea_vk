@@ -129,6 +129,10 @@ pub const LookingGlass = struct {
         const y = i / @as(usize, @intCast(self.size.w));
         std.debug.assert(y < self.size.h);
 
+        return pixvalXY(self, x, y);
+    }
+
+    pub fn pixvalXY(self: *LookingGlass, x: usize, y: usize) u16 {
         const img_x = @as(usize, @intCast(self.pos[0])) + x;
         const img_y = @as(usize, @intCast(self.pos[1])) + y;
 
@@ -142,6 +146,7 @@ pub const LookingGlass = struct {
 
         return elo.hdr;
     }
+
     const U16max: f32 = 1 << 16;
     pub fn updateStorage(self: *LookingGlass, storage_dset: addon.DescriptorPrep) !void {
         const total = self.size.total;

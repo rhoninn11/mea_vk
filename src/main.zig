@@ -231,7 +231,7 @@ fn deeper(access: EasyAcces) !void {
     defer storage_dset.deinit(allocator);
 
     const spacing = 0.1;
-    const size = 0.025;
+    const size = 0.04;
     var m_img = try proto.serdesLoad(allocator);
     defer m_img.deinit(allocator);
     try prefils.storagePrefil(storage_dset, grid, spacing);
@@ -294,8 +294,8 @@ fn deeper(access: EasyAcces) !void {
     var next_shape: vertex.TriangleArray = try vertex.Utils.Ringy(allocator);
     defer next_shape.deinit(allocator);
 
-    const rotmat = m.rotMatY(0.125);
-    vertex.Utils.Math.rotate(rotmat, &next_shape);
+    // const rotmat = m.rotMatY(0.125);
+    // vertex.Utils.Math.rotate(rotmat, &next_shape);
 
     var next_next_shape: vertex.TriangleArray = try vertex.Utils.Blocky(allocator);
     defer next_next_shape.deinit(allocator);
