@@ -3,6 +3,7 @@ const std = @import("std");
 const glfw = @import("third_party/glfw.zig");
 const vk = @import("third_party/vk.zig");
 const sht = @import("shaders/types.zig");
+const shu = @import("shaders/utils.zig");
 const gftx = @import("graphics_context.zig");
 
 const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
@@ -170,7 +171,8 @@ fn playerPos(p: *t.Player) m.vec3 {
 }
 
 fn deeper(access: EasyAcces) !void {
-    const grid = sht.GridSize.g64;
+    // const grid = sht.GridSize.g64;
+    const grid = shu.xyGrid(128, 32);
     const deeper_allocator = std.heap.page_allocator;
     var img = try proto.serdesLoad(deeper_allocator);
     defer img.deinit(deeper_allocator);
@@ -232,8 +234,6 @@ fn deeper(access: EasyAcces) !void {
 
     const spacing = 0.1;
     const size = 0.04;
-    var m_img = try proto.serdesLoad(allocator);
-    defer m_img.deinit(allocator);
     try prefils.storagePrefil(storage_dset, grid, spacing);
 
     var image = try imgs.vulkanTexture(cmd_ctx.gc, cmd_ctx.pool);

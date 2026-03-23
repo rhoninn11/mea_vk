@@ -27,6 +27,42 @@ pub const DescriptorPrep = struct {
     set_binding: u32,
     set_type: vk.DescriptorType,
 
+    fn dsetLayout(
+        devk: vk.DeviceProxy,
+        binding: u32,
+        set_type: vk.DescriptorType,
+        sh_stage_flags: vk.ShaderStageFlags,
+        arr_size: ?u32,
+    ) !vk.DescriptorSetLayout {
+        const bindles: bool = false;
+        const _bind = vk.DescriptorSetLayoutBinding{
+            .binding = binding,
+            .descriptor_count = arr_size orelse 1,
+            .descriptor_type = set_type,
+            .p_immutable_samplers = null, // for textures ?
+            .stage_flags = sh_stage_flags,
+        };
+        const binding_flgs: vk.DescriptorBindingFlags = .{
+            .partially_bound_bit = true,
+            .variable_descriptor_count_bit = true,
+            .update_after_bind_bit = true,
+        };
+        const flags_info: vk.DescriptorSetLayoutBindingFlagsCreateInfo = .{
+            .p_binding_flags = @ptrCast(&binding_flgs),
+            .binding_count = 1,
+        };
+
+        const cdsli: vk.DescriptorSetLayoutCreateInfo = .{
+            .p_bindings = @ptrCast(&_bind),
+            .binding_count = 1,
+            .p_next = if (bindles) &flags_info else null,
+        };
+
+        return devk.createDescriptorSetLayout(&cdsli, null);
+    }
+    inline fn uinty(val: usize) u32 {
+        return @as(u32, @intCast(val));
+    }
     pub fn init(
         alloc: Allocator,
         gc: *const gftx.GraphicsContext,
@@ -50,34 +86,12 @@ pub const DescriptorPrep = struct {
         try self.buff_arr.resize(alloc, len);
         try self.d_set_arr.resize(alloc, len);
 
-        //binding layout
-        const _bind = vk.DescriptorSetLayoutBinding{
-            .binding = self.set_binding, // w sensie, że lokacja 0?
-            .descriptor_count = 1,
-            .descriptor_type = self.set_type,
-            .p_immutable_samplers = null, // for textures ?
-            .stage_flags = using.shader_stage,
-        };
-        const binding_flgs: vk.DescriptorBindingFlags = .{
-            .partially_bound_bit = true,
-            .variable_descriptor_count_bit = true,
-            .update_after_bind_bit = true,
-        };
-        const flags_info: vk.DescriptorSetLayoutBindingFlagsCreateInfo = .{
-            .p_binding_flags = @ptrCast(&binding_flgs),
-            .binding_count = 1,
-        };
-        _ = flags_info;
-        // it should be extended with flags optionaly
         // https://claude.ai/chat/59de4b64-073d-448f-8e03-a216c526e921
 
-        const cdsli: vk.DescriptorSetLayoutCreateInfo = .{
-            .p_bindings = @ptrCast(&_bind),
-            .binding_count = 1,
-            .p_next = null,
-        };
-
-        self._d_set_layout = try devk.createDescriptorSetLayout(&cdsli, null);
+        //binding layout
+        self._d_set_layout = try Self.dsetLayout(devk, //
+            self.set_binding, self.set_type, //
+            using.shader_stage, 1);
 
         // duplicate
         for (0..len) |i| {
@@ -121,30 +135,14 @@ pub const DescriptorPrep = struct {
 
         for (0..len) |i| {
             if (self.set_type == .combined_image_sampler) {
-                const img_info = vk.DescriptorImageInfo{
-                    .image_layout = .shader_read_only_optimal,
-                    .image_view = img.?.vk_img_view.?,
-                    .sampler = img.?.vk_sampler.?,
-                };
-                const write_image_dsc_set = vk.WriteDescriptorSet{
-                    .s_type = .write_descriptor_set,
-                    .dst_set = self.d_set_arr.items[i],
-                    .dst_binding = with.set_binding,
-                    .dst_array_element = 0,
-                    .descriptor_type = self.set_type,
-                    .descriptor_count = 1,
-                    .p_buffer_info = &.{},
-                    .p_image_info = @ptrCast(&img_info),
-                    .p_texel_buffer_view = &.{},
-                };
-                self.gc.dev.updateDescriptorSets(1, @ptrCast(&write_image_dsc_set), 0, null);
+                self.updateTexture(i, img.?);
             } else {
                 const buf_info = vk.DescriptorBufferInfo{
                     .buffer = self.buff_arr.items[i].?.dvk_bfr,
                     .range = with.size,
                     .offset = 0,
                 };
-                const write_buffer_dsc_set = vk.WriteDescriptorSet{
+                const write_ops: []const vk.WriteDescriptorSet = &.{vk.WriteDescriptorSet{
                     .s_type = .write_descriptor_set,
                     .dst_set = self.d_set_arr.items[i],
                     .dst_binding = with.set_binding,
@@ -154,8 +152,8 @@ pub const DescriptorPrep = struct {
                     .p_buffer_info = @ptrCast(&buf_info),
                     .p_image_info = &.{},
                     .p_texel_buffer_view = &.{},
-                };
-                self.gc.dev.updateDescriptorSets(1, @ptrCast(&write_buffer_dsc_set), 0, null);
+                }};
+                self.gc.dev.updateDescriptorSets(uinty(write_ops.len), write_ops.ptr, 0, null);
             }
         }
 
@@ -165,11 +163,10 @@ pub const DescriptorPrep = struct {
     fn updateTexture(self: *Self, idx: usize, img: gftx.RGBImage) void {
         const img_info = vk.DescriptorImageInfo{
             .image_layout = .shader_read_only_optimal,
-            .image_view = img.?.vk_img_view.?,
-            .sampler = img.?.vk_sampler.?,
+            .image_view = img.vk_img_view.?,
+            .sampler = img.vk_sampler.?,
         };
         const write_image_dsc_set = vk.WriteDescriptorSet{
-            .s_type = .write_descriptor_set,
             .dst_set = self.d_set_arr.items[idx],
             .dst_binding = self.set_binding,
             .dst_array_element = 0,
@@ -206,8 +203,8 @@ pub const DescriptorPrep = struct {
 pub const Gridor = struct {
     pub fn gridMiddle(grid: *const sht.GridSize) m.vec3 {
         std.debug.print("grid is: {} {}\n", .{ grid.h, grid.w });
-        const x_mid = @as(f32, @floatFromInt(grid.h - 1)) * 0.5;
-        const z_mid = @as(f32, @floatFromInt(grid.w - 1)) * 0.5;
+        const x_mid = @as(f32, @floatFromInt(grid.w - 1)) * 0.5;
+        const z_mid = @as(f32, @floatFromInt(grid.h - 1)) * 0.5;
         return .{ x_mid, 0, z_mid };
     }
 
@@ -221,7 +218,7 @@ pub const Gridor = struct {
         return .{
             @as(f32, @floatFromInt(@mod(i, grid.w))),
             0,
-            @as(f32, @floatFromInt(i / grid.h)),
+            @as(f32, @floatFromInt(i / grid.w)),
         };
     }
 };

@@ -41,21 +41,28 @@ const uHdr = extern union {
     hdr: u16,
 };
 
+inline fn floaty(usz: usize) f32 {
+    return @as(f32, @floatFromInt(usz));
+}
+
 pub fn spawHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     var pixels = try alloc.alloc(u8, g.total * @sizeOf(u16));
+    const fy: f32 = 1;
+    const fx: f32 = 3;
     for (0..g.h) |y| {
-        const phaseval_y = @as(f32, @floatFromInt(y)) / (std.math.tau * 1);
-        const sinval_y = @sin(phaseval_y);
-        const fitting_y = ((sinval_y + 1) * 0.5 * ((1 << 16) - 3) + 1);
+        const y_phase = floaty(y) / 16; // give him some samples per cycle
+        const y_sin = @sin(y_phase * std.math.tau * fy);
+        const y_ufit = ((y_sin + 1) * 0.5 * ((1 << 16) - 3) + 1);
 
         for (0..g.w) |xx| {
-            const phaseval_x = @as(f32, @floatFromInt(xx)) / (std.math.tau * 1);
-            const sinval_x = @sin(phaseval_x);
-            const fitting_x = ((sinval_x + 1) * 0.5 * ((1 << 16) - 3) + 1);
-            const combined = fitting_x * 0.5 + fitting_y * 0.5;
+            const x_phase = floaty(xx) / 16;
+            const x_sin = @sin(x_phase * std.math.tau * fx);
+            const x_ufit = ((x_sin + 1) * 0.5 * ((1 << 16) - 3) + 1);
+
+            const combined = x_ufit * 0.5 + y_ufit * 0.5;
+            const hdrval: uHdr = .{ .hdr = @as(u16, @intFromFloat(combined)) };
 
             const gdx = shu.gridI(g, xx, y);
-            const hdrval: uHdr = .{ .hdr = @as(u16, @intFromFloat(combined)) };
             pixels[gdx * 2] = hdrval.byte[0];
             pixels[gdx * 2 + 1] = hdrval.byte[1];
         }

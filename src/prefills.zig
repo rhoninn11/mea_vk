@@ -55,13 +55,20 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: sht.GridSize, spacing: 
     const wave_scale = 1.5;
     var scratchpad = try local_a.alloc(sht.PerInstance, instance_num);
     for (storage_dset.buff_arr.items) |possible_buffer| {
+        var to_show: bool = true;
         for (0..instance_num) |i| {
             const i_f: f32 = @floatFromInt(i);
 
             // const y_d = (middle_alt[m.Z] - y_f) / middle_alt[m.Z];
             const g_idx = addons.Gridor.gridIdx(&grid, i);
+            if (g_idx[m.Z] > 0) {
+                to_show = false;
+            }
 
             const delt = ((middle - g_idx) / middle) * m.splat3d(6 * wave_scale);
+            if (to_show) {
+                std.debug.print("{} {} {} {}\n", .{ i_f, g_idx, middle, delt });
+            }
             const dist = std.math.sqrt(delt[m.X] * delt[m.X] + delt[m.Z] * delt[m.Z]);
 
             var fresh_one: sht.PerInstance = undefined;
