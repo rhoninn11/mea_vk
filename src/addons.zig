@@ -35,6 +35,7 @@ pub const DescriptorPrep = struct {
         arr_size: ?u32,
     ) !vk.DescriptorSetLayout {
         const bindles: bool = false;
+
         const _bind = vk.DescriptorSetLayoutBinding{
             .binding = binding,
             .descriptor_count = arr_size orelse 1,
@@ -226,10 +227,12 @@ pub const Gridor = struct {
 // ------------------------------------------------
 
 const MatPack = sht.MatPack;
-pub fn paramatricVariation(scale: f32, pos: m.vec3, targ: m.vec3) !MatPack {
-    const persp_window = m.mat_persp(1, 0.75, std.math.pi / 2.0, 0.1, 20);
-    const ortho_window = m.mat_ortho(scale, -scale, scale, -scale, 20, -20);
-    _ = ortho_window;
+pub fn paramatricVariation(pos: m.vec3, targ: m.vec3) !MatPack {
+    const choice: bool = false;
+    const persp_window = switch (choice) {
+        true => m.mat_persp(1, 0.75, std.math.pi / 2.0, 0.1, 20),
+        false => m.mat_ortho_uniformed(10),
+    };
 
     const ref_up: m.vec3 = .{ 0, 1, 0 };
     const trans = m.mat_translate(-pos);

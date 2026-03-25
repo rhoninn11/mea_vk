@@ -241,8 +241,12 @@ pub fn mat_ortho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32)
     };
 }
 
-pub fn mat_ortho_default() mat4u {
+pub inline fn mat_ortho_default() mat4u {
     const scale = 1;
+    return mat_ortho_uniformed(scale);
+}
+
+pub inline fn mat_ortho_uniformed(scale: f32) mat4u {
     // from up down depends, y axis flip in vulkan
     return mat_ortho(scale, -scale, scale, -scale, scale, -scale);
 }

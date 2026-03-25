@@ -14,11 +14,11 @@ pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s:
     const scale_osc = std.math.sin(total_s) * 0.2 + 2;
     _ = scale_osc;
 
+    // TODO: could fill both projections
     as_group_data.*.osc_scale = .{ 0.1, 0.1 };
     as_group_data.*.scale = .{ size, size };
     as_group_data.*.termoral = .{ total_s, 0, 1, 2 };
     as_group_data.*.matrices = try addons.paramatricVariation(
-        1,
         center,
         .{ 0, 0, 0 },
     );
@@ -52,23 +52,28 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: sht.GridSize, spacing: 
     }
 
     const middle = addons.Gridor.gridMiddle(&grid);
+    const min_dim = if (middle[0] > middle[2]) middle[2] else middle[0];
+
     const wave_scale = 1.5;
     var scratchpad = try local_a.alloc(sht.PerInstance, instance_num);
     for (storage_dset.buff_arr.items) |possible_buffer| {
-        var to_show: bool = true;
+        const storage = possible_buffer.?;
+        const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
+        defer @memcpy(mapping, scratchpad);
+
         for (0..instance_num) |i| {
             const i_f: f32 = @floatFromInt(i);
 
             // const y_d = (middle_alt[m.Z] - y_f) / middle_alt[m.Z];
             const g_idx = addons.Gridor.gridIdx(&grid, i);
-            if (g_idx[m.Z] > 0) {
-                to_show = false;
-            }
+            // if (g_idx[m.Z] > 0) {
+            //     to_show = false;
+            // }
 
-            const delt = ((middle - g_idx) / middle) * m.splat3d(6 * wave_scale);
-            if (to_show) {
-                std.debug.print("{} {} {} {}\n", .{ i_f, g_idx, middle, delt });
-            }
+            const delt = ((middle - g_idx) / m.splat3d(min_dim)) * m.splat3d(6 * wave_scale);
+            // if (to_show) {
+            //     std.debug.print("{} {} {} {}\n", .{ i_f, g_idx, middle, delt });
+            // }
             const dist = std.math.sqrt(delt[m.X] * delt[m.X] + delt[m.Z] * delt[m.Z]);
 
             var fresh_one: sht.PerInstance = undefined;
@@ -87,9 +92,6 @@ pub fn storagePrefil(storage_dset: DescriptorPrep, grid: sht.GridSize, spacing: 
 
             scratchpad[i] = fresh_one;
         }
-        const storage = possible_buffer.?;
-        const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
-        @memcpy(mapping, scratchpad);
 
         std.debug.print("\n", .{});
     }

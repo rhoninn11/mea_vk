@@ -239,6 +239,7 @@ pub const PoolInCtx = struct {
 
 pub const GraphicsContext = struct {
     pub const CommandBuffer = vk.CommandBufferProxy;
+    const Self = @This();
 
     allocator: Allocator,
 
@@ -341,27 +342,43 @@ pub const GraphicsContext = struct {
         self.graphics_queue = Queue.init(self.dev, candidate.queues.graphics_family);
         self.present_queue = Queue.init(self.dev, candidate.queues.present_family);
 
-        // ---- explore area -----
+        try self.memoryPropsWithExp();
+        try self.propsExplore();
 
-        self.mem_props = self.instance.getPhysicalDeviceMemoryProperties(self.pdev);
-        const mem_t_count = self.mem_props.memory_type_count;
-        const mem_h_count = self.mem_props.memory_heap_count;
+        return self;
+    }
+
+    fn memoryPropsWithExp(self: *Self) !void {
+        const props = self.instance.getPhysicalDeviceMemoryProperties(self.pdev);
+        self.mem_props = props;
+        // ---- explore area -----
+        const mem_t_count = props.memory_type_count;
+        const mem_h_count = props.memory_heap_count;
         std.debug.print("+++ instance info:\n", .{});
         std.debug.print("+++ memory types ({d}), memory heaps ({d})\n", .{ mem_t_count, mem_h_count });
 
-        const default_memory_flags = vk.MemoryPropertyFlags{
+        const my_first_memory_flags = vk.MemoryPropertyFlags{
             .host_visible_bit = true,
             .host_coherent_bit = true,
         };
-        const usage = vk.BufferUsageFlags{
+        const my_first_usage = vk.BufferUsageFlags{
             .transfer_src_bit = true,
         };
-        const test_buffer = try createBuffer(&self, default_memory_flags, usage, 4);
+        const test_buffer = try createBuffer(self, my_first_memory_flags, my_first_usage, 4);
         std.debug.print("+++ test buffor created\n", .{});
-        self.dev.destroyBuffer(test_buffer.dvk_bfr, null);
-        self.dev.freeMemory(test_buffer.dvk_mem, null);
+        test_buffer.deinit(self);
+    }
 
-        return self;
+    fn propsExplore(self: *const Self) !void {
+        const props = self.instance.getPhysicalDeviceProperties(self.pdev);
+
+        const ubo_alingment = props.limits.min_uniform_buffer_offset_alignment;
+        const sbo_alignment = props.limits.min_storage_buffer_offset_alignment;
+
+        std.debug.print("--------------- \n", .{});
+        std.debug.print("+++ essunia ubo every {}bytes\n", .{ubo_alingment});
+        std.debug.print("+++ essunia sbo every {}bytes \n", .{sbo_alignment});
+        std.debug.print("--------------- \n", .{});
     }
 
     pub fn deinit(self: GraphicsContext) void {
