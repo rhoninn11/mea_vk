@@ -210,7 +210,7 @@ fn deeper(access: EasyAcces) !void {
         allocator,
         gc,
         swapchain_len,
-        gftx.baked.uniform_frag_vert,
+        gftx.baked.uniformd_frag_vert,
         .{
             .set_binding = 0,
             .size = @sizeOf(sht.GroupData),
@@ -606,6 +606,8 @@ fn createCommandBuffers(
                 shader_realted.texture_dset,
             };
 
+            const dynamic_off: []const u32 = &.{0};
+
             gc.dev.cmdBindDescriptorSets(
                 cmdbuf,
                 .graphics,
@@ -613,8 +615,8 @@ fn createCommandBuffers(
                 0,
                 @intCast(hmm.len),
                 hmm.ptr,
-                0,
-                null,
+                dynamic_off.len,
+                dynamic_off.ptr,
             );
             gc.dev.cmdDraw(
                 cmdbuf,

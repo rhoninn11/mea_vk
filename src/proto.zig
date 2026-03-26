@@ -48,7 +48,7 @@ inline fn floaty(usz: usize) f32 {
 pub fn spawHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     var pixels = try alloc.alloc(u8, g.total * @sizeOf(u16));
     const fy: f32 = 1;
-    const fx: f32 = 3;
+    const fx: f32 = 1;
     for (0..g.h) |y| {
         const y_phase = floaty(y) / 16; // give him some samples per cycle
         const y_sin = @sin(y_phase * std.math.tau * fy);

@@ -665,9 +665,17 @@ pub const baked = struct {
         .usage_flag = usage_as_uniform,
         .descriptor_type = .uniform_buffer,
     };
+    const uniform_dynamic_usage: UsageType = .{
+        .usage_flag = usage_as_uniform,
+        .descriptor_type = .uniform_buffer_dynamic,
+    };
     const storage_usage: UsageType = .{
         .usage_flag = usage_as_storage,
         .descriptor_type = .storage_buffer,
+    };
+    const storage_dynamic_usage: UsageType = .{
+        .usage_flag = usage_as_storage,
+        .descriptor_type = .storage_buffer_dynamic,
     };
     const texture_usage: UsageType = .{ // also for bindles
         // buffer in descriptor is not used by texture btw.
@@ -693,8 +701,18 @@ pub const baked = struct {
         .memory_property = memory_cpu,
         .shader_stage = shader_both,
     };
+    pub const uniformd_frag_vert = DSetInit{
+        .usage = uniform_dynamic_usage,
+        .memory_property = memory_cpu,
+        .shader_stage = shader_both,
+    };
     pub const storage_frag_vert = DSetInit{
         .usage = storage_usage,
+        .memory_property = memory_cpu,
+        .shader_stage = shader_both,
+    };
+    pub const storaged_frag_vert = DSetInit{
+        .usage = storage_dynamic_usage,
         .memory_property = memory_cpu,
         .shader_stage = shader_both,
     };
