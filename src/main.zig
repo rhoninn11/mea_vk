@@ -49,9 +49,6 @@ fn Buffering(Base: type) type {
     };
 }
 
-var glass_input: motion.HoldsAxis = undefined;
-var plr_input: motion.HoldsAxis = undefined;
-
 const KeyAction = motion.KeyAction;
 fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
     _ = scancode;
@@ -70,8 +67,12 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
         }
     }
 
-    glass_input.passKeyAction(&x);
-    plr_input.passKeyAction(&x);
+    if (x.down(shader_reset.key)) {
+        shader_reset_trigger.activated = true;
+    }
+
+    glass_input.reciveInput(&x);
+    plr_input.reciveInput(&x);
 }
 
 fn windowExtext(window: *c_long) vk.Extent2D {
@@ -97,6 +98,11 @@ const BasicErrs = error{
 };
 
 const proto = @import("proto.zig");
+
+var glass_input: motion.HoldsAxis = undefined;
+var plr_input: motion.HoldsAxis = undefined;
+var shader_reset: motion.KeyAction = .{ .key = glfw.KeyQ, .action = glfw.KeyDown };
+var shader_reset_trigger: motion.Trigger = .{};
 
 pub fn main() !void {
     glass_input = try motion.HoldsAxis.init(&.{
@@ -365,8 +371,8 @@ fn deeper(access: EasyAcces) !void {
         const img_idx = swapchain.image_index;
         const win_size = windowExtext(window);
         // input_continue();
-        glass_input.input_continue();
-        plr_input.input_continue();
+        glass_input.update();
+        plr_input.update();
 
         // Don't present or resize swapchain while the window is minimized
         perf_stats.messure();
@@ -394,7 +400,10 @@ fn deeper(access: EasyAcces) !void {
         utils.PlayerUpdate(&plr, &plr_input, td);
 
         if (glass.update(&glass_input)) {
-            try glass.updateStorage(storage_dset);
+            try glass.updateStorage(storage_dset, true);
+        }
+        if (shader_reset_trigger.fired()) {
+            try glass.updateStorage(storage_dset, false);
         }
 
         //minimalized

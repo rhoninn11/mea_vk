@@ -155,7 +155,7 @@ pub const LookingGlass = struct {
     }
 
     const U16max: f32 = 1 << 16;
-    pub fn updateStorage(self: *LookingGlass, storage_dset: addon.DescriptorPrep) !void {
+    pub fn updateStorage(self: *LookingGlass, storage_dset: addon.DescriptorPrep, enabled: bool) !void {
         const total = self.size.total;
         const lim_num = 8096;
         std.debug.assert(total <= lim_num);
@@ -181,7 +181,7 @@ pub const LookingGlass = struct {
                 const tresholded = @max(0, ((level - trim_factor) / (1 - trim_factor)));
                 if (h > max_val) max_val = h;
                 if (h < min_val) min_val = h;
-                prev_one.depth_ctrl[0] = 1;
+                prev_one.depth_ctrl[0] = if (enabled) 1 else 0;
                 prev_one.depth_ctrl[1] = tresholded;
 
                 // prev_one.depth_ctrl[1] = 0;
