@@ -115,22 +115,17 @@ pub const DepthImage = struct {
     }
 };
 
-pub fn vulkanTexture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gm.RGBImage {
-    const cmd_ctx = gm.PoolInCtx{
-        .gc = gc,
-        .pool = with_pool,
-    };
-
-    var test_img = try gm.RGBImage.init(gc, 64, 64);
+pub fn vulkanTexture(pic: *const gm.PoolInCtx) !gm.RGBImage {
+    var test_img = try gm.RGBImage.init(pic.gc, 64, 64);
 
     const buff_size = test_img.dvk_size;
     const src_buff = try gm.createBuffer(
-        gc,
+        pic.gc,
         gm.baked.memory_cpu,
         gm.baked.usage_src,
         buff_size,
     );
-    defer src_buff.deinit(gc);
+    defer src_buff.deinit(pic.gc);
 
     const src_data = m_rgb_tex;
     const src_mapping: [*]u8 = @ptrCast(@alignCast(src_buff.mapping));
@@ -139,7 +134,7 @@ pub fn vulkanTexture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gm.
     const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
     const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
 
-    try imgLTrans(&cmd_ctx, .{
+    try imgLTrans(pic, .{
         .old_layout = .undefined,
         .new_layout = dst_layout,
         .image = test_img.dvk_img,
@@ -147,13 +142,13 @@ pub fn vulkanTexture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gm.
         .flags = gm.baked.undefined_to_transfered,
     });
 
-    try bfr2ImgCopy(&cmd_ctx, .{
+    try bfr2ImgCopy(pic, .{
         .buffer = src_buff.dvk_bfr,
         .image = test_img.dvk_img,
         .layout = dst_layout,
     });
 
-    try imgLTrans(&cmd_ctx, .{
+    try imgLTrans(pic, .{
         .old_layout = dst_layout,
         .new_layout = shader_read_layout,
         .image = test_img.dvk_img,
@@ -161,8 +156,8 @@ pub fn vulkanTexture(gc: *const GraphicsContext, with_pool: vk.CommandPool) !gm.
         .flags = gm.baked.transfered_to_fragment_readed,
     });
 
-    try test_img.createImageView(gc);
-    try test_img.createSampler(gc);
+    try test_img.createImageView(pic.gc);
+    try test_img.createSampler(pic.gc);
 
     return test_img;
 }

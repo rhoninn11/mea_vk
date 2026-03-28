@@ -227,9 +227,8 @@ pub const Gridor = struct {
 // ------------------------------------------------
 
 const MatPack = sht.MatPack;
-pub fn paramatricVariation(pos: m.vec3, targ: m.vec3) !MatPack {
-    const choice: bool = true;
-    const persp_window = switch (choice) {
+pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: bool) !MatPack {
+    const persp_window = switch (persp) {
         true => m.mat_persp(1, 0.75, std.math.pi / 2.0, 0.1, 20),
         false => m.mat_ortho_uniformed(10),
     };

@@ -71,6 +71,10 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
         shader_reset_trigger.activated = true;
     }
 
+    if (x.down(uniform_shift.key)) {
+        uniform_shift_trigger.activated = true;
+    }
+
     glass_input.reciveInput(&x);
     plr_input.reciveInput(&x);
 }
@@ -103,6 +107,9 @@ var glass_input: motion.HoldsAxis = undefined;
 var plr_input: motion.HoldsAxis = undefined;
 var shader_reset: motion.KeyAction = .{ .key = glfw.KeyQ, .action = glfw.KeyDown };
 var shader_reset_trigger: motion.Trigger = .{};
+var uniform_shift: motion.KeyAction = .{ .key = glfw.KeyE, .action = glfw.KeyDown };
+var uniform_shift_trigger: motion.Trigger = .{};
+var alt_projection: bool = false;
 
 pub fn main() !void {
     glass_input = try motion.HoldsAxis.init(&.{
@@ -205,7 +212,7 @@ fn deeper(access: EasyAcces) !void {
     }, null);
     defer gc.dev.destroyCommandPool(pool_cmd, null);
 
-    const cmd_ctx = gftx.PoolInCtx{
+    const pic = gftx.PoolInCtx{
         .gc = gc,
         .pool = pool_cmd,
     };
@@ -219,7 +226,7 @@ fn deeper(access: EasyAcces) !void {
         gftx.baked.uniformd_frag_vert,
         .{
             .set_binding = 0,
-            .size = @sizeOf(sht.GroupData),
+            .size = @sizeOf(sht.GroupData) * 2,
         },
         null,
     );
@@ -242,7 +249,7 @@ fn deeper(access: EasyAcces) !void {
     const size = 0.04;
     try prefils.storagePrefil(storage_dset, grid, spacing);
 
-    var image = try imgs.vulkanTexture(cmd_ctx.gc, cmd_ctx.pool);
+    var image = try imgs.vulkanTexture(&pic);
     defer image.deinit();
     var texture_dset = try addons.DescriptorPrep.init(
         allocator,
@@ -320,7 +327,7 @@ fn deeper(access: EasyAcces) !void {
     defer vert_buffering.deinit(gc);
 
     const buffer = vert_buffering.dvk_bfr;
-    try uploadVertices(gc, pool_cmd, buffer, as_slice);
+    try uploadVertices(&pic, buffer, as_slice);
 
     const draw_instanced_attempt: ShaderRelated = .{
         .instance_count = grid.total,
@@ -330,10 +337,11 @@ fn deeper(access: EasyAcces) !void {
         .texture_dset = texture_dset.d_set_arr.items[0],
     };
 
-    var cmdbufs = try createCommandBuffers(
-        gc,
-        pool_cmd,
-        allocator,
+    const cmdbufs = try allocator.alloc(vk.CommandBuffer, framebuffers.len);
+    defer allocator.free(cmdbufs);
+    try recordCommandBuffers(
+        &pic,
+        cmdbufs,
         buffer,
         swapchain.extent,
         render_pass,
@@ -341,8 +349,9 @@ fn deeper(access: EasyAcces) !void {
         framebuffers,
         as_slice,
         &draw_instanced_attempt,
+        alt_projection,
     );
-    defer destroyCommandBuffers(gc, pool_cmd, allocator, cmdbufs);
+    defer destroyCommandBuffers(&pic, cmdbufs);
 
     _ = glfw.setKeyCallback(window, key_callback);
 
@@ -405,6 +414,22 @@ fn deeper(access: EasyAcces) !void {
         if (shader_reset_trigger.fired()) {
             try glass.updateStorage(storage_dset, false);
         }
+        if (uniform_shift_trigger.fired()) {
+            alt_projection = !alt_projection;
+            destroyCommandBuffers(&pic, cmdbufs);
+            try recordCommandBuffers(
+                &pic,
+                cmdbufs,
+                buffer,
+                swapchain.extent,
+                render_pass,
+                pipeline,
+                framebuffers,
+                as_slice,
+                &draw_instanced_attempt,
+                alt_projection,
+            );
+        }
 
         //minimalized
         if (!addons.visible(win_size)) {
@@ -438,11 +463,10 @@ fn deeper(access: EasyAcces) !void {
             );
 
             std.debug.print("+++ c\n", .{});
-            destroyCommandBuffers(gc, pool_cmd, allocator, cmdbufs);
-            cmdbufs = try createCommandBuffers(
-                gc,
-                pool_cmd,
-                allocator,
+            destroyCommandBuffers(&pic, cmdbufs);
+            try recordCommandBuffers(
+                &pic,
+                cmdbufs,
                 buffer,
                 swapchain.extent,
                 render_pass,
@@ -450,6 +474,7 @@ fn deeper(access: EasyAcces) !void {
                 framebuffers,
                 as_slice,
                 &draw_instanced_attempt,
+                alt_projection,
             );
         }
         state = swapchain.present(cmdbuf) catch |err| switch (err) {
@@ -465,22 +490,22 @@ fn deeper(access: EasyAcces) !void {
 }
 
 // przykład przesyłania danych na gpu, też jest potrze kolejka dla tej operacji
-fn uploadVertices(gc: *const GraphicsContext, pool: vk.CommandPool, buffer: vk.Buffer, vert_slice: []const Vertex) !void {
+fn uploadVertices(pic: *const gftx.PoolInCtx, buffer: vk.Buffer, vert_slice: []const Vertex) !void {
     const buff_size = BufforingVert.memSize(vert_slice);
 
     var buffer_ = try gftx.createBuffer(
-        gc, //
+        pic.gc, //
         gftx.baked.memory_cpu,
         gftx.baked.usage_src,
         buff_size,
     );
-    defer buffer_.deinit(gc);
+    defer buffer_.deinit(pic.gc);
 
     const gpu_vertices: [*]Vertex = @ptrCast(@alignCast(buffer_.mapping));
     //does one @memcpy operation is more effective then #storagePrefill
     @memcpy(gpu_vertices, vert_slice);
 
-    try copyBuffer(gc, pool, buffer, buffer_.dvk_bfr, buff_size);
+    try copyBuffer(pic.gc, pic.pool, buffer, buffer_.dvk_bfr, buff_size);
 }
 
 // Z tego co rozumiem to... nie tego jeszcze nie rozumiem xD
@@ -525,7 +550,7 @@ fn copyBuffer(gc: *const GraphicsContext, pool: vk.CommandPool, dst: vk.Buffer, 
 }
 
 const ShaderRelated = struct {
-    instance_count: u32 = 1,
+    instance_count: u32,
     pipeline_layout: vk.PipelineLayout,
     uniform_dsets: std.ArrayList(vk.DescriptorSet),
     storage_dsets: std.ArrayList(vk.DescriptorSet),
@@ -533,27 +558,25 @@ const ShaderRelated = struct {
 };
 
 // a tutaj odbywa się taka jakby prekompilacja renderingu ?...
-fn createCommandBuffers(
-    gc: *const GraphicsContext,
-    pool: vk.CommandPool,
-    allocator: Allocator,
+fn recordCommandBuffers(
+    pic: *const gftx.PoolInCtx,
+    cmdbufs: []vk.CommandBuffer,
     buffer: vk.Buffer,
     extent: vk.Extent2D,
     render_pass: vk.RenderPass,
     pipeline: vk.Pipeline,
-    framebuffers: []vk.Framebuffer,
+    framebuffers: []const vk.Framebuffer,
     ojejoje: []const Vertex,
     shader_realted: *const ShaderRelated,
-) ![]vk.CommandBuffer {
-    const cmdbufs = try allocator.alloc(vk.CommandBuffer, framebuffers.len);
-    errdefer allocator.free(cmdbufs);
-
+    alt: bool,
+) !void {
+    const gc = pic.gc;
     try gc.dev.allocateCommandBuffers(&.{
-        .command_pool = pool,
+        .command_pool = pic.pool,
         .level = .primary,
         .command_buffer_count = @intCast(cmdbufs.len),
     }, cmdbufs.ptr);
-    errdefer gc.dev.freeCommandBuffers(pool, @intCast(cmdbufs.len), cmdbufs.ptr);
+    errdefer gc.dev.freeCommandBuffers(pic.pool, @intCast(cmdbufs.len), cmdbufs.ptr);
 
     const clear_arr: []const vk.ClearValue = &.{
         vk.ClearValue{
@@ -572,8 +595,11 @@ fn createCommandBuffers(
         .min_depth = 0,
         .max_depth = 1,
     };
-
     const scissor = vk.Rect2D{
+        .offset = .{ .x = 0, .y = 0 },
+        .extent = extent,
+    };
+    const render_area = vk.Rect2D{
         .offset = .{ .x = 0, .y = 0 },
         .extent = extent,
     };
@@ -583,12 +609,6 @@ fn createCommandBuffers(
 
         gc.dev.cmdSetViewport(cmdbuf, 0, 1, @ptrCast(&viewport));
         gc.dev.cmdSetScissor(cmdbuf, 0, 1, @ptrCast(&scissor));
-
-        // This needs to be a separate definition - see https://github.com/ziglang/zig/issues/7627.
-        const render_area = vk.Rect2D{
-            .offset = .{ .x = 0, .y = 0 },
-            .extent = extent,
-        };
 
         // oscilationg ring
         gc.dev.cmdBeginRenderPass(cmdbuf, &.{
@@ -609,22 +629,23 @@ fn createCommandBuffers(
                 @ptrCast(&buffer),
                 &offset,
             );
-            const hmm: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
+            const all_sets: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
                 shader_realted.uniform_dsets.items[i],
                 shader_realted.storage_dsets.items[i],
                 shader_realted.texture_dset,
             };
 
-            const dynamic_off: []const u32 = &.{0};
+            const uniform_offset: u32 = if (alt) @sizeOf(sht.GroupData) else 0;
+            const dynamic_off: []const u32 = &.{uniform_offset};
 
             gc.dev.cmdBindDescriptorSets(
                 cmdbuf,
                 .graphics,
                 shader_realted.pipeline_layout,
                 0,
-                @intCast(hmm.len),
-                hmm.ptr,
-                dynamic_off.len,
+                @intCast(all_sets.len),
+                all_sets.ptr,
+                @intCast(dynamic_off.len),
                 dynamic_off.ptr,
             );
             gc.dev.cmdDraw(
@@ -640,13 +661,10 @@ fn createCommandBuffers(
         }
         try gc.dev.endCommandBuffer(cmdbuf);
     }
-
-    return cmdbufs;
 }
 
-fn destroyCommandBuffers(gc: *const GraphicsContext, pool: vk.CommandPool, allocator: Allocator, cmdbufs: []vk.CommandBuffer) void {
-    gc.dev.freeCommandBuffers(pool, @truncate(cmdbufs.len), cmdbufs.ptr);
-    allocator.free(cmdbufs);
+fn destroyCommandBuffers(pic: *const gftx.PoolInCtx, cmdbufs: []vk.CommandBuffer) void {
+    pic.gc.dev.freeCommandBuffers(pic.pool, @truncate(cmdbufs.len), cmdbufs.ptr);
 }
 
 fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_pass: vk.RenderPass, swapchain: Swapchain) ![]vk.Framebuffer {

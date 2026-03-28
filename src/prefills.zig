@@ -7,21 +7,24 @@ const proto = @import("proto.zig");
 
 const DescriptorPrep = addons.DescriptorPrep;
 
-pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s: f32, center: m.vec3, size: f32) !void {
-    const this_frame_uniform = uniform_dset.buff_arr.items[frame_idx].?;
-    const as_group_data: *sht.GroupData = @ptrCast(@alignCast(this_frame_uniform.mapping.?));
+pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s: f32, camera: m.vec3, size: f32) !void {
+    var stack_mem: [4096]u8 = undefined;
+    var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
+    const local_a = provider.allocator();
 
-    const scale_osc = std.math.sin(total_s) * 0.2 + 2;
-    _ = scale_osc;
+    const uniform = uniform_dset.buff_arr.items[frame_idx].?;
+    const mapping: [*]sht.GroupData = @ptrCast(@alignCast(uniform.mapping.?));
+    var scratchpad = try local_a.alloc(sht.GroupData, 2);
+    defer @memcpy(mapping, scratchpad);
 
-    // TODO: could fill both projections
-    as_group_data.*.osc_scale = .{ 0.1, 0.1 };
-    as_group_data.*.scale = .{ size, size };
-    as_group_data.*.termoral = .{ total_s, 0, 1, 2 };
-    as_group_data.*.matrices = try addons.paramatricVariation(
-        center,
-        .{ 0, 0, 0 },
-    );
+    for (0..scratchpad.len) |i| {
+        scratchpad[i].osc_scale = .{ 0.1, 0.1 };
+        scratchpad[i].scale = .{ size, size };
+        scratchpad[i].termoral = .{ total_s, 0, 1, 2 };
+    }
+    const target: m.vec3 = .{ 0, 0, 0 };
+    scratchpad[0].matrices = try addons.paramatricVariation(camera, target, true);
+    scratchpad[1].matrices = try addons.paramatricVariation(camera, target, false);
 }
 
 pub fn storagePrefil(storage_dset: DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {
