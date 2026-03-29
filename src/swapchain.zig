@@ -5,6 +5,7 @@ const gftx = @import("graphics_context.zig");
 const GraphicsContext = gftx.GraphicsContext;
 
 const Allocator = std.mem.Allocator;
+const m = @import("math.zig");
 
 pub const Swapchain = struct {
     pub const PresentState = enum {
@@ -180,17 +181,41 @@ pub const Swapchain = struct {
         try current.waitForFence(self.gc);
         try self.gc.dev.resetFences(1, @ptrCast(&current.frame_fence));
 
+        const wait_info: vk.SemaphoreSubmitInfo = .{
+            .device_index = 0,
+            .semaphore = current.image_acquired,
+            .stage_mask = .{ .color_attachment_output_bit = true },
+            .value = 0,
+        };
+        const signal_info: vk.SemaphoreSubmitInfo = .{
+            .device_index = 0,
+            .semaphore = current.render_finished,
+            .stage_mask = .{ .all_commands_bit = true },
+            .value = 0,
+        };
+
+        const cmd_info = vk.CommandBufferSubmitInfo{
+            .command_buffer = cmdbuf,
+            .device_mask = 0,
+        };
+
+        const render_submits: []const vk.SubmitInfo2 = &.{vk.SubmitInfo2{
+            .wait_semaphore_info_count = 1,
+            .p_wait_semaphore_infos = @ptrCast(&wait_info),
+            .signal_semaphore_info_count = 1,
+            .p_signal_semaphore_infos = @ptrCast(&signal_info),
+            .command_buffer_info_count = 1,
+            .p_command_buffer_infos = @ptrCast(&cmd_info),
+        }};
+
         // Step 2: Submit the command buffer
-        const wait_stage = [_]vk.PipelineStageFlags{.{ .top_of_pipe_bit = true }};
-        try self.gc.dev.queueSubmit(self.gc.graphics_queue.handle, 1, &[_]vk.SubmitInfo{.{
-            .wait_semaphore_count = 1,
-            .p_wait_semaphores = @ptrCast(&current.image_acquired),
-            .p_wait_dst_stage_mask = &wait_stage,
-            .command_buffer_count = 1,
-            .p_command_buffers = @ptrCast(&cmdbuf),
-            .signal_semaphore_count = 1,
-            .p_signal_semaphores = @ptrCast(&current.render_finished),
-        }}, current.frame_fence);
+        try self.gc.dev.queueSubmit2KHR(
+            self.gc.graphics_queue.handle,
+            m.uinty(render_submits.len),
+            render_submits.ptr,
+            current.frame_fence,
+        );
+        // https://claude.ai/chat/398d5ba8-7355-4093-9a37-3361c5f3c45e
 
         // Step 3: Present the current frame
         _ = try self.gc.dev.queuePresentKHR(self.gc.present_queue.handle, &.{

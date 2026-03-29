@@ -406,3 +406,7 @@ pub fn rotMatX(part: f32) mat3 {
         z_,
     };
 }
+
+pub inline fn uinty(val: usize) u32 {
+    return @as(u32, @intCast(val));
+}

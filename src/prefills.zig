@@ -3,11 +3,16 @@ const std = @import("std");
 const m = @import("math.zig");
 const sht = @import("shaders/types.zig");
 const addons = @import("addons.zig");
+const dsets = @import("dsets.zig");
 const proto = @import("proto.zig");
 
-const DescriptorPrep = addons.DescriptorPrep;
-
-pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s: f32, camera: m.vec3, size: f32) !void {
+pub fn perFrameUniformFill(
+    uniform_dset: dsets.DescriptorPrep,
+    frame_idx: u8,
+    total_s: f32,
+    camera: m.vec3,
+    size: f32,
+) !void {
     var stack_mem: [4096]u8 = undefined;
     var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
     const local_a = provider.allocator();
@@ -27,7 +32,7 @@ pub fn perFrameUniformFill(uniform_dset: DescriptorPrep, frame_idx: u8, total_s:
     scratchpad[1].matrices = try addons.paramatricVariation(camera, target, false);
 }
 
-pub fn storagePrefil(storage_dset: DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {
+pub fn storagePrefil(storage_dset: dsets.DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {
     const instance_num = grid.total;
     const lim_num = 8096;
     std.debug.assert(instance_num <= lim_num);

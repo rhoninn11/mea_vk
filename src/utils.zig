@@ -68,17 +68,14 @@ pub const PerfStats = struct {
 
         const scale: f32 = messure_interval / update_interval;
         if (delta > update_interval_i) {
-            std.debug.print("\x1B[A\x1B[2K", .{});
+            // std.debug.print("\x1B[A\x1B[2K", .{});
             var fps: f32 = @floatFromInt(s.frame_num);
             fps *= scale;
 
             if (fps > 9000) {
-                // A first i didnt expected speed like 12k fps are even possible while window rendering
-                // but switching to linux from windows enabled such an improvement xD
-
-                std.debug.print("+++ omg is over 9000 {d}\n", .{fps});
+                // std.debug.print("+++ omg is over 9000 {d}\n", .{fps});
             }
-            std.debug.print("+++ rendering hit {d} fps\n", .{fps});
+            // std.debug.print("+++ rendering hit {d} fps\n", .{fps});
             s.t0 += update_interval_i;
             s.frame_num = 0;
         }

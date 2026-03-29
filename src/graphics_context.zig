@@ -15,6 +15,7 @@ const required_layer_names = [_][*:0]const u8{"VK_LAYER_KHRONOS_validation"};
 const required_device_extensions = [_][*:0]const u8{
     vk.extensions.khr_swapchain.name,
     vk.extensions.khr_multiview.name,
+    vk.extensions.khr_synchronization_2.name,
 };
 
 /// There are 3 levels of bindings in vulkan-zig:
@@ -143,44 +144,47 @@ const imgs = @import("imgs.zig");
 pub const DepthImage = imgs.DepthImage;
 
 pub const OneShotCommanded = struct {
-    gc: *const GraphicsContext,
-    cbfr: vk.CommandBuffer,
+    pic: *const PoolInCtx,
+    cmds: vk.CommandBuffer,
 
     pub fn resolve(self: *const OneShotCommanded) !void {
-        const devk = self.gc.dev;
-        try devk.endCommandBuffer(self.cbfr);
+        const vkdev = self.pic.gc.dev;
+        const vkq = self.pic.gc.graphics_queue.handle;
+
+        try vkdev.endCommandBuffer(self.cmds);
 
         const submmit_info: vk.SubmitInfo = .{
             .command_buffer_count = 1,
-            .p_command_buffers = @ptrCast(&self.cbfr),
+            .p_command_buffers = @ptrCast(&self.cmds),
         };
-        const vkq = self.gc.graphics_queue.handle;
-        try devk.queueSubmit(vkq, 1, @ptrCast(&submmit_info), .null_handle);
-        try devk.queueWaitIdle(vkq);
+        try vkdev.queueSubmit(vkq, 1, @ptrCast(&submmit_info), .null_handle);
+        try vkdev.queueWaitIdle(vkq);
+
+        vkdev.freeCommandBuffers(self.pic.pool, 1, @ptrCast(&self.cmds));
     }
-    pub fn init(cmd_ctx: *const PoolInCtx) !OneShotCommanded {
-        const devk = cmd_ctx.gc.dev;
-        var cbfr: vk.CommandBuffer = undefined;
+    pub fn init(pic: *const PoolInCtx) !OneShotCommanded {
+        const vkd = pic.gc.dev;
+        var cmds: vk.CommandBuffer = undefined;
 
         const cb_alloc_info: vk.CommandBufferAllocateInfo = .{
             .s_type = .command_buffer_allocate_info,
-            .command_pool = cmd_ctx.pool,
+            .command_pool = pic.pool,
             .level = .primary,
             .command_buffer_count = 1,
         };
-        try devk.allocateCommandBuffers(
+        try vkd.allocateCommandBuffers(
             &cb_alloc_info,
-            @ptrCast(&cbfr),
+            @ptrCast(&cmds),
         );
 
         const begin_info: vk.CommandBufferBeginInfo = .{
             .flags = .{ .one_time_submit_bit = true },
         };
-        try devk.beginCommandBuffer(cbfr, &begin_info);
+        try vkd.beginCommandBuffer(cmds, &begin_info);
 
         return .{
-            .gc = cmd_ctx.gc,
-            .cbfr = cbfr,
+            .pic = pic,
+            .cmds = cmds,
         };
     }
 };
@@ -722,9 +726,10 @@ pub const baked = struct {
         .shader_stage = shader_frag_only,
     };
 
-    pub const UniformInfo = struct {
+    pub const BindingInfo = struct {
         set_binding: u32,
         size: u32,
+        num: u32 = 1,
     };
 
     const depth_flag: vk.ImageAspectFlags = .{

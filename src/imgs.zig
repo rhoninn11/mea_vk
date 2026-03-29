@@ -183,7 +183,7 @@ pub fn imgLTrans(cmd_ctx: *const gm.PoolInCtx, cfg: t.ImgLTranConfig) !void {
         },
     };
     devk.cmdPipelineBarrier(
-        one_shot.cbfr,
+        one_shot.cmds,
         cfg.flags.stages.src,
         cfg.flags.stages.dst,
         .{},
@@ -205,10 +205,6 @@ const BfrToImgCpyCfg = struct {
 };
 
 pub fn bfr2ImgCopy(cmd_ctx: *const gm.PoolInCtx, cfg: BfrToImgCpyCfg) !void {
-    const devk = cmd_ctx.gc.dev;
-
-    const one_shot = try gm.OneShotCommanded.init(cmd_ctx);
-
     const bfr_img_cpy: vk.BufferImageCopy = .{
         .buffer_offset = 0,
         .buffer_row_length = 0,
@@ -221,8 +217,10 @@ pub fn bfr2ImgCopy(cmd_ctx: *const gm.PoolInCtx, cfg: BfrToImgCpyCfg) !void {
         .image_subresource = gm.baked.color_bfr2img_sublyr,
         .image_offset = .{ .x = 0, .y = 0, .z = 0 },
     };
-    devk.cmdCopyBufferToImage(
-        one_shot.cbfr,
+
+    const one_shot = try gm.OneShotCommanded.init(cmd_ctx);
+    cmd_ctx.gc.dev.cmdCopyBufferToImage(
+        one_shot.cmds,
         cfg.buffer,
         cfg.image,
         cfg.layout,
