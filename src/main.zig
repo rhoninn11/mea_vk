@@ -344,8 +344,37 @@ fn deeper(access: EasyAcces) !void {
         .texture_dset = texture_dset.d_set_arr.items[0],
     };
 
+    const frame_pools_config: vk.CommandPoolCreateInfo = .{
+        .queue_family_index = gc.graphics_queue.family,
+        .flags = .{
+            .transient_bit = true,
+        },
+    };
+
+    //TODO: shoud be on stack i guess
     const cmdbufs: []vk.CommandBuffer = try allocator.alloc(vk.CommandBuffer, swapchain_len);
     defer allocator.free(cmdbufs);
+    const pools: []vk.CommandPool = try allocator.alloc(vk.CommandPool, swapchain_len);
+    defer allocator.free(pools);
+    const recorders: []gftx.FrameRecorder = try allocator.alloc(gftx.FrameRecorder, swapchain_len);
+    defer allocator.free(recorders);
+
+    var created: u8 = 0;
+    for (0..swapchain_len) |i| {
+        pools[i] = try gc.dev.createCommandPool(&frame_pools_config, null);
+        created += 1;
+    }
+    defer for (0..created) |i| {
+        gc.dev.destroyCommandPool(pools[i], null);
+    };
+
+    for (0..swapchain_len) |i| {
+        recorders[i] = gftx.FrameRecorder{
+            .gc = pic.gc,
+            .pool = pools[i],
+            .cmgs = cmdbufs[i],
+        };
+    }
 
     try recordCommandBuffers(
         &pic,
@@ -558,7 +587,6 @@ fn recordCommandBuffers(
         .level = .primary,
         .command_buffer_count = @intCast(cmdbufs.len),
     }, cmdbufs.ptr);
-    errdefer gc.dev.freeCommandBuffers(pic.pool, @intCast(cmdbufs.len), cmdbufs.ptr);
 
     const clear_arr: []const vk.ClearValue = &.{
         vk.ClearValue{

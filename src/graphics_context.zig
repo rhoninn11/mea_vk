@@ -241,6 +241,12 @@ pub const PoolInCtx = struct {
     pool: vk.CommandPool,
 };
 
+pub const FrameRecorder = struct {
+    gc: *const GraphicsContext,
+    pool: vk.CommandPool,
+    cmgs: vk.CommandBuffer,
+};
+
 pub const GraphicsContext = struct {
     pub const CommandBuffer = vk.CommandBufferProxy;
     const Self = @This();
@@ -296,13 +302,15 @@ pub const GraphicsContext = struct {
                 .engine_version = @bitCast(vk.makeApiVersion(0, 0, 0, 0)),
                 .api_version = @bitCast(vk.API_VERSION_1_2),
             },
+
             .enabled_layer_count = required_layer_names.len,
             .pp_enabled_layer_names = @ptrCast(&required_layer_names),
             .enabled_extension_count = @intCast(extension_names.items.len),
             .pp_enabled_extension_names = extension_names.items.ptr,
             // enumerate_portability_bit_khr to support vulkan in mac os
             // see https://github.com/glfw/glfw/issues/2335
-            .flags = .{ .enumerate_portability_bit_khr = true },
+            .flags = .{ .enumerate_portability_bit_khr = false },
+            // .flags = .{ .enumerate_portability_bit_khr = true }, // for apple
             // should be commented but it just warns so no big deal
         }, null);
 
@@ -427,6 +435,7 @@ fn checkLayerSupport(vkb: *const BaseWrapper, alloc: Allocator) !bool {
         .{ available_layers.len, required_layer_names.len },
     );
 
+    //https://claude.ai/chat/c91e18de-8740-4c55-bcd9-21280657196e
     var result = true;
     for (required_layer_names) |required_layer| {
         for (available_layers) |layer| {
@@ -478,17 +487,33 @@ fn initializeCandidate(instance: Instance, candidate: DeviceCandidate) !vk.Devic
         },
     };
 
-    const queue_count: u32 = if (candidate.queues.graphics_family == candidate.queues.present_family)
-        1
-    else
-        2;
+    const queues_the_same = candidate.queues.graphics_family == candidate.queues.present_family;
+    const queue_count: u32 = if (queues_the_same) 1 else 2;
 
-    return try instance.createDevice(candidate.pdev, &.{
+    var sync2: vk.PhysicalDeviceSynchronization2Features = .{
+        .p_next = null,
+    };
+
+    var features2 = vk.PhysicalDeviceFeatures2{
+        .p_next = @ptrCast(&sync2),
+        .features = undefined,
+    };
+
+    instance.getPhysicalDeviceFeatures2(candidate.pdev, &features2);
+
+    if (sync2.synchronization_2 == .false) {
+        return error.FeatureNotPresent;
+    }
+
+    const dev_create_info: vk.DeviceCreateInfo = .{
         .queue_create_info_count = queue_count,
         .p_queue_create_infos = &qci,
         .enabled_extension_count = required_device_extensions.len,
         .pp_enabled_extension_names = @ptrCast(&required_device_extensions),
-    }, null);
+        .p_next = &sync2,
+    };
+
+    return try instance.createDevice(candidate.pdev, &dev_create_info, null);
 }
 
 const DeviceCandidate = struct {
@@ -502,14 +527,28 @@ const QueueAllocation = struct {
     present_family: u32,
 };
 
-fn debugUtilsMessengerCallback(severity: vk.DebugUtilsMessageSeverityFlagsEXT, msg_type: vk.DebugUtilsMessageTypeFlagsEXT, callback_data: ?*const vk.DebugUtilsMessengerCallbackDataEXT, _: ?*anyopaque) callconv(.c) vk.Bool32 {
-    const severity_str = if (severity.verbose_bit_ext) "verbose" else if (severity.info_bit_ext) "info" else if (severity.warning_bit_ext) "warning" else if (severity.error_bit_ext) "error" else "unknown";
+fn severityTag(sev: vk.DebugUtilsMessageSeverityFlagsEXT) []const u8 {
+    if (sev.verbose_bit_ext) return "\x1b[34m verbose \x1b[0m";
+    if (sev.info_bit_ext) return "\x1b[34m info \x1b[0m";
+    if (sev.warning_bit_ext) return "\x1b[33m warning \x1b[0m";
+    if (sev.error_bit_ext) return "\x1b[31m error \x1b[0m";
+    return "\x1b[34m unknown\x1b[0m";
+}
 
-    const type_str = if (msg_type.general_bit_ext) "general" else if (msg_type.validation_bit_ext) "validation" else if (msg_type.performance_bit_ext) "performance" else if (msg_type.device_address_binding_bit_ext) "device addr" else "unknown";
+fn typeBit(msg_type: vk.DebugUtilsMessageTypeFlagsEXT) []const u8 {
+    if (msg_type.general_bit_ext) return "general";
+    if (msg_type.validation_bit_ext) return "validation";
+    if (msg_type.performance_bit_ext) return "performance";
+    if (msg_type.device_address_binding_bit_ext) return "device addr";
+    return "unknown";
+}
+
+fn debugUtilsMessengerCallback(severity: vk.DebugUtilsMessageSeverityFlagsEXT, msg_type: vk.DebugUtilsMessageTypeFlagsEXT, callback_data: ?*const vk.DebugUtilsMessengerCallbackDataEXT, _: ?*anyopaque) callconv(.c) vk.Bool32 {
+    const severity_str = severityTag(severity);
+    const type_str = typeBit(msg_type);
 
     const message: [*c]const u8 = if (callback_data) |cb_data| cb_data.p_message else "NO MESSAGE!";
     std.debug.print("[{s}][{s}]. Message:\n  {s}\n", .{ severity_str, type_str, message });
-
     return .false;
 }
 
@@ -521,6 +560,7 @@ fn pickPhysicalDevice(
     const pdevs = try instance.enumeratePhysicalDevicesAlloc(allocator);
     defer allocator.free(pdevs);
 
+    std.debug.print("+++ physicale device options: {d}\n", .{pdevs.len});
     for (pdevs) |pdev| {
         if (try checkSuitable(instance, pdev, allocator, surface)) |candidate| {
             return candidate;
@@ -561,18 +601,22 @@ fn checkSuitable(
             mv_props.max_multiview_instance_index,
         });
 
-        var b: vk.PhysicalDeviceDescriptorIndexingFeatures = .{
+        var pds2: vk.PhysicalDeviceSynchronization2FeaturesKHR = .{ .synchronization_2 = .true };
+
+        var pddif: vk.PhysicalDeviceDescriptorIndexingFeatures = .{
             .descriptor_binding_partially_bound = .true,
             .descriptor_binding_variable_descriptor_count = .true,
             .shader_sampled_image_array_non_uniform_indexing = .true,
+            .p_next = &pds2,
         };
 
         var features2: vk.PhysicalDeviceFeatures2 = .{
             .features = undefined,
-            .p_next = &b,
+            .p_next = &pddif,
         };
         instance.getPhysicalDeviceFeatures2(pdev, &features2);
-        const choose_cond = features2.features.sampler_anisotropy == .true;
+        var choose_cond = features2.features.sampler_anisotropy == .true;
+        choose_cond = choose_cond;
         if (!choose_cond) {
             return null;
         }
