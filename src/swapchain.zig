@@ -159,6 +159,7 @@ pub const Swapchain = struct {
     }
 
     pub fn present(self: *Swapchain, cmdbuf: vk.CommandBuffer) !PresentState {
+        const gc = self.gc;
         // Simple method:
         // 1) Acquire next image
         // 2) Wait for and reset fence of the acquired image
@@ -178,8 +179,8 @@ pub const Swapchain = struct {
 
         // Step 1: Make sure the current frame has finished rendering
         const current = self.currentSwapImage();
-        try current.waitForFence(self.gc);
-        try self.gc.dev.resetFences(1, @ptrCast(&current.frame_fence));
+        try current.waitForFence(gc);
+        try current.resetFence(gc);
 
         const wait_info: vk.SemaphoreSubmitInfo = .{
             .device_index = 0,
@@ -243,6 +244,10 @@ pub const Swapchain = struct {
             else => unreachable,
         };
     }
+
+    pub fn currentSignaled(self: *Swapchain) !void {
+        return try self.currentSwapImage().waitForFence(self.gc);
+    }
 };
 
 const SwapImage = struct {
@@ -296,6 +301,10 @@ const SwapImage = struct {
 
     fn waitForFence(self: SwapImage, gc: *const GraphicsContext) !void {
         _ = try gc.dev.waitForFences(1, @ptrCast(&self.frame_fence), .true, std.math.maxInt(u64));
+    }
+
+    fn resetFence(self: SwapImage, gc: *const GraphicsContext) !void {
+        try gc.dev.resetFences(1, @ptrCast(&self.frame_fence));
     }
 };
 

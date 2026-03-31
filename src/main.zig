@@ -454,6 +454,7 @@ fn deeper(access: EasyAcces) !void {
         }
         if (uniform_shift_trigger.fired()) {
             alt_projection = !alt_projection;
+            try swapchain.currentSignaled();
             destroyCommandBuffers(&pic, cmdbufs);
             try recordCommandBuffers(
                 &pic,
