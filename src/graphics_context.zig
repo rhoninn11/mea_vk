@@ -40,6 +40,15 @@ const DeviceWrapper = vk.DeviceWrapper;
 const Instance = vk.InstanceProxy;
 const Device = vk.DeviceProxy;
 
+pub const DrawInfo = struct {
+    instance_count: u32,
+    pipeline: vk.Pipeline,
+    pipeline_layout: vk.PipelineLayout,
+    uniform_dsets: std.ArrayList(vk.DescriptorSet),
+    storage_dsets: std.ArrayList(vk.DescriptorSet),
+    texture_dset: vk.DescriptorSet,
+};
+
 // imgs
 pub const RGBImage = struct {
     const Self = @This();
@@ -242,9 +251,24 @@ pub const PoolInCtx = struct {
 };
 
 pub const FrameRecorder = struct {
-    gc: *const GraphicsContext,
+    gm: *const GraphicsContext,
     pool: vk.CommandPool,
-    cmgs: vk.CommandBuffer,
+    cmds: *vk.CommandBuffer,
+    id: u8,
+
+    pub fn clear(self: *const FrameRecorder, gm: *const GraphicsContext) !void {
+        try gm.dev.resetCommandPool(self.pool, .{});
+    }
+
+    pub fn begin(self: *const FrameRecorder, gm: *const GraphicsContext) !void {
+        const cbai: vk.CommandBufferAllocateInfo = .{
+            .command_pool = self.pool,
+            .level = .primary,
+            .command_buffer_count = 1,
+        };
+
+        try gm.dev.allocateCommandBuffers(&cbai, @ptrCast(self.cmds));
+    }
 };
 
 pub const GraphicsContext = struct {

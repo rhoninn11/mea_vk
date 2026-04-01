@@ -27,6 +27,7 @@ const BufforingVert = Buffering(Vertex);
 const Allocator = std.mem.Allocator;
 
 const motion = @import("motion.zig");
+const frame = @import("frame.zig");
 
 const vert_spv align(@alignOf(u32)) = @embedFile("vertex_shader").*;
 const frag_spv align(@alignOf(u32)) = @embedFile("fragment_shader").*;
@@ -133,7 +134,7 @@ pub fn main() !void {
     }
 
     // czym się różni vk.Rect2D od vk.Extend2D?
-    var resolution_extent = vk.Extent2D{ .width = 800, .height = 600 };
+    var resolution_extent = vk.Extent2D{ .width = 1600, .height = 900 };
     glfw.windowHint(glfw.ClientAPI, glfw.NoAPI);
     const window = try glfw.createWindow(
         @intCast(resolution_extent.width),
@@ -335,7 +336,7 @@ fn deeper(access: EasyAcces) !void {
     const buffer = vert_buffering.dvk_bfr;
     try uploadVertices(&pic, buffer, as_slice);
 
-    const draw_instanced_attempt: DrawInfo = .{
+    const draw_instanced_attempt: gftx.DrawInfo = .{
         .instance_count = grid.total,
         .pipeline = pipeline,
         .pipeline_layout = pipeline_layout,
@@ -351,13 +352,13 @@ fn deeper(access: EasyAcces) !void {
         },
     };
 
-    //TODO: shoud be on stack i guess
-    const cmdbufs: []vk.CommandBuffer = try allocator.alloc(vk.CommandBuffer, swapchain_len);
-    defer allocator.free(cmdbufs);
-    const pools: []vk.CommandPool = try allocator.alloc(vk.CommandPool, swapchain_len);
-    defer allocator.free(pools);
-    const recorders: []gftx.FrameRecorder = try allocator.alloc(gftx.FrameRecorder, swapchain_len);
-    defer allocator.free(recorders);
+    const inflight_slots = 8;
+    std.debug.assert(swapchain_len < inflight_slots);
+    var inflight_stack: [1024]u8 = undefined;
+    var loc_stack: std.heap.FixedBufferAllocator = .init(inflight_stack[0..1024]);
+    const cmdbufs: []vk.CommandBuffer = try loc_stack.allocator().alloc(vk.CommandBuffer, swapchain_len);
+    const pools: []vk.CommandPool = try loc_stack.allocator().alloc(vk.CommandPool, swapchain_len);
+    const recorders: []gftx.FrameRecorder = try loc_stack.allocator().alloc(gftx.FrameRecorder, swapchain_len);
 
     var created: u8 = 0;
     for (0..swapchain_len) |i| {
@@ -370,26 +371,22 @@ fn deeper(access: EasyAcces) !void {
 
     for (0..swapchain_len) |i| {
         recorders[i] = gftx.FrameRecorder{
-            .gc = pic.gc,
+            .id = @intCast(i),
+            .gm = pic.gc,
             .pool = pools[i],
-            .cmgs = cmdbufs[i],
+            .cmds = &cmdbufs[i],
         };
+        try frame.recordCommandBuffers(
+            &recorders[i],
+            buffer,
+            swapchain.extent,
+            render_pass,
+            framebuffers,
+            as_slice,
+            &draw_instanced_attempt,
+            alt_projection,
+        );
     }
-
-    try recordCommandBuffers(
-        &pic,
-        cmdbufs,
-        buffer,
-        swapchain.extent,
-        render_pass,
-        framebuffers,
-        as_slice,
-        &draw_instanced_attempt,
-        alt_projection,
-        0,
-    );
-
-    defer destroyCommandBuffers(&pic, cmdbufs);
 
     _ = glfw.setKeyCallback(window, key_callback);
 
@@ -454,20 +451,6 @@ fn deeper(access: EasyAcces) !void {
         }
         if (uniform_shift_trigger.fired()) {
             alt_projection = !alt_projection;
-            try swapchain.currentSignaled();
-            destroyCommandBuffers(&pic, cmdbufs);
-            try recordCommandBuffers(
-                &pic,
-                cmdbufs,
-                buffer,
-                swapchain.extent,
-                render_pass,
-                framebuffers,
-                as_slice,
-                &draw_instanced_attempt,
-                alt_projection,
-                0,
-            );
         }
 
         //minimalized
@@ -475,6 +458,17 @@ fn deeper(access: EasyAcces) !void {
             glfw.pollEvents();
             continue;
         }
+        try swapchain.currentWaitG();
+        try frame.recordCommandBuffers(
+            &recorders[img_idx],
+            buffer,
+            swapchain.extent,
+            render_pass,
+            framebuffers,
+            as_slice,
+            &draw_instanced_attempt,
+            alt_projection,
+        );
         try prefils.perFrameUniformFill(
             uniform_dset,
             @intCast(img_idx),
@@ -502,19 +496,18 @@ fn deeper(access: EasyAcces) !void {
             );
 
             std.debug.print("+++ c\n", .{});
-            destroyCommandBuffers(&pic, cmdbufs);
-            try recordCommandBuffers(
-                &pic,
-                cmdbufs,
-                buffer,
-                swapchain.extent,
-                render_pass,
-                framebuffers,
-                as_slice,
-                &draw_instanced_attempt,
-                alt_projection,
-                0,
-            );
+            for (recorders) |*recorder| {
+                try frame.recordCommandBuffers(
+                    recorder,
+                    buffer,
+                    swapchain.extent,
+                    render_pass,
+                    framebuffers,
+                    as_slice,
+                    &draw_instanced_attempt,
+                    alt_projection,
+                );
+            }
         }
         state = swapchain.present(cmdbuf) catch |err| switch (err) {
             error.OutOfDateKHR => Swapchain.PresentState.suboptimal,
@@ -557,126 +550,6 @@ fn copyBuffer(pic: *const gftx.PoolInCtx, dst: vk.Buffer, src: vk.Buffer, size: 
     };
     vkdev.cmdCopyBuffer(one_shot.cmds, src, dst, 1, @ptrCast(&region));
     try one_shot.resolve();
-}
-
-const DrawInfo = struct {
-    instance_count: u32,
-    pipeline: vk.Pipeline,
-    pipeline_layout: vk.PipelineLayout,
-    uniform_dsets: std.ArrayList(vk.DescriptorSet),
-    storage_dsets: std.ArrayList(vk.DescriptorSet),
-    texture_dset: vk.DescriptorSet,
-};
-
-// a tutaj odbywa się taka jakby prekompilacja renderingu ?...
-fn recordCommandBuffers(
-    pic: *const gftx.PoolInCtx,
-    cmdbufs: []vk.CommandBuffer,
-    buffer: vk.Buffer,
-    extent: vk.Extent2D,
-    render_pass: vk.RenderPass,
-    framebuffers: []const vk.Framebuffer,
-    ojejoje: []const Vertex,
-    draw: *const DrawInfo,
-    alt: bool,
-    frame: u8,
-) !void {
-    _ = frame;
-    const gc = pic.gc;
-    try gc.dev.allocateCommandBuffers(&.{
-        .command_pool = pic.pool,
-        .level = .primary,
-        .command_buffer_count = @intCast(cmdbufs.len),
-    }, cmdbufs.ptr);
-
-    const clear_arr: []const vk.ClearValue = &.{
-        vk.ClearValue{
-            .color = .{ .float_32 = .{ 0.05, 0, 0, 1 } },
-        },
-        vk.ClearValue{
-            .depth_stencil = .{ .depth = 1.0, .stencil = 0 },
-        },
-    };
-
-    const viewport = vk.Viewport{
-        .x = 0,
-        .y = 0,
-        .width = @floatFromInt(extent.width),
-        .height = @floatFromInt(extent.height),
-        .min_depth = 0,
-        .max_depth = 1,
-    };
-    const scissor = vk.Rect2D{
-        .offset = .{ .x = 0, .y = 0 },
-        .extent = extent,
-    };
-    const render_area = vk.Rect2D{
-        .offset = .{ .x = 0, .y = 0 },
-        .extent = extent,
-    };
-
-    for (cmdbufs, 0..) |cmdbuf, i| {
-        try gc.dev.beginCommandBuffer(cmdbuf, &.{});
-
-        gc.dev.cmdSetViewport(cmdbuf, 0, 1, @ptrCast(&viewport));
-        gc.dev.cmdSetScissor(cmdbuf, 0, 1, @ptrCast(&scissor));
-
-        // oscilationg ring
-        gc.dev.cmdBeginRenderPass(cmdbuf, &.{
-            .render_pass = render_pass,
-            .framebuffer = framebuffers[i],
-            .render_area = render_area,
-            .clear_value_count = m.uinty(clear_arr.len),
-            .p_clear_values = clear_arr.ptr,
-        }, .@"inline");
-        {
-            defer gc.dev.cmdEndRenderPass(cmdbuf);
-            const offset = [_]vk.DeviceSize{0};
-            gc.dev.cmdBindPipeline(cmdbuf, .graphics, draw.pipeline);
-            gc.dev.cmdBindVertexBuffers(
-                cmdbuf,
-                0,
-                1,
-                @ptrCast(&buffer),
-                &offset,
-            );
-            const all_sets: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
-                draw.uniform_dsets.items[i],
-                draw.storage_dsets.items[i],
-                draw.texture_dset,
-            };
-
-            const uniform_offset: u32 = if (alt) @sizeOf(sht.GroupData) else 0;
-            const dynamic_off: []const u32 = &.{uniform_offset};
-
-            gc.dev.cmdBindDescriptorSets(
-                cmdbuf,
-                .graphics,
-                draw.pipeline_layout,
-                0,
-                @intCast(all_sets.len),
-                all_sets.ptr,
-                @intCast(dynamic_off.len),
-                dynamic_off.ptr,
-            );
-            gc.dev.cmdDraw(
-                cmdbuf,
-                @intCast(ojejoje.len),
-                draw.instance_count,
-                0,
-                0,
-            );
-        }
-        try gc.dev.endCommandBuffer(cmdbuf);
-    }
-}
-
-fn destroyCommandBuffers(pic: *const gftx.PoolInCtx, cmdbufs: []vk.CommandBuffer) void {
-    pic.gc.dev.freeCommandBuffers(
-        pic.pool,
-        m.uinty(cmdbufs.len),
-        cmdbufs.ptr,
-    );
 }
 
 fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_pass: vk.RenderPass, swapchain: Swapchain) ![]vk.Framebuffer {
@@ -790,8 +663,6 @@ fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain) !vk.Render
     return try gc.dev.createRenderPass(&render_pass_create_info, null);
 }
 
-// tu mamy długą fuckję, która inicjalizuej pipeline graficzny, czyli co?
-// to tu powinoo się definiować tak jakby cały reder pass?
 fn createPipeline(
     gc: *const GraphicsContext,
     layout: vk.PipelineLayout,
