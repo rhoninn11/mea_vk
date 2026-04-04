@@ -74,6 +74,12 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
     if (x.down(uniform_shift.key)) {
         uniform_shift_trigger.activated = true;
     }
+    if (x.down(slide_l.key)) {
+        slide_l_trig.activated = true;
+    }
+    if (x.down(slide_r.key)) {
+        slide_r_trig.activated = true;
+    }
 
     glass_input.reciveInput(&x);
     plr_input.reciveInput(&x);
@@ -109,7 +115,10 @@ var shader_reset: motion.KeyAction = .{ .key = glfw.KeyQ, .action = glfw.KeyDown
 var shader_reset_trigger: motion.Trigger = .{};
 var uniform_shift: motion.KeyAction = .{ .key = glfw.KeyE, .action = glfw.KeyDown };
 var uniform_shift_trigger: motion.Trigger = .{};
-var alt_projection: bool = false;
+var slide_l: motion.KeyAction = .{ .key = glfw.KeyV, .action = glfw.KeyDown };
+var slide_r: motion.KeyAction = .{ .key = glfw.KeyB, .action = glfw.KeyDown };
+var slide_l_trig: motion.Trigger = .{};
+var slide_r_trig: motion.Trigger = .{};
 
 pub fn main() !void {
     glass_input = try motion.HoldsAxis.init(&.{
@@ -182,6 +191,11 @@ pub fn main() !void {
 fn playerPos(p: *t.Player) m.vec3 {
     return m.orbit_r(p.phi, p.r) + m.vec3{ 0, p.h, 0 };
 }
+
+var frame_state: frame.FrameState = .{
+    .alt_proj = false,
+    .model_idx = 0,
+};
 
 fn deeper(access: EasyAcces) !void {
     // const grid = sht.GridSize.g64;
@@ -303,38 +317,44 @@ fn deeper(access: EasyAcces) !void {
 
     // geometry
     var param = vertex.RingParams.default;
+    var verts: vertex.TriangleArray = try .initCapacity(allocator, 1024);
+    defer verts.deinit(allocator);
 
     param.len = 32;
     param.flat = false;
+    var models: vertex.VertIndex = .{ .offsets = undefined };
     var shape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, param);
-    defer shape.deinit(allocator);
+    try verts.appendSlice(allocator, shape.items);
+    models.register(shape.items);
+    shape.deinit(allocator);
 
     param.len = 5;
     param.flat = true;
-    var next_shape: vertex.TriangleArray = try vertex.Utils.Ringy(allocator);
-    defer next_shape.deinit(allocator);
+    shape = try vertex.Utils.Ringy(allocator);
+    try verts.appendSlice(allocator, shape.items);
+    models.register(shape.items);
+    shape.deinit(allocator);
 
-    // const rotmat = m.rotMatY(0.125);
-    // vertex.Utils.Math.rotate(rotmat, &next_shape);
+    shape = try vertex.Utils.Blocky(allocator);
+    try verts.appendSlice(allocator, shape.items);
+    models.register(shape.items);
+    shape.deinit(allocator);
 
-    var next_next_shape: vertex.TriangleArray = try vertex.Utils.Blocky(allocator);
-    defer next_next_shape.deinit(allocator);
+    std.debug.print("+++ vert count {d}\n", .{verts.items.len});
 
-    std.debug.print("+++ vert count {d}\n", .{next_next_shape.items.len});
-
-    const as_slice: []const Vertex = next_shape.items;
+    const as_slice: []const Vertex = verts.items;
     const mem_size = @sizeOf(Vertex) * as_slice.len;
 
-    const vert_buffering = try gftx.createBuffer(
+    const vert_buffer = try gftx.createBuffer(
         gc,
         gftx.baked.memory_gpu,
         gftx.baked.usage_vert_dst,
         mem_size,
     );
-    defer vert_buffering.deinit(gc);
+    defer vert_buffer.deinit(gc);
+    models.vkBuffer = vert_buffer.dvk_bfr;
 
-    const buffer = vert_buffering.dvk_bfr;
-    try uploadVertices(&pic, buffer, as_slice);
+    try uploadVertices(&pic, models.vkBuffer, as_slice);
 
     const draw_instanced_attempt: gftx.DrawInfo = .{
         .instance_count = grid.total,
@@ -378,13 +398,12 @@ fn deeper(access: EasyAcces) !void {
         };
         try frame.recordCommandBuffers(
             &recorders[i],
-            buffer,
+            &models,
             swapchain.extent,
             render_pass,
             framebuffers,
-            as_slice,
             &draw_instanced_attempt,
-            alt_projection,
+            &frame_state,
         );
     }
 
@@ -450,7 +469,17 @@ fn deeper(access: EasyAcces) !void {
             try glass.updateStorage(storage_dset, false);
         }
         if (uniform_shift_trigger.fired()) {
-            alt_projection = !alt_projection;
+            frame_state.alt_proj = !frame_state.alt_proj;
+        }
+
+        if (slide_r_trig.fired()) {
+            const last = frame_state.model_idx == models.head - 1;
+            frame_state.model_idx = if (last) 0 else frame_state.model_idx + 1;
+        }
+
+        if (slide_l_trig.fired()) {
+            const first = frame_state.model_idx == 0;
+            frame_state.model_idx = if (first) models.head - 1 else frame_state.model_idx - 1;
         }
 
         //minimalized
@@ -461,13 +490,12 @@ fn deeper(access: EasyAcces) !void {
         try swapchain.currentWaitG();
         try frame.recordCommandBuffers(
             &recorders[img_idx],
-            buffer,
+            &models,
             swapchain.extent,
             render_pass,
             framebuffers,
-            as_slice,
             &draw_instanced_attempt,
-            alt_projection,
+            &frame_state,
         );
         try prefils.perFrameUniformFill(
             uniform_dset,
@@ -499,13 +527,12 @@ fn deeper(access: EasyAcces) !void {
             for (recorders) |*recorder| {
                 try frame.recordCommandBuffers(
                     recorder,
-                    buffer,
+                    &models,
                     swapchain.extent,
                     render_pass,
                     framebuffers,
-                    as_slice,
                     &draw_instanced_attempt,
-                    alt_projection,
+                    &frame_state,
                 );
             }
         }

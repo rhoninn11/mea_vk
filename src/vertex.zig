@@ -225,6 +225,21 @@ pub const Utils = struct {
     }
 };
 
+pub const VertIndex = struct {
+    offsets: [4]u32 = .{ 0, 0, 0, 0 },
+    sizes: [4]u32 = .{ 0, 0, 0, 0 },
+    head: u8 = 0,
+    total: u32 = 0,
+    vkBuffer: vk.Buffer = undefined,
+
+    pub fn register(self: *VertIndex, new: []const Vertex) void {
+        self.sizes[self.head] = @intCast(new.len);
+        self.offsets[self.head] = self.total;
+        self.total += @intCast(new.len);
+        self.head += 1;
+    }
+};
+
 pub const VertexAlt1 = struct {
     pos: [3]f32,
 };

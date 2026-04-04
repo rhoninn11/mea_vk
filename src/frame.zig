@@ -3,16 +3,21 @@ const vk = @import("third_party/vk.zig");
 const sht = @import("shaders/types.zig");
 const vtx = @import("vertex.zig");
 const m = @import("math.zig");
+const v = @import("vertex.zig");
+
+pub const FrameState = struct {
+    alt_proj: bool,
+    model_idx: u8,
+};
 
 pub fn recordCommandBuffers(
     rec: *const gftx.FrameRecorder,
-    buffer: vk.Buffer,
+    models: *const v.VertIndex,
     extent: vk.Extent2D,
     render_pass: vk.RenderPass,
     framebuffers: []const vk.Framebuffer,
-    ojejoje: []const vtx.Vertex,
     draw: *const gftx.DrawInfo,
-    alt: bool,
+    state: *const FrameState,
 ) !void {
     const gm = rec.gm;
     const m_clears: []const vk.ClearValue = &.{
@@ -61,13 +66,14 @@ pub fn recordCommandBuffers(
         }, .@"inline");
         {
             defer gm.dev.cmdEndRenderPass(cbufr);
-            const offset = [_]vk.DeviceSize{0};
+            const vert_offset = models.offsets[state.model_idx];
+            const offset = [_]vk.DeviceSize{vert_offset * @sizeOf(v.Vertex)};
             gm.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline);
             gm.dev.cmdBindVertexBuffers(
                 cbufr,
                 0,
                 1,
-                @ptrCast(&buffer),
+                @ptrCast(&models.vkBuffer),
                 &offset,
             );
             const all_sets: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
@@ -76,7 +82,7 @@ pub fn recordCommandBuffers(
                 draw.texture_dset,
             };
 
-            const uniform_offset: u32 = if (alt) @sizeOf(sht.GroupData) else 0;
+            const uniform_offset: u32 = if (state.alt_proj) @sizeOf(sht.GroupData) else 0;
             const dynamic_off: []const u32 = &.{uniform_offset};
 
             gm.dev.cmdBindDescriptorSets(
@@ -91,7 +97,7 @@ pub fn recordCommandBuffers(
             );
             gm.dev.cmdDraw(
                 cbufr,
-                @intCast(ojejoje.len),
+                models.sizes[state.model_idx],
                 draw.instance_count,
                 0,
                 0,
