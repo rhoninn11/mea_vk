@@ -242,7 +242,7 @@ fn deeper(access: EasyAcces) !void {
         allocator,
         gc,
         swapchain_len,
-        gftx.baked.uniformd_frag_vert,
+        gftx.baked.uniform_frag_vert_dyn,
         .{
             .set_binding = 0,
             .size = @sizeOf(sht.GroupData),
@@ -269,20 +269,24 @@ fn deeper(access: EasyAcces) !void {
     const size = 0.04;
     try prefils.storagePrefil(storage_dset, grid, spacing);
 
-    var image = try imgs.vulkanTexture(&pic);
-    defer image.deinit();
+    var demo_rgb = try imgs.vulkanTexture(&pic, imgs.demo_tex_rgb[0..]);
+    var demo_r = try imgs.vulkanTexture(&pic, imgs.demo_tex_r[0..]);
+    defer demo_rgb.deinit();
+    defer demo_r.deinit();
     var texture_dset = try dset.DescriptorPrep.init(
         allocator,
         gc,
-        swapchain_len,
+        1,
         gftx.baked.texture_frag,
         .{
             .set_binding = 0,
-            .size = @as(u32, @intCast(image.dvk_size)),
+            .size = @as(u32, @intCast(demo_rgb.dvk_size)),
         },
-        image,
+        16,
     );
     defer texture_dset.deinit(allocator);
+    texture_dset.updateTexture(0, demo_rgb, 0);
+    texture_dset.updateTexture(0, demo_r, 1);
 
     // render pass
     const render_pass = try createRenderPass(gc, swapchain);

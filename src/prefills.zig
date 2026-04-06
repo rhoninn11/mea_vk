@@ -97,6 +97,7 @@ pub fn storagePrefil(storage_dset: dsets.DescriptorPrep, grid: sht.GridSize, spa
 
             fresh_one.depth_ctrl[0] = 0;
             fresh_one.depth_ctrl[1] = 0;
+            fresh_one.depth_ctrl[2] = i_f * 0.001;
 
             scratchpad[i] = fresh_one;
         }

@@ -22,11 +22,17 @@ pub const DescriptorPrep = struct {
         sh_stage_flags: vk.ShaderStageFlags,
         arr_size: ?u32,
     ) !vk.DescriptorSetLayout {
-        const bindles: bool = false;
+        var bindless: bool = false;
+        if (arr_size) |size| {
+            if (size > 1) bindless = true;
+        }
+        if (bindless) {
+            std.debug.print("+++ binding size is {d}\n", .{arr_size.?});
+        }
 
         const _bind = vk.DescriptorSetLayoutBinding{
             .binding = binding,
-            .descriptor_count = arr_size orelse 1,
+            .descriptor_count = if (bindless) arr_size.? else 1,
             .descriptor_type = set_type,
             .p_immutable_samplers = null, // for textures ?
             .stage_flags = sh_stage_flags,
@@ -40,14 +46,18 @@ pub const DescriptorPrep = struct {
             .p_binding_flags = @ptrCast(&binding_flgs),
             .binding_count = 1,
         };
-
-        const cdsli: vk.DescriptorSetLayoutCreateInfo = .{
-            .p_bindings = @ptrCast(&_bind),
-            .binding_count = 1,
-            .p_next = if (bindles) &flags_info else null,
+        const create_flags: vk.DescriptorSetLayoutCreateFlags = .{
+            .update_after_bind_pool_bit = true,
         };
 
-        return devk.createDescriptorSetLayout(&cdsli, null);
+        const dslci: vk.DescriptorSetLayoutCreateInfo = .{
+            .p_bindings = @ptrCast(&_bind),
+            .flags = if (bindless) create_flags else .{},
+            .binding_count = 1,
+            .p_next = if (bindless) &flags_info else null,
+        };
+
+        return devk.createDescriptorSetLayout(&dslci, null);
     }
     inline fn uinty(val: usize) u32 {
         return @as(u32, @intCast(val));
@@ -55,35 +65,37 @@ pub const DescriptorPrep = struct {
     pub fn init(
         alloc: std.mem.Allocator,
         gc: *const gm.GraphicsContext,
-        len: usize,
+        frame_copies_num: usize,
         using: gm.baked.DSetInit,
         with: gm.baked.BindingInfo,
-        img: ?gm.RGBImage,
+        bindless_size: ?u32,
     ) !Self {
-        const len_u32: u32 = @intCast(len);
+        const len_u32: u32 = @intCast(frame_copies_num);
 
         var self: Self = .{
             .gc = gc,
             .set_binding = with.set_binding,
             .set_type = using.usage.descriptor_type,
         };
+        const arr_size: u32 = bindless_size orelse 1;
+        const bindless: bool = bindless_size != null;
 
         //dynamic arrays alloc
         const devk = self.gc.dev;
         errdefer self.deinit(alloc);
-        try self.d_set_layout_arr.resize(alloc, len);
-        try self.buff_arr.resize(alloc, len);
-        try self.d_set_arr.resize(alloc, len);
+        try self.d_set_layout_arr.resize(alloc, frame_copies_num);
+        try self.buff_arr.resize(alloc, frame_copies_num);
+        try self.d_set_arr.resize(alloc, frame_copies_num);
 
         // https://claude.ai/chat/59de4b64-073d-448f-8e03-a216c526e921
 
         //binding layout
         self._d_set_layout = try Self.dsetLayout(devk, //
             self.set_binding, self.set_type, //
-            using.shader_stage, 1);
+            using.shader_stage, arr_size);
 
         // duplicate
-        for (0..len) |i| {
+        for (0..frame_copies_num) |i| {
             self.d_set_layout_arr.items[i] = self._d_set_layout.?;
             self.buff_arr.items[i] = null;
             self.buff_arr.items[i] = try gm.createBuffer(
@@ -95,19 +107,32 @@ pub const DescriptorPrep = struct {
         }
 
         // allocate from pool
+        const pool_capacity = len_u32 * if (bindless_size) |bs| bs else 1;
+
         const p_size: []const vk.DescriptorPoolSize = &.{.{
             .type = self.set_type,
-            .descriptor_count = len_u32,
+            .descriptor_count = pool_capacity,
         }};
 
         // std.debug.print("+++ pool is {s}\n", .{@tagName(p_size.type)});
 
+        const pool_flags: vk.DescriptorPoolCreateFlags = .{
+            .update_after_bind_bit = true,
+        };
+
         self._d_pool = try self.gc.dev.createDescriptorPool(&vk.DescriptorPoolCreateInfo{
             .s_type = .descriptor_pool_create_info,
+            .flags = pool_flags,
             .p_pool_sizes = p_size.ptr,
             .pool_size_count = @intCast(p_size.len),
             .max_sets = len_u32,
         }, null);
+
+        // eg. 16 bindles textures
+        const variable_count: vk.DescriptorSetVariableDescriptorCountAllocateInfo = .{
+            .descriptor_set_count = 1,
+            .p_descriptor_counts = @ptrCast(&arr_size),
+        };
 
         try self.gc.dev.allocateDescriptorSets(
             &vk.DescriptorSetAllocateInfo{
@@ -115,6 +140,7 @@ pub const DescriptorPrep = struct {
                 .descriptor_pool = self._d_pool.?,
                 .descriptor_set_count = len_u32,
                 .p_set_layouts = self.d_set_layout_arr.items.ptr,
+                .p_next = if (bindless) @ptrCast(&variable_count) else null,
             },
             self.d_set_arr.items.ptr,
         );
@@ -122,10 +148,8 @@ pub const DescriptorPrep = struct {
         // specify data
         // var hmm: std.ArrayList(vk.WriteDescriptorSet) = .empty;
 
-        for (0..len) |i| {
-            if (self.set_type == .combined_image_sampler) {
-                self.updateTexture(i, img.?);
-            } else {
+        for (0..frame_copies_num) |i| {
+            if (self.set_type != .combined_image_sampler) {
                 const buf_info = vk.DescriptorBufferInfo{
                     .buffer = self.buff_arr.items[i].?.dvk_bfr,
                     .range = with.size,
@@ -142,6 +166,7 @@ pub const DescriptorPrep = struct {
                     .p_image_info = &.{},
                     .p_texel_buffer_view = &.{},
                 }};
+                std.debug.print("+++ before update\n", .{});
                 self.gc.dev.updateDescriptorSets(uinty(write_ops.len), write_ops.ptr, 0, null);
             }
         }
@@ -149,7 +174,7 @@ pub const DescriptorPrep = struct {
         return self;
     }
 
-    fn updateTexture(self: *Self, idx: usize, img: gm.RGBImage) void {
+    pub fn updateTexture(self: *Self, idx: usize, img: gm.RGBImage, array_idx: ?u32) void {
         const img_info = vk.DescriptorImageInfo{
             .image_layout = .shader_read_only_optimal,
             .image_view = img.vk_img_view.?,
@@ -158,13 +183,14 @@ pub const DescriptorPrep = struct {
         const write_image_dsc_set = vk.WriteDescriptorSet{
             .dst_set = self.d_set_arr.items[idx],
             .dst_binding = self.set_binding,
-            .dst_array_element = 0,
+            .dst_array_element = if (array_idx) |i| i else 0,
             .descriptor_type = self.set_type,
             .descriptor_count = 1,
             .p_buffer_info = &.{},
             .p_image_info = @ptrCast(&img_info),
             .p_texel_buffer_view = &.{},
         };
+        std.debug.print("+++ before texture update\n", .{});
         self.gc.dev.updateDescriptorSets(1, @ptrCast(&write_image_dsc_set), 0, null);
     }
 

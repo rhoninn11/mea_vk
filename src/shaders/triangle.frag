@@ -1,4 +1,5 @@
 #version 450
+#extension GL_EXT_nonuniform_qualifier : enable
 
 #define TAU 6.2831853071
 
@@ -12,11 +13,12 @@ layout(set = 0, binding = 0) uniform UniformData{
     vec4 not_used_4d_2;
 } b_ubo;
 
-layout(set = 2, binding = 0) uniform sampler2D texSampler;
+layout(set = 2, binding = 0) uniform sampler2D tex_bindless[];
 
 layout(location = 0) in vec4 v_color;
 layout(location = 1) in float v_progress;
 layout(location = 2) in vec2 v_depth_shading;
+layout(location = 3) flat in int v_tex_idx;
 
 layout(location = 0) out vec4 f_color;
 
@@ -39,7 +41,7 @@ void main() {
     float progress = v_progress;
     vec2 uv = v_color.rg;
     float spread = v_color.b;
-    vec4 tex_color = texture(texSampler, uv);
+    vec4 tex_color = texture(tex_bindless[v_tex_idx], uv);
     vec3 cos_in = vec3(progress-spread, progress, progress+spread) * TAU;
     vec3 emf_color_approx = (-cos(cos_in) + 1.0)*0.5-0.5; 
     
