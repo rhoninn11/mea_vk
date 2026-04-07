@@ -7,8 +7,11 @@ pub const vec4 = @Vector(4, f32);
 // glsl mat4 alignment is 16B
 test "allignment hurtles" {
     const v4a = @alignOf(vec4);
-    // like in glsl
-    try std.testing.expect(v4a == 16);
+    const v3a = @alignOf(vec3);
+
+    const glsl_alignment = 16;
+    try std.testing.expect(v4a == glsl_alignment);
+    try std.testing.expect(v3a == glsl_alignment);
 
     const v4b = @alignOf([7]f32);
     try std.testing.expect(v4b == 4);

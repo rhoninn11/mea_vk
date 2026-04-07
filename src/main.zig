@@ -2,6 +2,8 @@ const std = @import("std");
 
 const glfw = @import("third_party/glfw.zig");
 const vk = @import("third_party/vk.zig");
+const oklab = @import("third_party/oklab.zig");
+
 const sht = @import("shaders/types.zig");
 const shu = @import("shaders/utils.zig");
 const gftx = @import("graphics_context.zig");
@@ -112,6 +114,11 @@ var uniform_shift_trigger: motion.Trigger = .{};
 var alt_projection: bool = false;
 
 pub fn main() !void {
+    const lab_color_is = oklab.srgb_to_oklab(.{ 1, 0, 0 });
+    std.debug.print("+++ lab color {d}\n", .{lab_color_is});
+    const srgb_color_is = oklab.oklab_to_srgb(lab_color_is);
+    std.debug.print("+++ srgb from lab color {d}\n", .{srgb_color_is});
+
     glass_input = try motion.HoldsAxis.init(&.{
         glfw.KeyJ, glfw.KeyK, //
         glfw.KeyH, glfw.KeyL,
