@@ -166,7 +166,6 @@ pub const DescriptorPrep = struct {
                     .p_image_info = &.{},
                     .p_texel_buffer_view = &.{},
                 }};
-                std.debug.print("+++ before update\n", .{});
                 self.gc.dev.updateDescriptorSets(uinty(write_ops.len), write_ops.ptr, 0, null);
             }
         }
@@ -190,7 +189,6 @@ pub const DescriptorPrep = struct {
             .p_image_info = @ptrCast(&img_info),
             .p_texel_buffer_view = &.{},
         };
-        std.debug.print("+++ before texture update\n", .{});
         self.gc.dev.updateDescriptorSets(1, @ptrCast(&write_image_dsc_set), 0, null);
     }
 

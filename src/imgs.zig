@@ -3,6 +3,7 @@ const gm = @import("graphics_context.zig");
 const GraphicsContext = gm.GraphicsContext;
 
 const t = @import("types.zig");
+const m = @import("math.zig");
 const swpchn = @import("swapchain.zig");
 
 // Checkboard texture spawned in memory
@@ -240,7 +241,6 @@ pub fn vulkanTexture(pic: *const gm.PoolInCtx, pixdata: []const u8) !gm.RGBImage
     );
     defer src_buff.deinit(pic.gc);
     const mapping: [*]u8 = @ptrCast(@alignCast(src_buff.mapping));
-
     @memcpy(mapping, pixdata);
 
     const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
@@ -250,7 +250,6 @@ pub fn vulkanTexture(pic: *const gm.PoolInCtx, pixdata: []const u8) !gm.RGBImage
         .old_layout = .undefined,
         .new_layout = dst_layout,
         .image = test_img.dvk_img,
-        .format = test_img.vk_format,
         .flags = gm.baked.undefined_to_transfered,
     });
 
@@ -264,7 +263,6 @@ pub fn vulkanTexture(pic: *const gm.PoolInCtx, pixdata: []const u8) !gm.RGBImage
         .old_layout = dst_layout,
         .new_layout = shader_read_layout,
         .image = test_img.dvk_img,
-        .format = test_img.vk_format,
         .flags = gm.baked.transfered_to_fragment_readed,
     });
 

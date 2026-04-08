@@ -20,7 +20,6 @@ pub const ImgLTranConfig = struct {
     image: vk.Image,
     old_layout: vk.ImageLayout,
     new_layout: vk.ImageLayout,
-    format: ?vk.Format = null,
     flags: TransitPrep,
 };
 
