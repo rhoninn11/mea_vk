@@ -1,6 +1,7 @@
 const std = @import("std");
 const vk = @import("third_party/vk.zig");
 const gm = @import("graphics_context.zig");
+const m = @import("math.zig");
 
 pub const DescriptorPrep = struct {
     const Self = @This();
@@ -58,9 +59,6 @@ pub const DescriptorPrep = struct {
         };
 
         return devk.createDescriptorSetLayout(&dslci, null);
-    }
-    inline fn uinty(val: usize) u32 {
-        return @as(u32, @intCast(val));
     }
     pub fn init(
         alloc: std.mem.Allocator,
@@ -166,7 +164,7 @@ pub const DescriptorPrep = struct {
                     .p_image_info = &.{},
                     .p_texel_buffer_view = &.{},
                 }};
-                self.gc.dev.updateDescriptorSets(uinty(write_ops.len), write_ops.ptr, 0, null);
+                self.gc.dev.updateDescriptorSets(m.uinty(write_ops.len), write_ops.ptr, 0, null);
             }
         }
 

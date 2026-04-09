@@ -410,6 +410,11 @@ pub fn rotMatX(part: f32) mat3 {
     };
 }
 
+// conversions
 pub inline fn uinty(val: usize) u32 {
     return @as(u32, @intCast(val));
+}
+
+pub inline fn floaty(usz: usize) f32 {
+    return @as(f32, @floatFromInt(usz));
 }

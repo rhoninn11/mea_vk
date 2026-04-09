@@ -2,7 +2,6 @@ const std = @import("std");
 
 const glfw = @import("third_party/glfw.zig");
 const vk = @import("third_party/vk.zig");
-const oklab = @import("third_party/oklab.zig");
 
 const sht = @import("shaders/types.zig");
 const shu = @import("shaders/utils.zig");
@@ -21,6 +20,7 @@ const phx = @import("phys.zig");
 const imgs = @import("imgs.zig");
 const utils = @import("utils.zig");
 const prefils = @import("prefills.zig");
+const oklab = @import("oklab.zig");
 
 const InertiaVec2 = phx.InertiaPack(m.vec3);
 const Vertex = vertex.Vertex;
@@ -123,10 +123,7 @@ var slide_l_trig: motion.Trigger = .{};
 var slide_r_trig: motion.Trigger = .{};
 
 pub fn main() !void {
-    const lab_color_is = oklab.srgb_to_oklab(.{ 1, 0, 0 });
-    std.debug.print("+++ lab color {d}\n", .{lab_color_is});
-    const srgb_color_is = oklab.oklab_to_srgb(lab_color_is);
-    std.debug.print("+++ srgb from lab color {d}\n", .{srgb_color_is});
+    oklab.demo();
 
     glass_input = try motion.HoldsAxis.init(&.{
         glfw.KeyJ, glfw.KeyK, //

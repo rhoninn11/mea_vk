@@ -7,6 +7,8 @@ const motion = @import("motion.zig");
 const sht = @import("shaders/types.zig");
 const shu = @import("shaders/utils.zig");
 
+const m = @import("math.zig");
+
 const Errorset = error{
     constrained,
 };
@@ -42,21 +44,17 @@ const uHdr = extern union {
     hdr: u16,
 };
 
-inline fn floaty(usz: usize) f32 {
-    return @as(f32, @floatFromInt(usz));
-}
-
 pub fn spawHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     var pixels = try alloc.alloc(u8, g.total * @sizeOf(u16));
     const fy: f32 = 1;
     const fx: f32 = 1;
     for (0..g.h) |y| {
-        const y_phase = floaty(y) / 16; // give him some samples per cycle
+        const y_phase = m.floaty(y) / 16; // give him some samples per cycle
         const y_sin = @sin(y_phase * std.math.tau * fy);
         const y_ufit = ((y_sin + 1) * 0.5 * ((1 << 16) - 3) + 1);
 
         for (0..g.w) |xx| {
-            const x_phase = floaty(xx) / 16;
+            const x_phase = m.floaty(xx) / 16;
             const x_sin = @sin(x_phase * std.math.tau * fx);
             const x_ufit = ((x_sin + 1) * 0.5 * ((1 << 16) - 3) + 1);
 
