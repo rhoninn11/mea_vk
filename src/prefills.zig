@@ -3,11 +3,11 @@ const std = @import("std");
 const m = @import("math.zig");
 const sht = @import("shaders/types.zig");
 const addons = @import("addons.zig");
-const dsets = @import("dsets.zig");
+const dset = @import("dset.zig");
 const proto = @import("proto.zig");
 
 pub fn perFrameUniformFill(
-    uniform_dset: dsets.DescriptorPrep,
+    uniform_dset: dset.DescriptorPrep,
     frame_idx: u8,
     total_s: f32,
     camera: m.vec3,
@@ -32,7 +32,7 @@ pub fn perFrameUniformFill(
     scratchpad[1].matrices = try addons.paramatricVariation(camera, target, false);
 }
 
-pub fn storagePrefil(storage_dset: dsets.DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {
+pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {
     const instance_num = grid.total;
     const lim_num = 8096;
     std.debug.assert(instance_num <= lim_num);
@@ -97,7 +97,6 @@ pub fn storagePrefil(storage_dset: dsets.DescriptorPrep, grid: sht.GridSize, spa
 
             fresh_one.depth_ctrl[0] = 0;
             fresh_one.depth_ctrl[1] = 0;
-            fresh_one.depth_ctrl[2] = i_f * 0.001;
 
             scratchpad[i] = fresh_one;
         }

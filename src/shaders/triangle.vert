@@ -29,6 +29,7 @@ struct Instance{
     vec4 new_usage;
     vec4 offset_4d;
     vec4 depth_ctrl;
+    vec4 srgb;
 };
 layout(set = 1, binding = 0) buffer readonly InstanceData{
     Instance per_instance[];
@@ -37,10 +38,11 @@ layout(set = 1, binding = 0) buffer readonly InstanceData{
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_color;
 
-layout(location = 0) out vec4 v_color;
+layout(location = 0) out vec2 v_uv;
 layout(location = 1) out float v_progress;
 layout(location = 2) out vec2 v_depth_shading;
 layout(location = 3) flat out int v_tex_idx;
+layout(location = 4) out vec2 v_color_rest;
 
 
 // group locked at the middle of the screan
@@ -74,16 +76,11 @@ void main() {
     vec4 before_transform = vec4(base, 1.0);
     gl_Position = ems.proj * ems.view * ems.model * before_transform;
     // gl_Position = before_transform; 
-    v_color.rg = a_color.rg;
-    v_color.b = spread_offset;
-    v_color.a = float_anim;
+    v_uv.rg = a_color.rg;
+    v_color_rest = vec2(spread_offset, float_anim);
 
     v_progress = a_color.r + m_inst.new_usage.x;
 
     v_depth_shading = m_inst.depth_ctrl.xy;
-    if (m_inst.depth_ctrl.z < 0.5) {
-        v_tex_idx = 0;
-    } else {
-        v_tex_idx = 1;
-    }
+    v_tex_idx = 0;
 }

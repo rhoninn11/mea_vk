@@ -1,6 +1,8 @@
 const std = @import("std");
 const source = @import("third_party/oklab.zig");
 const m = @import("math.zig");
+const dset = @import("dset.zig");
+const sht = @import("shaders/types.zig");
 
 pub fn srgb_to_oklab(srgb: m.vec3) m.vec3 {
     const lms_conv: [3]m.vec3 = .{
@@ -53,24 +55,25 @@ pub fn demo() void {
     };
     var labs: [3]m.vec3 = undefined;
     for (0..3) |i| labs[i] = srgb_to_oklab(rgbs[i]);
-    std.debug.print("-------", .{});
-    for (0..3) |i| std.debug.print("+++ srgb: {} -> lab: {}\n", .{ rgbs[i], labs[i] });
-    std.debug.print("-------", .{});
+    // std.debug.print("-------", .{});
+    // for (0..3) |i| std.debug.print("+++ srgb: {} -> lab: {}\n", .{ rgbs[i], labs[i] });
+    // std.debug.print("-------", .{});
 
     const L: f32 = 0.37;
     const C: f32 = 0.15;
     const delta: f32 = 0.026;
     const steps: u8 = 32;
-    std.debug.print("|-------\n", .{});
+    // std.debug.print("|-------\n", .{});
     for (0..steps) |i| {
         const phase = m.floaty(i) * delta * std.math.tau;
         const a = C * @cos(phase);
         const b = C * @sin(phase);
         const lab: m.vec3 = .{ L, a, b };
         const rgb: m.vec3 = oklab_to_srgb(lab);
-        std.debug.print("phase {} | lab: {} -> srgb {}\n", .{ m.floaty(i) * delta * 360, lab, rgb });
+        // std.debug.print("phase {} | lab: {} -> srgb {}\n", .{ m.floaty(i) * delta * 360, lab, rgb });
+        _ = rgb;
     }
-    std.debug.print("|-------\n", .{});
+    // std.debug.print("|-------\n", .{});
 
     const r_delta: f32 = 1 / m.floaty(steps);
     for (0..3) |jj| {
@@ -80,7 +83,55 @@ pub fn demo() void {
             srgb[jj] = 1;
             srgb *= rdv;
             const lab = srgb_to_oklab(srgb);
-            std.debug.print("srgb: {} -> lab {}\n", .{ srgb, lab });
+            // std.debug.print("srgb: {} -> lab {}\n", .{ srgb, lab });
+            _ = lab;
         }
     }
 }
+
+const U16max: f32 = 1 << 16;
+pub const OkUnderstanding = struct {
+    size: sht.GridSize,
+
+    pub fn updateStorage(self: *const OkUnderstanding, storage_dset: dset.DescriptorPrep) !void {
+        const total = self.size.total;
+        const lim_num = 8096;
+        std.debug.assert(total <= lim_num);
+
+        const stack_size = lim_num * @sizeOf(sht.PerInstance);
+        var stack_mem: [stack_size]u8 = undefined;
+
+        var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
+        const local_a = provider.allocator();
+
+        var scratchpad = try local_a.alloc(sht.PerInstance, total);
+        for (storage_dset.buff_arr.items) |possible_buffer| {
+            const storage = possible_buffer.?;
+            const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
+            @memcpy(scratchpad, mapping);
+            var phase: f32 = 0;
+            var h: f32 = 0;
+
+            const r: f32 = 2;
+            const h_delt: f32 = 0.02;
+            const phase_delt: f32 = 0.01;
+            for (0..total) |i| {
+                const pos: m.vec3 = .{
+                    r * @cos(std.math.tau * phase),
+                    h,
+                    r * @sin(std.math.tau * phase),
+                };
+                phase += phase_delt;
+                h += h_delt;
+
+                var inst_data: sht.PerInstance = scratchpad[i];
+                inst_data.offset_4d = .{ pos[0], pos[1], pos[2], 0 };
+                inst_data.depth_ctrl[0] = 1;
+                inst_data.depth_ctrl[1] = 0;
+
+                scratchpad[i] = inst_data;
+            }
+            @memcpy(mapping, scratchpad);
+        }
+    }
+};

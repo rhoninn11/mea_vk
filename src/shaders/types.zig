@@ -22,6 +22,7 @@ pub const PerInstance = struct {
     new_usage: [4]f32 = undefined,
     offset_4d: [4]f32 = undefined,
     depth_ctrl: [4]f32 = undefined,
+    srgb: [4]f32 = undefined,
 };
 
 const DepthControl = extern struct {

@@ -15,10 +15,11 @@ layout(set = 0, binding = 0) uniform UniformData{
 
 layout(set = 2, binding = 0) uniform sampler2D tex_bindless[];
 
-layout(location = 0) in vec4 v_color;
+layout(location = 0) in vec2 v_uv;
 layout(location = 1) in float v_progress;
 layout(location = 2) in vec2 v_depth_shading;
 layout(location = 3) flat in int v_tex_idx;
+layout(location = 4) in vec2 v_color_rest;
 
 layout(location = 0) out vec4 f_color;
 
@@ -39,22 +40,20 @@ void main() {
     float h = v_depth_shading.y;
     
     float progress = v_progress;
-    vec2 uv = v_color.rg;
-    float spread = v_color.b;
+    vec2 uv = v_uv.rg;
+    float spread = v_color_rest.r;
+    float dim_lvl = v_color_rest.g;
     vec4 tex_color = texture(tex_bindless[v_tex_idx], uv);
     vec3 cos_in = vec3(progress-spread, progress, progress+spread) * TAU;
     vec3 emf_color_approx = (-cos(cos_in) + 1.0)*0.5-0.5; 
     
-    //vec3 mixed = emf_color_approx*tex_color.rgb;
-    
-
-    f_color = vec4(emf_color_approx*v_color.a, 1.0);
+    f_color = vec4(dim_lvl*emf_color_approx, 1.0);
     f_color = f_color*tex_color;
 
     float trim_factor = 0.0;
     float shifted = ((h - trim_factor)/(1-trim_factor));
 
-    vec3 level_color = inferno(shifted) * vec3(uv.x*uv.x) * gate;
+    vec3 level_color = inferno(shifted) * vec3(uv.x) * gate;
     level_color +=  f_color.xyz * (1-gate);
     
     f_color = vec4(level_color, 1.0);

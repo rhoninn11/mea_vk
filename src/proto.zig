@@ -2,7 +2,7 @@ const std = @import("std");
 const utils = @import("utils.zig");
 const meagen = @import("gen/meagen.pb.zig");
 const addon = @import("addons.zig");
-const dsets = @import("dsets.zig");
+const dset = @import("dset.zig");
 const motion = @import("motion.zig");
 const sht = @import("shaders/types.zig");
 const shu = @import("shaders/utils.zig");
@@ -154,7 +154,7 @@ pub const LookingGlass = struct {
     }
 
     const U16max: f32 = 1 << 16;
-    pub fn updateStorage(self: *LookingGlass, storage_dset: dsets.DescriptorPrep, enabled: bool) !void {
+    pub fn updateStorage(self: *LookingGlass, storage_dset: dset.DescriptorPrep, enabled: bool) !void {
         const total = self.size.total;
         const lim_num = 8096;
         std.debug.assert(total <= lim_num);

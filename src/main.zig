@@ -10,7 +10,7 @@ const gftx = @import("graphics_context.zig");
 const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
 const Swapchain = @import("swapchain.zig").Swapchain;
 const addons = @import("addons.zig");
-const dset = @import("dsets.zig");
+const dset = @import("dset.zig");
 
 const helpers = @import("helpers.zig");
 const vertex = @import("vertex.zig");
@@ -82,6 +82,9 @@ fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, 
     if (x.down(slide_r.key)) {
         slide_r_trig.activated = true;
     }
+    if (x.down(ok_vis.key)) {
+        ok_vis_trigger.activated = true;
+    }
 
     glass_input.reciveInput(&x);
     plr_input.reciveInput(&x);
@@ -113,6 +116,8 @@ const proto = @import("proto.zig");
 
 var glass_input: motion.HoldsAxis = undefined;
 var plr_input: motion.HoldsAxis = undefined;
+var ok_vis: motion.KeyAction = .{ .key = glfw.KeyY, .action = glfw.KeyDown };
+var ok_vis_trigger: motion.Trigger = .{};
 var shader_reset: motion.KeyAction = .{ .key = glfw.KeyQ, .action = glfw.KeyDown };
 var shader_reset_trigger: motion.Trigger = .{};
 var uniform_shift: motion.KeyAction = .{ .key = glfw.KeyE, .action = glfw.KeyDown };
@@ -209,6 +214,7 @@ fn deeper(access: EasyAcces) !void {
     defer img.deinit(deeper_allocator);
 
     var glass = proto.LookingGlass.init(&img, grid);
+    const ok_understanding = oklab.OkUnderstanding{ .size = grid };
 
     var swapchain_len: u8 = undefined;
     // const gc = access.vkctx.?.*;
@@ -478,6 +484,10 @@ fn deeper(access: EasyAcces) !void {
         }
         if (uniform_shift_trigger.fired()) {
             frame_state.alt_proj = !frame_state.alt_proj;
+        }
+        if (ok_vis_trigger.fired()) {
+            try ok_understanding.updateStorage(storage_dset);
+            std.debug.print("+++ jakaś wiadowmość\n", .{});
         }
 
         if (slide_r_trig.fired()) {
