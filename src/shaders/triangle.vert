@@ -54,10 +54,14 @@ void main() {
     float h = m_inst.depth_ctrl.y;
 
     vec3 pose_on_surface = m_inst.offset_4d.xyz;
-    vec3 prescaled_pos = a_pos * vec3(_group.data.scale.x);
+    vec3 pos_scaled = a_pos * vec3(_group.data.scale.x);
     
+    vec3 pos_im = pos_scaled;
     if (gate > 0.5) {
-        prescaled_pos.y *= h * 10; 
+        pos_im = vec3(pos_scaled.x, pos_scaled.y*10*h, pos_scaled.z);
+    }
+    if (gate > 1.5) {
+        pos_im = pos_scaled;
     }
 
     float phase_offset = m_inst.other_offsets.x;
@@ -67,17 +71,21 @@ void main() {
 
 //  should be visible after depth testing
     float depth_osc = sin(_group.data.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
-    float float_anim = depth_osc + gl_InstanceIndex*0.0001; // to combat depth flickering
+    float y_anim = depth_osc + gl_InstanceIndex*0.0001; // to combat depth flickering
+    if (gate > 0.5) {
+        y_anim = h*2;
+    }
+    if (gate > 1.5) {
+        y_anim = h*2;
+    }
 
-    float_anim = gate*h*2 + (1-gate)*float_anim;
-
-    vec3 base = prescaled_pos + pose_on_surface + vec3(0, float_anim, 0);
+    vec3 base = pos_im + pose_on_surface + vec3(0, y_anim, 0);
 
     vec4 before_transform = vec4(base, 1.0);
     gl_Position = ems.proj * ems.view * ems.model * before_transform;
     // gl_Position = before_transform; 
     v_uv.rg = a_color.rg;
-    v_color_rest = vec2(spread_offset, float_anim);
+    v_color_rest = vec2(spread_offset, y_anim);
 
     v_progress = a_color.r + m_inst.new_usage.x;
 

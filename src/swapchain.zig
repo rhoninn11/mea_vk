@@ -112,7 +112,9 @@ pub const Swapchain = struct {
         };
     }
 
-    fn deinitExceptSwapchain(self: Swapchain) void {
+    fn deinitExceptSwapchain(self: Swapchain) !void {
+        std.debug.print("+++ deinit exept swapchain\n", .{});
+        for (self.swap_images) |si| try si.waitForFence(self.gc);
         for (self.swap_images) |si| si.deinit(self.gc);
         self.depth_image.deinit(self.gc);
         self.allocator.free(self.swap_images);
@@ -123,11 +125,11 @@ pub const Swapchain = struct {
         for (self.swap_images) |si| si.waitForFence(self.gc) catch {};
     }
 
-    pub fn deinit(self: Swapchain) void {
+    pub fn deinit(self: Swapchain) !void {
         // if we have no swapchain none of these should exist and we can just return
         if (self.handle == .null_handle) return;
 
-        self.deinitExceptSwapchain();
+        try self.deinitExceptSwapchain();
         self.gc.dev.destroySwapchainKHR(self.handle, null);
     }
 
@@ -135,7 +137,7 @@ pub const Swapchain = struct {
         const gc = self.gc;
         const allocator = self.allocator;
         const old_handle = self.handle;
-        self.deinitExceptSwapchain();
+        try self.deinitExceptSwapchain();
         // set current handle to NULL_HANDLE to signal that the current swapchain does no longer need to be
         // de-initialized if we fail to recreate it.
         self.handle = .null_handle;
@@ -292,6 +294,7 @@ const SwapImage = struct {
     }
 
     fn deinit(self: SwapImage, gc: *const GraphicsContext) void {
+        std.debug.print("+++ deinit for swap image\n", .{});
         self.waitForFence(gc) catch return;
         gc.dev.destroyImageView(self.view, null);
         gc.dev.destroySemaphore(self.image_acquired, null);

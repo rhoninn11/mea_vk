@@ -36,8 +36,6 @@ vec3 inferno(float t) {
 }
 
 void main() {
-    float gate = v_depth_shading.x;
-    float h = v_depth_shading.y;
     
     float progress = v_progress;
     vec2 uv = v_uv.rg;
@@ -50,11 +48,15 @@ void main() {
     f_color = vec4(dim_lvl*emf_color_approx, 1.0);
     f_color = f_color*tex_color;
 
-    float trim_factor = 0.0;
-    float shifted = ((h - trim_factor)/(1-trim_factor));
-
-    vec3 level_color = inferno(shifted) * vec3(uv.x) * gate;
-    level_color +=  f_color.xyz * (1-gate);
+    const float gate = v_depth_shading.x;
+    const float h = v_depth_shading.y;
+    vec3 level_color = f_color.xyz;
+    if (gate > 0.5) {
+        level_color = inferno(h) * vec3(uv.x);
+    }
+    if (gate > 1.5) {
+        level_color = vec3(1,0.9,0.7);
+    }
     
     f_color = vec4(level_color, 1.0);
 }

@@ -110,23 +110,24 @@ pub const OkUnderstanding = struct {
             const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
             @memcpy(scratchpad, mapping);
             var phase: f32 = 0;
-            var h: f32 = 0;
+            var l: f32 = 0;
 
-            const r: f32 = 2;
-            const h_delt: f32 = 0.02;
+            const chroma: f32 = 0.2;
+            const l_delt: f32 = 0.001;
             const phase_delt: f32 = 0.01;
             for (0..total) |i| {
-                const pos: m.vec3 = .{
-                    r * @cos(std.math.tau * phase),
-                    h,
-                    r * @sin(std.math.tau * phase),
+                // TODO: adjust postion to be in lab space calc srgb and clamp
+                const lab: m.vec3 = .{
+                    l,
+                    chroma * @cos(std.math.tau * phase),
+                    chroma * @sin(std.math.tau * phase),
                 };
                 phase += phase_delt;
-                h += h_delt;
-
+                l += l_delt;
+                const srgb_pos = oklab_to_srgb(lab);
                 var inst_data: sht.PerInstance = scratchpad[i];
-                inst_data.offset_4d = .{ pos[0], pos[1], pos[2], 0 };
-                inst_data.depth_ctrl[0] = 1;
+                inst_data.offset_4d = .{ srgb_pos[0], srgb_pos[1], srgb_pos[2], 0 };
+                inst_data.depth_ctrl[0] = 2;
                 inst_data.depth_ctrl[1] = 0;
 
                 scratchpad[i] = inst_data;

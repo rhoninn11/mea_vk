@@ -225,7 +225,7 @@ fn deeper(access: EasyAcces) !void {
     var resolution_extent = windowExtext(window);
 
     var swapchain = try Swapchain.init(gc, allocator, resolution_extent);
-    defer swapchain.deinit();
+    defer swapchain.deinit() catch std.debug.print("... well swapchaing deinit failed\n", .{});
 
     swapchain_len = @intCast(swapchain.swap_images.len);
     std.debug.print("+++ Serial frames {}\n", .{swapchain_len});
@@ -523,13 +523,11 @@ fn deeper(access: EasyAcces) !void {
             size,
         );
 
-        const cmdbuf = cmdbufs[img_idx];
-
         if (state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {
             // std.debug.assert(false); //cuz it will throw error due to bad depth_img resolution
             resolution_extent = win_size;
             std.debug.print("+++ a\n", .{});
-            // try gc.dev.deviceWaitIdle();
+            try gc.dev.deviceWaitIdle();
             try swapchain.recreate(resolution_extent);
 
             std.debug.print("+++ b\n", .{});
@@ -554,6 +552,7 @@ fn deeper(access: EasyAcces) !void {
                 );
             }
         }
+        const cmdbuf = cmdbufs[swapchain.image_index];
         state = swapchain.present(cmdbuf) catch |err| switch (err) {
             error.OutOfDateKHR => Swapchain.PresentState.suboptimal,
             else => |narrow| return narrow,
