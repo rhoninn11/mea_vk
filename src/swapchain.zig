@@ -294,7 +294,6 @@ const SwapImage = struct {
     }
 
     fn deinit(self: SwapImage, gc: *const GraphicsContext) void {
-        std.debug.print("+++ deinit for swap image\n", .{});
         self.waitForFence(gc) catch return;
         gc.dev.destroyImageView(self.view, null);
         gc.dev.destroySemaphore(self.image_acquired, null);

@@ -330,45 +330,27 @@ fn deeper(access: EasyAcces) !void {
     defer destroyFramebuffers(gc, allocator, framebuffers);
 
     // geometry
-    var param = vertex.RingParams.default;
-    var verts: vertex.TriangleArray = try .initCapacity(allocator, 1024);
-    defer verts.deinit(allocator);
+    var repo: vertex.VertIndex = .{ .offsets = undefined };
 
-    param.len = 32;
-    param.flat = false;
-    var models: vertex.VertIndex = .{ .offsets = undefined };
-    var shape: vertex.TriangleArray = try vertex.Utils.Ring(allocator, param);
-    try verts.appendSlice(allocator, shape.items);
-    models.register(shape.items);
-    shape.deinit(allocator);
-
-    param.len = 5;
-    param.flat = true;
-    shape = try vertex.Utils.Ringy(allocator);
-    try verts.appendSlice(allocator, shape.items);
-    models.register(shape.items);
-    shape.deinit(allocator);
-
-    shape = try vertex.Utils.Blocky(allocator);
-    try verts.appendSlice(allocator, shape.items);
-    models.register(shape.items);
-    shape.deinit(allocator);
-
-    std.debug.print("+++ vert count {d}\n", .{verts.items.len});
-
+    const _32kb = 8096 * 4;
+    var stack_8kb: [_32kb]u8 = undefined;
+    var small_stack_alloc: std.heap.FixedBufferAllocator = .init(stack_8kb[0..]);
+    const ssa = small_stack_alloc.allocator();
+    var verts: vertex.TriangleArray = try .initCapacity(ssa, 256);
+    try vertex.populateModels(ssa, &verts, &repo);
     const as_slice: []const Vertex = verts.items;
-    const mem_size = @sizeOf(Vertex) * as_slice.len;
 
     const vert_buffer = try gftx.createBuffer(
         gc,
         gftx.baked.memory_gpu,
         gftx.baked.usage_vert_dst,
-        mem_size,
+        @sizeOf(Vertex) * as_slice.len,
     );
     defer vert_buffer.deinit(gc);
-    models.vkBuffer = vert_buffer.dvk_bfr;
-
-    try uploadVertices(&pic, models.vkBuffer, as_slice);
+    try uploadVertices(&pic, vert_buffer.dvk_bfr, as_slice);
+    repo.vkBuffer = vert_buffer.dvk_bfr;
+    // container
+    std.debug.print("+++ total verts {d}\n", .{verts.items.len});
 
     const draw_instanced_attempt: gftx.DrawInfo = .{
         .instance_count = grid.total,
@@ -412,7 +394,7 @@ fn deeper(access: EasyAcces) !void {
         };
         try frame.recordCommandBuffers(
             &recorders[i],
-            &models,
+            &repo,
             swapchain.extent,
             render_pass,
             framebuffers,
@@ -429,20 +411,19 @@ fn deeper(access: EasyAcces) !void {
     var perf_stats = addons.PerfStats.init();
     var state: Swapchain.PresentState = .optimal;
 
-    timeline1.arm(std.time.us_per_s / 2);
-    var r_lim = utils.Caped.init(1, 5);
-    var high_lim = utils.Caped.init(0, 3);
+    const s_interval = std.time.us_per_s;
+    timeline1.arm(s_interval * 0.5);
 
-    var plr = t.Player{
-        .phi = 0,
-        .r = r_lim.cap(1.74),
-        .h = high_lim.cap(1.74),
-    };
+    var cplr: utils.CappedPlayer = .default;
 
-    const speed: f32 = 1;
     const IVec3 = phx.InertiaPack(m.vec3);
-    var inertia = IVec3.Inertia.init(.{ plr.phi, 0, 0 });
+    var inertia = IVec3.Inertia.init(.{ cplr.p.phi, 0, 0 });
     inertia.phx = IVec3.InertiaCfg.default();
+
+    var phi_val_monit = utils.ValMonit{
+        .name = "phi val",
+        .val = 0,
+    };
 
     while (!glfw.windowShouldClose(window)) {
         const img_idx = swapchain.image_index;
@@ -462,19 +443,24 @@ fn deeper(access: EasyAcces) !void {
 
         const td = timeline.deltaS();
 
-        const phi_delt: f32 = switch (plr_input.axes[0]) {
+        const phi_moved: f32 = switch (plr_input.axes[0]) {
             motion.Axis.positive => 1,
             motion.Axis.negative => -1,
             else => 0,
         };
 
-        const phi_a = plr.phi + (-phi_delt) * td * std.math.tau * speed;
+        const phi_spead: f32 = 1;
+        const phi_delt = (-phi_moved) * td * std.math.tau * phi_spead;
+        const phi_a = cplr.p.phi + phi_delt;
+
         inertia.in(.{ phi_a, 0, 0 });
         inertia.simulate(timeline1.delta_ms);
-        plr.phi = inertia.out()[0];
-        plr.phi = phi_a;
 
-        utils.PlayerUpdate(&plr, &plr_input, td);
+        const phi_delayed = inertia.out()[0];
+        phi_val_monit.update(phi_delayed);
+        cplr.p.phi = phi_a;
+
+        utils.PlayerUpdate(&cplr.p, &plr_input, td);
 
         if (glass.update(&glass_input)) {
             try glass.updateStorage(storage_dset, true);
@@ -487,17 +473,16 @@ fn deeper(access: EasyAcces) !void {
         }
         if (ok_vis_trigger.fired()) {
             try ok_understanding.updateStorage(storage_dset);
-            std.debug.print("+++ jakaś wiadowmość\n", .{});
         }
 
         if (slide_r_trig.fired()) {
-            const last = frame_state.model_idx == models.head - 1;
+            const last = frame_state.model_idx == repo.head - 1;
             frame_state.model_idx = if (last) 0 else frame_state.model_idx + 1;
         }
 
         if (slide_l_trig.fired()) {
             const first = frame_state.model_idx == 0;
-            frame_state.model_idx = if (first) models.head - 1 else frame_state.model_idx - 1;
+            frame_state.model_idx = if (first) repo.head - 1 else frame_state.model_idx - 1;
         }
 
         //minimalized
@@ -508,7 +493,7 @@ fn deeper(access: EasyAcces) !void {
         try swapchain.currentWaitG();
         try frame.recordCommandBuffers(
             &recorders[img_idx],
-            &models,
+            &repo,
             swapchain.extent,
             render_pass,
             framebuffers,
@@ -519,18 +504,16 @@ fn deeper(access: EasyAcces) !void {
             uniform_dset,
             @intCast(img_idx),
             timeline.total_s,
-            playerPos(&plr),
+            playerPos(&cplr.p),
             size,
         );
 
         if (state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {
             // std.debug.assert(false); //cuz it will throw error due to bad depth_img resolution
             resolution_extent = win_size;
-            std.debug.print("+++ a\n", .{});
             try gc.dev.deviceWaitIdle();
             try swapchain.recreate(resolution_extent);
 
-            std.debug.print("+++ b\n", .{});
             destroyFramebuffers(gc, allocator, framebuffers);
             framebuffers = try createFramebuffers(
                 gc,
@@ -539,11 +522,10 @@ fn deeper(access: EasyAcces) !void {
                 swapchain,
             );
 
-            std.debug.print("+++ c\n", .{});
             for (recorders) |*recorder| {
                 try frame.recordCommandBuffers(
                     recorder,
-                    &models,
+                    &repo,
                     swapchain.extent,
                     render_pass,
                     framebuffers,

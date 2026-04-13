@@ -255,3 +255,26 @@ pub fn probing() void {
     tinkering(VertexAlt1);
     tinkering(VertexAlt2);
 }
+pub fn populateModels(alloc: std.mem.Allocator, here: *TriangleArray, as: *VertIndex) !void {
+    var param = RingParams.default;
+    var shape: TriangleArray = undefined;
+
+    param.len = 5;
+    param.flat = true;
+    shape = try Utils.Ringy(alloc);
+    try here.appendSlice(alloc, shape.items);
+    as.register(shape.items);
+    shape.deinit(alloc);
+
+    param.len = 32;
+    param.flat = false;
+    shape = try Utils.Ring(alloc, param);
+    try here.appendSlice(alloc, shape.items);
+    as.register(shape.items);
+    shape.deinit(alloc);
+
+    shape = try Utils.Blocky(alloc);
+    try here.appendSlice(alloc, shape.items);
+    as.register(shape.items);
+    shape.deinit(alloc);
+}

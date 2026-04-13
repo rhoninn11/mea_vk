@@ -83,9 +83,17 @@ pub const PerfStats = struct {
         s.frame_num += 1;
     }
 };
+pub const CappedPlayer = struct {
+    pub const lim_r = Caped.init(1, 5);
+    pub const lim_h = Caped.init(-10, 10);
 
-var r_lim = Caped.init(1, 5);
-var high_lim = Caped.init(0, 10);
+    p: t.Player,
+    pub const default: CappedPlayer = .{ .p = .{
+        .phi = 0,
+        .r = lim_r.cap(1.75),
+        .h = lim_h.cap(1.75),
+    } };
+};
 
 pub fn PlayerUpdate(player: *t.Player, input: *const motion.HoldsAxis, td: f32) void {
     const plr = player;
@@ -97,7 +105,7 @@ pub fn PlayerUpdate(player: *t.Player, input: *const motion.HoldsAxis, td: f32) 
         motion.Axis.positive => plr.r - r_speed * td,
         else => plr.r,
     };
-    plr.r = r_lim.cap(plr.r);
+    plr.r = CappedPlayer.lim_r.cap(plr.r);
 
     const h_speed: f32 = 3;
     const height = input.axes[2];
@@ -106,7 +114,7 @@ pub fn PlayerUpdate(player: *t.Player, input: *const motion.HoldsAxis, td: f32) 
         motion.Axis.positive => plr.h + h_speed * td,
         else => plr.h,
     };
-    plr.h = high_lim.cap(plr.h);
+    plr.h = CappedPlayer.lim_h.cap(plr.h);
 }
 
 pub inline fn DefaultRng() !std.Random {
@@ -117,3 +125,25 @@ pub inline fn DefaultRng() !std.Random {
     });
     return prng.random();
 }
+
+pub const ValMonit = struct {
+    printed: bool = false,
+    name: []const u8,
+    val: f32,
+
+    pub fn update(self: *ValMonit, new_val: f32) void {
+        self.val = new_val;
+        if (self.printed) {
+            for (0..3) |_| {
+                std.debug.print("\x1b[2K", .{}); // wyczyść linię
+                std.debug.print("\x1b[1A", .{}); // w górę
+            }
+        }
+
+        std.debug.print("---------------\n", .{});
+        std.debug.print("-- {s} equals \x1b[31m{d}\x1b[0m \n", .{ self.name, self.val });
+        std.debug.print("---------------\n", .{});
+
+        self.printed = true;
+    }
+};
