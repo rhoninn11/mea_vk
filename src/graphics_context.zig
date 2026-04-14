@@ -42,7 +42,7 @@ const Device = vk.DeviceProxy;
 
 pub const DrawInfo = struct {
     instance_count: u32,
-    pipeline: vk.Pipeline,
+    pipeline: [4]vk.Pipeline,
     pipeline_layout: vk.PipelineLayout,
     uniform_dsets: std.ArrayList(vk.DescriptorSet),
     storage_dsets: std.ArrayList(vk.DescriptorSet),

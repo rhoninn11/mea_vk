@@ -19,7 +19,7 @@ pub fn perFrameUniformFill(
 
     const uniform = uniform_dset.buff_arr.items[frame_idx].?;
     const mapping: [*]sht.GroupData = @ptrCast(@alignCast(uniform.mapping.?));
-    var scratchpad = try local_a.alloc(sht.GroupData, 2);
+    var scratchpad = try local_a.alloc(sht.GroupData, 3);
     defer @memcpy(mapping, scratchpad);
 
     for (0..scratchpad.len) |i| {
@@ -29,7 +29,8 @@ pub fn perFrameUniformFill(
     }
     const target: m.vec3 = .{ 0, 0, 0 };
     scratchpad[0].matrices = try addons.paramatricVariation(camera, target, true);
-    scratchpad[1].matrices = try addons.paramatricVariation(camera, target, false);
+    scratchpad[1].matrices = addons.guiVisor(5, 2.5);
+    scratchpad[2].matrices = try addons.paramatricVariation(camera, target, false);
 }
 
 pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {

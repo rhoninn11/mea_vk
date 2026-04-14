@@ -64,6 +64,20 @@ pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: bool) !MatPack {
     return interm;
 }
 
+pub fn guiVisor(x: f32, y: f32) MatPack {
+    const interm = MatPack{
+        .proj = m.mat_ortho(x * 0.9, -x * 0.1, y * 0.9, -y * 0.1, 1024, 0).arr,
+        .view = m.mat_identity().arr,
+        .model = m.mat_identity().arr,
+        // .view = m.mat_translate(-pos).arr,
+        // .view = m.lookRotation(.{ 0, 0, -1 }, pos).arr,
+    };
+    return interm;
+}
+pub fn defGuiVisor() MatPack {
+    return guiVisor(640, 480);
+}
+
 pub fn getWindowSize(window: *glfw.Window) vk.Extent2D {
     var w: c_int = undefined;
     var h: c_int = undefined;

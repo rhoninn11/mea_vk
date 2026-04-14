@@ -13,13 +13,14 @@ pub fn InertiaPack(VecTpy: type) type {
         pub const InertiaCfg: type = struct {
             const Self = @This();
 
-            f: VecTpy = asVec(2),
-            z: VecTpy = asVec(1),
-            r: VecTpy = asVec(0),
+            pub const default = new(2, 1, 2);
+            f: VecTpy,
+            z: VecTpy,
+            r: VecTpy,
 
-            k1: VecTpy = asVec(0),
-            k2: VecTpy = asVec(0),
-            k3: VecTpy = asVec(0),
+            k1: VecTpy = undefined,
+            k2: VecTpy = undefined,
+            k3: VecTpy = undefined,
 
             // transform parameters from config config space to equation space
             pub inline fn reecalc(self: *Self) void {
@@ -35,12 +36,6 @@ pub fn InertiaPack(VecTpy: type) type {
                     .z = asVec(z),
                     .r = asVec(r),
                 };
-                inst.reecalc();
-                return inst;
-            }
-
-            pub fn default() Self {
-                var inst = Self{};
                 inst.reecalc();
                 return inst;
             }

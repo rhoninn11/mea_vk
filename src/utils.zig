@@ -1,5 +1,6 @@
 const std = @import("std");
 const t = @import("types.zig");
+const m = @import("math.zig");
 const motion = @import("motion.zig");
 
 pub fn Slider(vecTpy: type) type {
@@ -88,14 +89,29 @@ pub const CappedPlayer = struct {
     pub const lim_h = Caped.init(-10, 10);
 
     p: t.Player,
-    pub const default: CappedPlayer = .{ .p = .{
-        .phi = 0,
-        .r = lim_r.cap(1.75),
-        .h = lim_h.cap(1.75),
-    } };
+    phi_raw: f32,
+    pub const default: CappedPlayer = .{
+        .phi_raw = 0,
+        .p = .{
+            .phi = 0,
+            .r = lim_r.cap(1.75),
+            .h = lim_h.cap(1.75),
+        },
+    };
+
+    pub fn pos(self: *CappedPlayer) m.vec3 {
+        return playerPos(&self.p);
+    }
+    pub fn control(self: *CappedPlayer, input: *const motion.HoldsAxis, td: f32) void {
+        playerApplyInput(&self.p, input, td);
+    }
 };
 
-pub fn PlayerUpdate(player: *t.Player, input: *const motion.HoldsAxis, td: f32) void {
+pub fn playerPos(p: *t.Player) m.vec3 {
+    return m.orbit_r(p.phi, p.r) + m.vec3{ 0, p.h, 0 };
+}
+
+pub fn playerApplyInput(player: *t.Player, input: *const motion.HoldsAxis, td: f32) void {
     const plr = player;
 
     const r_speed: f32 = 3;

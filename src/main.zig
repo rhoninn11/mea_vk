@@ -12,39 +12,34 @@ const Swapchain = @import("swapchain.zig").Swapchain;
 const addons = @import("addons.zig");
 const dset = @import("dset.zig");
 
-const helpers = @import("helpers.zig");
 const vertex = @import("vertex.zig");
+
 const m = @import("math.zig");
 const t = @import("types.zig");
+const u = @import("utils.zig");
 const phx = @import("phys.zig");
 const imgs = @import("imgs.zig");
-const utils = @import("utils.zig");
 const prefils = @import("prefills.zig");
 const oklab = @import("oklab.zig");
 
 const InertiaVec2 = phx.InertiaPack(m.vec3);
 const Vertex = vertex.Vertex;
 
-const BufforingVert = Buffering(Vertex);
+const BufforingVert = MemCalc(Vertex);
 const Allocator = std.mem.Allocator;
 
 const motion = @import("motion.zig");
 const frame = @import("frame.zig");
 
-const vert_spv align(@alignOf(u32)) = @embedFile("vertex_shader").*;
-const frag_spv align(@alignOf(u32)) = @embedFile("fragment_shader").*;
+const pipe = @import("pipe.zig");
 
 const app_name = "vulkan-zig triangle example";
 const future_app_name = "oct_calculator";
 
-// Taki buferek może posłużyć np. do wysłania trójkątów na gpu
-fn Buffering(Base: type) type {
+fn MemCalc(Base: type) type {
     return struct {
-        const Self = @This();
-
         pub fn memSize(based_on: []const Base) usize {
             std.debug.assert(based_on.len >= 1);
-
             const unit_size = @sizeOf(@TypeOf(based_on[0]));
             return unit_size * based_on.len;
         }
@@ -197,10 +192,6 @@ pub fn main() !void {
     try deeper(access);
 }
 
-fn playerPos(p: *t.Player) m.vec3 {
-    return m.orbit_r(p.phi, p.r) + m.vec3{ 0, p.h, 0 };
-}
-
 var frame_state: frame.FrameState = .{
     .alt_proj = false,
     .model_idx = 0,
@@ -208,7 +199,7 @@ var frame_state: frame.FrameState = .{
 
 fn deeper(access: EasyAcces) !void {
     // const grid = sht.GridSize.g64;
-    const grid = shu.xyGrid(128, 32);
+    const grid = shu.xyGrid(64, 64);
     const deeper_allocator = std.heap.page_allocator;
     var img = try proto.serdesLoad(deeper_allocator);
     defer img.deinit(deeper_allocator);
@@ -317,8 +308,10 @@ fn deeper(access: EasyAcces) !void {
     }, null);
     defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
 
-    const pipeline = try createPipeline(gc, pipeline_layout, render_pass);
+    const pipeline = try pipe.createPipeline(gc, pipeline_layout, render_pass);
+    const pipeline_2nd = try pipe.createPipeline(gc, pipeline_layout, render_pass);
     defer gc.dev.destroyPipeline(pipeline, null);
+    defer gc.dev.destroyPipeline(pipeline_2nd, null);
 
     // framebuffers
     var framebuffers = try createFramebuffers(
@@ -354,7 +347,7 @@ fn deeper(access: EasyAcces) !void {
 
     const draw_instanced_attempt: gftx.DrawInfo = .{
         .instance_count = grid.total,
-        .pipeline = pipeline,
+        .pipeline = [4]vk.Pipeline{ pipeline, pipeline_2nd, undefined, undefined },
         .pipeline_layout = pipeline_layout,
         .uniform_dsets = uniform_dset.d_set_arr,
         .storage_dsets = storage_dset.d_set_arr,
@@ -414,13 +407,13 @@ fn deeper(access: EasyAcces) !void {
     const s_interval = std.time.us_per_s;
     timeline1.arm(s_interval * 0.5);
 
-    var cplr: utils.CappedPlayer = .default;
+    var cplr: u.CappedPlayer = .default;
 
     const IVec3 = phx.InertiaPack(m.vec3);
-    var inertia = IVec3.Inertia.init(.{ cplr.p.phi, 0, 0 });
-    inertia.phx = IVec3.InertiaCfg.default();
+    var inertia = IVec3.Inertia.init(.{ cplr.phi_raw, 0, 0 });
+    inertia.phx = .default;
 
-    var phi_val_monit = utils.ValMonit{
+    var phi_val_monit = u.ValMonit{
         .name = "phi val",
         .val = 0,
     };
@@ -451,16 +444,16 @@ fn deeper(access: EasyAcces) !void {
 
         const phi_spead: f32 = 1;
         const phi_delt = (-phi_moved) * td * std.math.tau * phi_spead;
-        const phi_a = cplr.p.phi + phi_delt;
+        cplr.phi_raw += phi_delt;
 
-        inertia.in(.{ phi_a, 0, 0 });
+        inertia.in(.{ cplr.phi_raw, 0, 0 });
         inertia.simulate(timeline1.delta_ms);
 
-        const phi_delayed = inertia.out()[0];
-        phi_val_monit.update(phi_delayed);
-        cplr.p.phi = phi_a;
+        const phi_sim = inertia.out()[0];
+        phi_val_monit.update(phi_sim);
+        cplr.p.phi = phi_sim;
 
-        utils.PlayerUpdate(&cplr.p, &plr_input, td);
+        cplr.control(&plr_input, td);
 
         if (glass.update(&glass_input)) {
             try glass.updateStorage(storage_dset, true);
@@ -504,7 +497,7 @@ fn deeper(access: EasyAcces) !void {
             uniform_dset,
             @intCast(img_idx),
             timeline.total_s,
-            playerPos(&cplr.p),
+            cplr.pos(),
             size,
         );
 
@@ -687,145 +680,6 @@ fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain) !vk.Render
     };
 
     return try gc.dev.createRenderPass(&render_pass_create_info, null);
-}
-
-fn createPipeline(
-    gc: *const GraphicsContext,
-    layout: vk.PipelineLayout,
-    render_pass: vk.RenderPass,
-) !vk.Pipeline {
-    const vert = try gc.dev.createShaderModule(&.{
-        .code_size = vert_spv.len,
-        .p_code = @ptrCast(&vert_spv),
-    }, null);
-    defer gc.dev.destroyShaderModule(vert, null);
-
-    const frag = try gc.dev.createShaderModule(&.{
-        .code_size = frag_spv.len,
-        .p_code = @ptrCast(&frag_spv),
-    }, null);
-    defer gc.dev.destroyShaderModule(frag, null);
-
-    const pssci = [_]vk.PipelineShaderStageCreateInfo{
-        .{
-            .stage = .{ .vertex_bit = true },
-            .module = vert,
-            .p_name = "main",
-        },
-        .{
-            .stage = .{ .fragment_bit = true },
-            .module = frag,
-            .p_name = "main",
-        },
-    };
-
-    const pvisci = vk.PipelineVertexInputStateCreateInfo{
-        .vertex_binding_description_count = 1,
-        .p_vertex_binding_descriptions = @ptrCast(&Vertex.binding_description),
-        .vertex_attribute_description_count = Vertex.attribute_description.len,
-        .p_vertex_attribute_descriptions = &Vertex.attribute_description,
-    };
-
-    const piasci = vk.PipelineInputAssemblyStateCreateInfo{
-        .topology = .triangle_list,
-        .primitive_restart_enable = .false,
-    };
-
-    const pvsci = vk.PipelineViewportStateCreateInfo{
-        .viewport_count = 1,
-        .p_viewports = undefined, // set in createCommandBuffers with cmdSetViewport
-        .scissor_count = 1,
-        .p_scissors = undefined, // set in createCommandBuffers with cmdSetScissor
-    };
-
-    const prsci = vk.PipelineRasterizationStateCreateInfo{
-        .depth_clamp_enable = .false,
-        .rasterizer_discard_enable = .false,
-        .polygon_mode = .fill,
-        .cull_mode = .{ .back_bit = false },
-        .front_face = .clockwise, // couse we assume Y axis flip
-        .depth_bias_enable = .false,
-        .depth_bias_constant_factor = 0,
-        .depth_bias_clamp = 0,
-        .depth_bias_slope_factor = 0,
-        .line_width = 1,
-    };
-
-    const pmsci = vk.PipelineMultisampleStateCreateInfo{
-        .rasterization_samples = .{ .@"1_bit" = true },
-        .sample_shading_enable = .false,
-        .min_sample_shading = 1,
-        .alpha_to_coverage_enable = .false,
-        .alpha_to_one_enable = .false,
-    };
-
-    const pcbas = vk.PipelineColorBlendAttachmentState{
-        .blend_enable = .false,
-        .src_color_blend_factor = .one,
-        .dst_color_blend_factor = .zero,
-        .color_blend_op = .add,
-        .src_alpha_blend_factor = .one,
-        .dst_alpha_blend_factor = .zero,
-        .alpha_blend_op = .add,
-        .color_write_mask = .{ .r_bit = true, .g_bit = true, .b_bit = true, .a_bit = true },
-    };
-
-    const pcbsci = vk.PipelineColorBlendStateCreateInfo{
-        .logic_op_enable = .false,
-        .logic_op = .copy,
-        .attachment_count = 1,
-        .p_attachments = @ptrCast(&pcbas),
-        .blend_constants = [_]f32{ 0, 0, 0, 0 },
-    };
-
-    const dynstate = [_]vk.DynamicState{ .viewport, .scissor };
-    const pdsci = vk.PipelineDynamicStateCreateInfo{
-        .flags = .{},
-        .dynamic_state_count = dynstate.len,
-        .p_dynamic_states = &dynstate,
-    };
-
-    const depth_stencil_state = vk.PipelineDepthStencilStateCreateInfo{
-        .depth_test_enable = .true,
-        .depth_write_enable = .true,
-        .depth_compare_op = .less,
-        .depth_bounds_test_enable = .false,
-        .min_depth_bounds = 0.0,
-        .max_depth_bounds = 1.0,
-        .stencil_test_enable = .false,
-        .front = undefined,
-        .back = undefined,
-    };
-
-    const gpci = vk.GraphicsPipelineCreateInfo{
-        .flags = .{},
-        .stage_count = 2,
-        .p_stages = &pssci,
-        .p_vertex_input_state = &pvisci,
-        .p_input_assembly_state = &piasci,
-        .p_tessellation_state = null,
-        .p_viewport_state = &pvsci,
-        .p_rasterization_state = &prsci,
-        .p_multisample_state = &pmsci,
-        .p_depth_stencil_state = &depth_stencil_state,
-        .p_color_blend_state = &pcbsci,
-        .p_dynamic_state = &pdsci,
-        .layout = layout,
-        .render_pass = render_pass,
-        .subpass = 0,
-        .base_pipeline_handle = .null_handle,
-        .base_pipeline_index = -1,
-    };
-
-    var pipeline: vk.Pipeline = undefined;
-    _ = try gc.dev.createGraphicsPipelines(
-        .null_handle,
-        1,
-        @ptrCast(&gpci),
-        null,
-        @ptrCast(&pipeline),
-    );
-    return pipeline;
 }
 
 test "do it even testing" {
