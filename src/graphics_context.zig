@@ -705,9 +705,9 @@ pub const baked = struct {
         .shader_stage = shader_frag_only,
     };
 
-    pub const BindingInfo = struct {
-        set_binding: u32,
-        size: u32,
+    pub const DSetDataInfo = struct {
+        binding: u32,
+        element_size: u32,
         num: u32 = 1,
     };
 

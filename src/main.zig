@@ -245,9 +245,9 @@ fn deeper(access: EasyAcces) !void {
         swapchain_len,
         gftx.baked.uniform_frag_vert_dyn,
         .{
-            .set_binding = 0,
-            .size = @sizeOf(sht.GroupData),
-            .num = 2,
+            .binding = 0,
+            .element_size = @sizeOf(sht.GroupData),
+            .num = 3,
         },
         null,
     );
@@ -259,8 +259,8 @@ fn deeper(access: EasyAcces) !void {
         swapchain_len,
         gftx.baked.storage_frag_vert,
         .{
-            .set_binding = 0,
-            .size = @sizeOf(sht.PerInstance) * @as(u32, grid.total),
+            .binding = 0,
+            .element_size = @sizeOf(sht.PerInstance) * @as(u32, grid.total),
         },
         null,
     );
@@ -274,20 +274,20 @@ fn deeper(access: EasyAcces) !void {
     var demo_r = try imgs.vulkanTexture(&pic, imgs.demo_tex_r[0..]);
     defer demo_rgb.deinit();
     defer demo_r.deinit();
-    var texture_dset = try dset.DescriptorPrep.init(
+    var texture_dset_ak_attlas = try dset.DescriptorPrep.init(
         allocator,
         gc,
         1,
         gftx.baked.texture_frag,
         .{
-            .set_binding = 0,
-            .size = @as(u32, @intCast(demo_rgb.dvk_size)),
+            .binding = 0,
+            .element_size = @as(u32, @intCast(demo_rgb.dvk_size)),
         },
         16,
     );
-    defer texture_dset.deinit(allocator);
-    texture_dset.updateTexture(0, demo_rgb, 0);
-    texture_dset.updateTexture(0, demo_r, 1);
+    defer texture_dset_ak_attlas.deinit(allocator);
+    texture_dset_ak_attlas.updateTexture(0, demo_rgb, 0);
+    texture_dset_ak_attlas.updateTexture(0, demo_r, 1);
 
     // render pass
     const render_pass = try createRenderPass(gc, swapchain);
@@ -297,7 +297,7 @@ fn deeper(access: EasyAcces) !void {
     const dsets = [_]vk.DescriptorSetLayout{
         uniform_dset._d_set_layout.?,
         storage_dset._d_set_layout.?,
-        texture_dset._d_set_layout.?,
+        texture_dset_ak_attlas._d_set_layout.?,
     };
     const pipeline_layout = try gc.dev.createPipelineLayout(&.{
         .flags = .{},
@@ -351,7 +351,7 @@ fn deeper(access: EasyAcces) !void {
         .pipeline_layout = pipeline_layout,
         .uniform_dsets = uniform_dset.d_set_arr,
         .storage_dsets = storage_dset.d_set_arr,
-        .texture_dset = texture_dset.d_set_arr.items[0],
+        .texture_dset = texture_dset_ak_attlas.d_set_arr.items[0],
     };
 
     const frame_pools_config: vk.CommandPoolCreateInfo = .{
@@ -450,7 +450,7 @@ fn deeper(access: EasyAcces) !void {
         inertia.simulate(timeline1.delta_ms);
 
         const phi_sim = inertia.out()[0];
-        phi_val_monit.update(phi_sim);
+        try phi_val_monit.update(phi_sim);
         cplr.p.phi = phi_sim;
 
         cplr.control(&plr_input, td);

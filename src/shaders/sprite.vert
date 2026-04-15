@@ -21,7 +21,6 @@ struct GroupData{
     MatPack matrices;
 };
 
-
 // whole data has is 16 x f32
 layout(set = 0, binding = 0) uniform GroupDataUbo{
     GroupData data;

@@ -29,8 +29,8 @@ pub fn perFrameUniformFill(
     }
     const target: m.vec3 = .{ 0, 0, 0 };
     scratchpad[0].matrices = try addons.paramatricVariation(camera, target, true);
-    scratchpad[1].matrices = addons.guiVisor(5, 2.5);
-    scratchpad[2].matrices = try addons.paramatricVariation(camera, target, false);
+    scratchpad[1].matrices = try addons.paramatricVariation(camera, target, false);
+    scratchpad[2].matrices = addons.guiVisor(5, 2.5);
 }
 
 pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {

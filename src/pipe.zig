@@ -3,10 +3,11 @@ const gm = @import("graphics_context.zig");
 const vk = @import("third_party/vk.zig");
 const v = @import("vertex.zig");
 
-const vert_spv align(@alignOf(u32)) = @embedFile("vertex_shader").*;
-const frag_spv align(@alignOf(u32)) = @embedFile("fragment_shader").*;
+const vert_spv align(@alignOf(u32)) = @embedFile("triangle_vert").*;
+const frag_spv align(@alignOf(u32)) = @embedFile("triangle_frag").*;
 const Vertex = v.Vertex;
 
+// TODO: Daayyym i need to change approach, to handle more shaders
 pub fn createPipeline(
     gc: *const gm.GraphicsContext,
     layout: vk.PipelineLayout,
@@ -36,7 +37,15 @@ pub fn createPipeline(
             .p_name = "main",
         },
     };
+    return restOfPipeline(&pssci, gc, layout, render_pass);
+}
 
+fn restOfPipeline(
+    pssci: *const [2]vk.PipelineShaderStageCreateInfo,
+    gc: *const gm.GraphicsContext,
+    layout: vk.PipelineLayout,
+    render_pass: vk.RenderPass,
+) !vk.Pipeline {
     const pvisci = vk.PipelineVertexInputStateCreateInfo{
         .vertex_binding_description_count = 1,
         .p_vertex_binding_descriptions = @ptrCast(&Vertex.binding_description),
@@ -118,7 +127,7 @@ pub fn createPipeline(
     const gpci = vk.GraphicsPipelineCreateInfo{
         .flags = .{},
         .stage_count = 2,
-        .p_stages = &pssci,
+        .p_stages = pssci,
         .p_vertex_input_state = &pvisci,
         .p_input_assembly_state = &piasci,
         .p_tessellation_state = null,
@@ -136,12 +145,13 @@ pub fn createPipeline(
     };
 
     var pipeline: vk.Pipeline = undefined;
-    _ = try gc.dev.createGraphicsPipelines(
+    const result = try gc.dev.createGraphicsPipelines(
         .null_handle,
         1,
         @ptrCast(&gpci),
         null,
         @ptrCast(&pipeline),
     );
+    _ = result;
     return pipeline;
 }

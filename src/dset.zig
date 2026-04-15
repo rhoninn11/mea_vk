@@ -65,14 +65,14 @@ pub const DescriptorPrep = struct {
         gc: *const gm.GraphicsContext,
         frame_copies_num: usize,
         using: gm.baked.DSetInit,
-        with: gm.baked.BindingInfo,
+        data_info: gm.baked.DSetDataInfo,
         bindless_size: ?u32,
     ) !Self {
         const len_u32: u32 = @intCast(frame_copies_num);
 
         var self: Self = .{
             .gc = gc,
-            .set_binding = with.set_binding,
+            .set_binding = data_info.binding,
             .set_type = using.usage.descriptor_type,
         };
         const arr_size: u32 = bindless_size orelse 1;
@@ -84,8 +84,6 @@ pub const DescriptorPrep = struct {
         try self.d_set_layout_arr.resize(alloc, frame_copies_num);
         try self.buff_arr.resize(alloc, frame_copies_num);
         try self.d_set_arr.resize(alloc, frame_copies_num);
-
-        // https://claude.ai/chat/59de4b64-073d-448f-8e03-a216c526e921
 
         //binding layout
         self._d_set_layout = try Self.dsetLayout(devk, //
@@ -100,7 +98,7 @@ pub const DescriptorPrep = struct {
                 self.gc,
                 using.memory_property,
                 using.usage.usage_flag,
-                with.size * with.num,
+                data_info.element_size * data_info.num,
             );
         }
 
@@ -150,13 +148,13 @@ pub const DescriptorPrep = struct {
             if (self.set_type != .combined_image_sampler) {
                 const buf_info = vk.DescriptorBufferInfo{
                     .buffer = self.buff_arr.items[i].?.dvk_bfr,
-                    .range = with.size,
+                    .range = data_info.element_size,
                     .offset = 0,
                 };
                 const write_ops: []const vk.WriteDescriptorSet = &.{vk.WriteDescriptorSet{
                     .s_type = .write_descriptor_set,
                     .dst_set = self.d_set_arr.items[i],
-                    .dst_binding = with.set_binding,
+                    .dst_binding = data_info.binding,
                     .dst_array_element = 0,
                     .descriptor_type = using.usage.descriptor_type,
                     .descriptor_count = 1,

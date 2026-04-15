@@ -113,25 +113,28 @@ pub fn build(b: *std.Build) !void {
         );
     } else {
         const ders_prefix: []const u8 = "src/shaders";
-        const ders_found: []const []const u8 = find_glsl_files(ders_prefix);
-        _ = ders_found;
+        const ders_found: []const []const u8 = try find_glsl_files(ders_prefix);
+        for (ders_found) |der| {
+            std.debug.print("+++ found shader file: {s}\n", .{der});
+        }
 
         const bld_cmd: []const []const u8 = &.{
             "glslc",
             "--target-env=vulkan1.2",
             "-o",
         };
+
         const vert_cmd = b.addSystemCommand(bld_cmd);
         const vert_spv = vert_cmd.addOutputFileArg("vert.spv");
         vert_cmd.addFileArg(b.path("src/shaders/triangle.vert"));
-        triangle_exe.root_module.addAnonymousImport("vertex_shader", .{
+        triangle_exe.root_module.addAnonymousImport("triangle_vert", .{
             .root_source_file = vert_spv,
         });
 
         const frag_cmd = b.addSystemCommand(bld_cmd);
         const frag_spv = frag_cmd.addOutputFileArg("frag.spv");
         frag_cmd.addFileArg(b.path("src/shaders/triangle.frag"));
-        triangle_exe.root_module.addAnonymousImport("fragment_shader", .{
+        triangle_exe.root_module.addAnonymousImport("triangle_frag", .{
             .root_source_file = frag_spv,
         });
     }
@@ -154,9 +157,22 @@ pub fn build(b: *std.Build) !void {
 //     "triangle.frag",
 // }};
 
-fn find_glsl_files(prefix: []const u8) []const []const u8 {
+fn find_glsl_files(prefix: []const u8) ![]const []const u8 {
     // std.fs.cwd().openDir(prefix, .{ .iterate = true });
-    _ = prefix;
+    var for_abs_name: [4096]u8 = undefined;
+
+    const prefix_abs = try std.fs.realpath(prefix, &for_abs_name);
+    const shader_dir = try std.fs.openDirAbsolute(prefix_abs, .{ .iterate = true });
+
+    var iter = shader_dir.iterate();
+    while (try iter.next()) |entry| {
+        if (std.mem.endsWith(u8, entry.name, ".vert")) {
+            std.debug.print("+++ found {s}\n", .{entry.name});
+        }
+        if (std.mem.endsWith(u8, entry.name, ".vert")) {
+            std.debug.print("+++ found {s}\n", .{entry.name});
+        }
+    }
 
     return &.{
         "triangle.vert",

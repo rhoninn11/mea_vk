@@ -50,6 +50,7 @@ pub fn recordCommandBuffers(
         .extent = extent,
     };
 
+    const uniform_sz = @sizeOf(sht.GroupData);
     {
         try gm.dev.beginCommandBuffer(cbufr, &.{});
 
@@ -68,7 +69,6 @@ pub fn recordCommandBuffers(
             defer gm.dev.cmdEndRenderPass(cbufr);
             const vert_offset = models.offsets[state.model_idx];
             const offset = [_]vk.DeviceSize{vert_offset * @sizeOf(v.Vertex)};
-            gm.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[1]);
             gm.dev.cmdBindVertexBuffers(
                 cbufr,
                 0,
@@ -76,15 +76,16 @@ pub fn recordCommandBuffers(
                 @ptrCast(&models.vkBuffer),
                 &offset,
             );
+
+            const uniform_offset: u32 = if (state.alt_proj) uniform_sz * 1 else 0;
+            var dynamic_off: []const u32 = &.{uniform_offset};
             const all_sets: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
                 draw.uniform_dsets.items[rec.id],
                 draw.storage_dsets.items[rec.id],
                 draw.texture_dset,
             };
 
-            const uniform_offset: u32 = if (state.alt_proj) @sizeOf(sht.GroupData) else 0;
-            const dynamic_off: []const u32 = &.{uniform_offset};
-
+            gm.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[0]);
             gm.dev.cmdBindDescriptorSets(
                 cbufr,
                 .graphics,
@@ -102,6 +103,27 @@ pub fn recordCommandBuffers(
                 0,
                 0,
             );
+            if (state.alt_proj) {
+                dynamic_off = &.{uniform_sz * 2};
+                gm.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[1]);
+                gm.dev.cmdBindDescriptorSets(
+                    cbufr,
+                    .graphics,
+                    draw.pipeline_layout,
+                    0,
+                    @intCast(all_sets.len),
+                    all_sets.ptr,
+                    @intCast(dynamic_off.len),
+                    dynamic_off.ptr,
+                );
+                gm.dev.cmdDraw(
+                    cbufr,
+                    models.sizes[state.model_idx],
+                    draw.instance_count,
+                    0,
+                    0,
+                );
+            }
         }
         try gm.dev.endCommandBuffer(cbufr);
     }

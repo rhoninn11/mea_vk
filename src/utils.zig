@@ -147,18 +147,25 @@ pub const ValMonit = struct {
     name: []const u8,
     val: f32,
 
-    pub fn update(self: *ValMonit, new_val: f32) void {
+    pub fn update(self: *ValMonit, new_val: f32) !void {
+        var buffer: [1024]u8 = undefined;
+        const stderr_f = std.fs.File.stderr();
+        var stderr = stderr_f.writer(buffer[0..]).interface;
+
         self.val = new_val;
+
         if (self.printed) {
             for (0..3) |_| {
-                std.debug.print("\x1b[2K", .{}); // wyczyść linię
-                std.debug.print("\x1b[1A", .{}); // w górę
+                try stderr.print("\x1b[2K", .{}); // wyczyść linię
+                try stderr.print("\x1b[1A", .{}); // w górę
             }
         }
 
-        std.debug.print("---------------\n", .{});
-        std.debug.print("-- {s} equals \x1b[31m{d}\x1b[0m \n", .{ self.name, self.val });
-        std.debug.print("---------------\n", .{});
+        try stderr.print("---------------\n", .{});
+        try stderr.print("-- {s} equals \x1b[31m{d}\x1b[0m \n", .{ self.name, self.val });
+        try stderr.print("---------------\n", .{});
+
+        try stderr.flush();
 
         self.printed = true;
     }
