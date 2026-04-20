@@ -112,31 +112,44 @@ pub fn build(b: *std.Build) !void {
             .{ .root_source_file = frag_spv.getEmittedBin() },
         );
     } else {
-        const ders_prefix: []const u8 = "src/shaders";
-        const ders_found: []const []const u8 = try find_glsl_files(ders_prefix);
-        for (ders_found) |der| {
-            std.debug.print("+++ found shader file: {s}\n", .{der});
-        }
-
+        var scope_stack: [256]u8 = undefined;
+        const prefix: []const u8 = "src/shaders";
+        const sdrs_map = try find_glsl_files(prefix);
         const bld_cmd: []const []const u8 = &.{
             "glslc",
             "--target-env=vulkan1.2",
             "-o",
         };
+        for (0..sdrs_map.names.len) |i| {
+            var alc_local = std.heap.FixedBufferAllocator.init(scope_stack[0..]);
+            const alloc = alc_local.allocator();
 
-        const vert_cmd = b.addSystemCommand(bld_cmd);
-        const vert_spv = vert_cmd.addOutputFileArg("vert.spv");
-        vert_cmd.addFileArg(b.path("src/shaders/triangle.vert"));
-        triangle_exe.root_module.addAnonymousImport("triangle_vert", .{
-            .root_source_file = vert_spv,
-        });
+            const basename = sdrs_map.names[i];
+            const exts: [2][]const u8 = .{ "vert", "frag" };
+            var units: [2]DersUnit = undefined;
+            for (exts, 0..) |ext, jj| {
+                units[jj].unit = try std.fmt.allocPrint(alloc, "{s}_{s}", .{ basename, ext });
+                units[jj].unit_spv = try std.fmt.allocPrint(alloc, "{s}.spv", .{units[jj].unit});
+                units[jj].src = try std.fmt.allocPrint(alloc, "{s}/{s}.{s}", .{ prefix, basename, ext });
+            }
 
-        const frag_cmd = b.addSystemCommand(bld_cmd);
-        const frag_spv = frag_cmd.addOutputFileArg("frag.spv");
-        frag_cmd.addFileArg(b.path("src/shaders/triangle.frag"));
-        triangle_exe.root_module.addAnonymousImport("triangle_frag", .{
-            .root_source_file = frag_spv,
-        });
+            for (units) |shader| {
+                const spirv_bld_cmd = b.addSystemCommand(bld_cmd);
+                const spv_out = spirv_bld_cmd.addOutputFileArg(shader.unit_spv);
+                spirv_bld_cmd.addFileArg(b.path(shader.src));
+                triangle_exe.root_module.addAnonymousImport(shader.unit, .{
+                    .root_source_file = spv_out,
+                });
+                std.debug.print("+++ buiding {s} from {s}\n", .{ basename, shader.src });
+            }
+        }
+
+        // const vert_cmd = b.addSystemCommand(bld_cmd);
+        // const vert_spv = vert_cmd.addOutputFileArg("vert.spv");
+        // vert_cmd.addFileArg(b.path("src/shaders/triangle.vert"));
+        // triangle_exe.root_module.addAnonymousImport("triangle_vert", .{
+        //     .root_source_file = vert_spv,
+        // });
     }
 
     const triangle_run_cmd = b.addRunArtifact(triangle_exe);
@@ -152,12 +165,7 @@ pub fn build(b: *std.Build) !void {
     test_step.dependOn(&test_run_cmd.step);
 }
 
-// const shaders: []const []const u8 = .{.{
-//     "triangle.vert",
-//     "triangle.frag",
-// }};
-
-fn find_glsl_files(prefix: []const u8) ![]const []const u8 {
+fn find_glsl_files(prefix: []const u8) !DersMap {
     // std.fs.cwd().openDir(prefix, .{ .iterate = true });
     var for_abs_name: [4096]u8 = undefined;
 
@@ -167,18 +175,33 @@ fn find_glsl_files(prefix: []const u8) ![]const []const u8 {
     var iter = shader_dir.iterate();
     while (try iter.next()) |entry| {
         if (std.mem.endsWith(u8, entry.name, ".vert")) {
-            std.debug.print("+++ found {s}\n", .{entry.name});
+            // std.debug.print("+++ found {s}\n", .{entry.name});
         }
         if (std.mem.endsWith(u8, entry.name, ".vert")) {
-            std.debug.print("+++ found {s}\n", .{entry.name});
+            // std.debug.print("+++ found {s}\n", .{entry.name});
         }
     }
-
-    return &.{
-        "triangle.vert",
-        "triangle.frag",
+    return DersMap{
+        .names = &.{ "triangle", "sprite" },
+        .files = &.{
+            "triangle.vert",
+            "triangle.frag",
+            "sprite.vert",
+            "sprite.frag",
+        },
     };
 }
+
+const DersMap = struct {
+    files: []const []const u8,
+    names: []const []const u8,
+};
+
+const DersUnit = struct {
+    src: []const u8,
+    unit: []const u8,
+    unit_spv: []const u8,
+};
 fn protoGen(b: *std.Build, dep: *Dependency, target: std.Build.ResolvedTarget) void {
     const gen_step = protobuf.RunProtocStep.create(
         dep.builder,

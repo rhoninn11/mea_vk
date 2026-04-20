@@ -3,25 +3,58 @@ const gm = @import("graphics_context.zig");
 const vk = @import("third_party/vk.zig");
 const v = @import("vertex.zig");
 
-const vert_spv align(@alignOf(u32)) = @embedFile("triangle_vert").*;
-const frag_spv align(@alignOf(u32)) = @embedFile("triangle_frag").*;
+const vert_triangle align(@alignOf(u32)) = @embedFile("triangle_vert").*;
+const frag_triangle align(@alignOf(u32)) = @embedFile("triangle_frag").*;
+
+const vert_sprite align(@alignOf(u32)) = @embedFile("sprite_vert").*;
+const frag_sprite align(@alignOf(u32)) = @embedFile("sprite_frag").*;
 const Vertex = v.Vertex;
 
-// TODO: Daayyym i need to change approach, to handle more shaders
 pub fn createPipeline(
     gc: *const gm.GraphicsContext,
     layout: vk.PipelineLayout,
     render_pass: vk.RenderPass,
 ) !vk.Pipeline {
     const vert = try gc.dev.createShaderModule(&.{
-        .code_size = vert_spv.len,
-        .p_code = @ptrCast(&vert_spv),
+        .code_size = vert_triangle.len,
+        .p_code = @ptrCast(&vert_triangle),
     }, null);
     defer gc.dev.destroyShaderModule(vert, null);
 
     const frag = try gc.dev.createShaderModule(&.{
-        .code_size = frag_spv.len,
-        .p_code = @ptrCast(&frag_spv),
+        .code_size = frag_triangle.len,
+        .p_code = @ptrCast(&frag_triangle),
+    }, null);
+    defer gc.dev.destroyShaderModule(frag, null);
+
+    const pssci = [_]vk.PipelineShaderStageCreateInfo{
+        .{
+            .stage = .{ .vertex_bit = true },
+            .module = vert,
+            .p_name = "main",
+        },
+        .{
+            .stage = .{ .fragment_bit = true },
+            .module = frag,
+            .p_name = "main",
+        },
+    };
+    return restOfPipeline(&pssci, gc, layout, render_pass);
+}
+pub fn createPipelineAlt(
+    gc: *const gm.GraphicsContext,
+    layout: vk.PipelineLayout,
+    render_pass: vk.RenderPass,
+) !vk.Pipeline {
+    const vert = try gc.dev.createShaderModule(&.{
+        .code_size = vert_sprite.len,
+        .p_code = @ptrCast(&vert_sprite),
+    }, null);
+    defer gc.dev.destroyShaderModule(vert, null);
+
+    const frag = try gc.dev.createShaderModule(&.{
+        .code_size = frag_sprite.len,
+        .p_code = @ptrCast(&frag_sprite),
     }, null);
     defer gc.dev.destroyShaderModule(frag, null);
 

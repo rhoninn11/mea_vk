@@ -50,13 +50,7 @@ void main() {
 
     const float gate = v_depth_shading.x;
     const float h = v_depth_shading.y;
-    vec3 level_color = f_color.xyz;
-    if (gate > 0.5) {
-        level_color = inferno(h) * vec3(uv.x);
-    }
-    if (gate > 1.5) {
-        level_color = vec3(1,0.9,0.7);
-    }
-    
+    vec3 level_color = vec3(0.45, 0.3, 0.7);
+    level_color = level_color * vec3(uv.x);
     f_color = vec4(level_color, 1.0);
 }

@@ -309,7 +309,7 @@ fn deeper(access: EasyAcces) !void {
     defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
 
     const pipeline = try pipe.createPipeline(gc, pipeline_layout, render_pass);
-    const pipeline_2nd = try pipe.createPipeline(gc, pipeline_layout, render_pass);
+    const pipeline_2nd = try pipe.createPipelineAlt(gc, pipeline_layout, render_pass);
     defer gc.dev.destroyPipeline(pipeline, null);
     defer gc.dev.destroyPipeline(pipeline_2nd, null);
 
