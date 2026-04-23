@@ -1,4 +1,5 @@
 const std = @import("std");
+const vk = @import("third_party/vk.zig");
 
 const m = @import("math.zig");
 const sht = @import("shaders/types.zig");
@@ -12,6 +13,7 @@ pub fn perFrameUniformFill(
     total_s: f32,
     camera: m.vec3,
     size: f32,
+    screan: vk.Extent2D,
 ) !void {
     var stack_mem: [4096]u8 = undefined;
     var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
@@ -30,7 +32,9 @@ pub fn perFrameUniformFill(
     const target: m.vec3 = .{ 0, 0, 0 };
     scratchpad[0].matrices = try addons.paramatricVariation(camera, target, true);
     scratchpad[1].matrices = try addons.paramatricVariation(camera, target, false);
-    scratchpad[2].matrices = addons.guiVisor(5, 2.5);
+    const x: f32 = @as(f32, @floatFromInt(screan.width));
+    const y: f32 = @as(f32, @floatFromInt(screan.height));
+    scratchpad[2].matrices = addons.guiVisor(x, y);
 }
 
 pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {
@@ -60,7 +64,7 @@ pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spac
         storage_baker.items[i] = -0.125;
     }
 
-    const middle = addons.Gridor.gridMiddle(&grid);
+    const middle = addons.GridOps.middle(&grid);
     const min_dim = if (middle[0] > middle[2]) middle[2] else middle[0];
 
     const wave_scale = 1.5;
@@ -74,7 +78,7 @@ pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spac
             const i_f: f32 = @floatFromInt(i);
 
             // const y_d = (middle_alt[m.Z] - y_f) / middle_alt[m.Z];
-            const g_idx = addons.Gridor.gridIdx(&grid, i);
+            const g_idx = addons.GridOps.gridIdx(&grid, i);
             // if (g_idx[m.Z] > 0) {
             //     to_show = false;
             // }

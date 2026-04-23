@@ -75,7 +75,7 @@ pub const RingParams = struct {
 
 pub const Utils = struct {
     pub const Math = struct {
-        pub fn rotate(mat: m.mat3, tris: *TriangleArray) void {
+        pub fn matApply(tris: *TriangleArray, mat: m.mat3) void {
             const len = tris.items.len;
             for (0..len) |i| {
                 const vert = m.vec3u{ .arr = tris.items[i].pos };
@@ -125,9 +125,24 @@ pub const Utils = struct {
         for (0..ring_tris.items.len) |i| ring_tris.items[i].color[0] = 1;
         const rotmat = m.rotMatY(0.125);
 
-        Math.rotate(rotmat, &ring_tris);
+        Math.matApply(&ring_tris, rotmat);
         try addSides(alloc, &ring_tris);
         return ring_tris;
+    }
+
+    pub fn Bilboard(alloc: Allocator) !TriangleArray {
+        var triangles: TriangleArray = try .initCapacity(alloc, 6);
+        errdefer triangles.deinit(alloc);
+
+        var lid: [6]Vertex = undefined;
+
+        for (0.., tri_loops) |i, ti| {
+            lid[i] = quad[ti];
+        }
+        try triangles.appendSlice(alloc, &lid);
+        const rotmat = m.rotMatX(0.25);
+        Math.matApply(&triangles, rotmat);
+        return triangles;
     }
 
     fn addSides(alloc: Allocator, tris: *TriangleArray) !void {
@@ -277,4 +292,31 @@ pub fn populateModels(alloc: std.mem.Allocator, here: *TriangleArray, as: *VertI
     try here.appendSlice(alloc, shape.items);
     as.register(shape.items);
     shape.deinit(alloc);
+
+    shape = try Utils.Bilboard(alloc);
+    try here.appendSlice(alloc, shape.items);
+    as.register(shape.items);
+    shape.deinit(alloc);
 }
+
+const BBox = struct {
+    min: [3]f32,
+    max: [3]f32,
+
+    pub fn fromTriangles(t_arr: TriangleArray) BBox {
+        std.debug.assert(t_arr.items.len > 0);
+        var min = t_arr.items[0].pos;
+        var max = min;
+        for (t_arr.items) |vert| {
+            for (0..3) |i| {
+                if (vert.pos[i] < min[i]) min[i] = vert.pos[i];
+                if (vert.pos[i] > max[i]) max[i] = vert.pos[i];
+            }
+        }
+        return .{ .min = min, .max = max };
+    }
+
+    pub fn print(self: *const BBox, name: []const u8) void {
+        std.debug.print("??? {s} bbox: min - {any} | max - {any}\n", .{ name, self.min, self.max });
+    }
+};

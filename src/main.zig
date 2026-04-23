@@ -260,7 +260,7 @@ fn deeper(access: EasyAcces) !void {
         gftx.baked.storage_frag_vert,
         .{
             .binding = 0,
-            .element_size = @sizeOf(sht.PerInstance) * @as(u32, grid.total),
+            .element_size = @sizeOf(sht.PerInstance) * @as(u32, grid.total) * 2,
         },
         null,
     );
@@ -270,10 +270,25 @@ fn deeper(access: EasyAcces) !void {
     const size = 0.04;
     try prefils.storagePrefil(storage_dset, grid, spacing);
 
-    var demo_rgb = try imgs.vulkanTexture(&pic, imgs.demo_tex_rgb[0..]);
-    var demo_r = try imgs.vulkanTexture(&pic, imgs.demo_tex_r[0..]);
+    const atlas_size = 16;
+    var demo_rgb = try imgs.vulkanTexture(&pic, &imgs.demo_tex_rgb);
+    var demo_r = try imgs.vulkanTexture(&pic, &imgs.demo_tex_r);
     defer demo_rgb.deinit();
     defer demo_r.deinit();
+
+    const L_delt: f32 = 0.07;
+    var L: f32 = 0.2;
+    var ok_samples: [16]?gftx.RGBImage = undefined;
+    for (&ok_samples) |*sample| sample.* = null;
+    defer for (&ok_samples) |*sample| if (sample.*) |*valid| valid.deinit();
+    for (&ok_samples) |*sample| {
+        const oksample = try oklab.OkUnderstanding.sampleSpace(allocator, L);
+        defer allocator.free(oksample);
+        const ok_vk_tex = try imgs.vulkanTexture(&pic, oksample);
+        sample.* = ok_vk_tex;
+        L += L_delt;
+    }
+
     var texture_dset_ak_attlas = try dset.DescriptorPrep.init(
         allocator,
         gc,
@@ -283,11 +298,21 @@ fn deeper(access: EasyAcces) !void {
             .binding = 0,
             .element_size = @as(u32, @intCast(demo_rgb.dvk_size)),
         },
-        16,
+        atlas_size,
     );
     defer texture_dset_ak_attlas.deinit(allocator);
-    texture_dset_ak_attlas.updateTexture(0, demo_rgb, 0);
-    texture_dset_ak_attlas.updateTexture(0, demo_r, 1);
+
+    texture_dset_ak_attlas.updateTexture(0, &demo_rgb, 0);
+    texture_dset_ak_attlas.updateTexture(0, &demo_r, 1);
+    var idx: u8 = 2;
+    for (ok_samples) |sample| {
+        if (idx >= atlas_size) {
+            break;
+        }
+        _ = sample orelse break;
+        texture_dset_ak_attlas.updateTexture(0, &sample.?, idx);
+        idx += 1;
+    }
 
     // render pass
     const render_pass = try createRenderPass(gc, swapchain);
@@ -408,6 +433,7 @@ fn deeper(access: EasyAcces) !void {
     timeline1.arm(s_interval * 0.5);
 
     var cplr: u.CappedPlayer = .default;
+    cplr.inertia.phx = .default;
 
     const IVec3 = phx.InertiaPack(m.vec3);
     var inertia = IVec3.Inertia.init(.{ cplr.phi_raw, 0, 0 });
@@ -435,25 +461,8 @@ fn deeper(access: EasyAcces) !void {
         }
 
         const td = timeline.deltaS();
-
-        const phi_moved: f32 = switch (plr_input.axes[0]) {
-            motion.Axis.positive => 1,
-            motion.Axis.negative => -1,
-            else => 0,
-        };
-
-        const phi_spead: f32 = 1;
-        const phi_delt = (-phi_moved) * td * std.math.tau * phi_spead;
-        cplr.phi_raw += phi_delt;
-
-        inertia.in(.{ cplr.phi_raw, 0, 0 });
-        inertia.simulate(timeline1.delta_ms);
-
-        const phi_sim = inertia.out()[0];
-        try phi_val_monit.update(phi_sim);
-        cplr.p.phi = phi_sim;
-
         cplr.control(&plr_input, td);
+        try phi_val_monit.update(cplr.p.phi);
 
         if (glass.update(&glass_input)) {
             try glass.updateStorage(storage_dset, true);
@@ -499,6 +508,7 @@ fn deeper(access: EasyAcces) !void {
             timeline.total_s,
             cplr.pos(),
             size,
+            win_size,
         );
 
         if (state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {

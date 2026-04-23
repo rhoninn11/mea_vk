@@ -42,10 +42,7 @@ layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_color;
 
 layout(location = 0) out vec2 v_uv;
-layout(location = 1) out float v_progress;
-layout(location = 2) out vec2 v_depth_shading;
-layout(location = 3) flat out int v_tex_idx;
-layout(location = 4) out vec2 v_color_rest;
+layout(location = 1) flat out int v_tex_idx;
 
 
 // group locked at the middle of the screan
@@ -53,45 +50,21 @@ layout(location = 4) out vec2 v_color_rest;
 void main() {
     Instance m_inst = _storage.per_instance[gl_InstanceIndex];
     MatPack ems = _group.data.matrices;
-    float gate = m_inst.depth_ctrl.x;
-    float h = m_inst.depth_ctrl.y;
 
-    vec3 pose_on_surface = m_inst.offset_4d.xyz;
-    vec3 pos_scaled = a_pos * vec3(_group.data.scale.x);
-    
-    vec3 pos_im = pos_scaled;
-    if (gate > 0.5) {
-        pos_im = vec3(pos_scaled.x, pos_scaled.y*10*h, pos_scaled.z);
-    }
-    if (gate > 1.5) {
-        pos_im = pos_scaled;
-    }
+    vec3 inst_pos = m_inst.offset_4d.xyz;
 
-    float phase_offset = m_inst.other_offsets.x;
-    float spread_offset = m_inst.other_offsets.y;
-    
-    float phase = _group.data.temporal.x + phase_offset;
-
-//  should be visible after depth testing
-    float depth_osc = sin(_group.data.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
-    float y_anim = depth_osc + gl_InstanceIndex*0.0001; // to combat depth flickering
-    if (gate > 0.5) {
-        y_anim = h*2;
-    }
-    if (gate > 1.5) {
-        y_anim = h*2;
-    }
-
-    vec3 base = pos_im + pose_on_surface + vec3(0, y_anim, 0);
-
+    vec3 base = a_pos;
     vec4 before_transform = vec4(base, 1.0);
-    gl_Position = ems.proj * ems.view * ems.model * before_transform;
-    // gl_Position = before_transform; 
-    v_uv.rg = a_color.rg;
-    v_color_rest = vec2(spread_offset, y_anim);
 
-    v_progress = a_color.r + m_inst.new_usage.x;
+    gl_Position = ems.proj * before_transform;
+    
+    v_uv = a_color.xy;
 
-    v_depth_shading = m_inst.depth_ctrl.xy;
-    v_tex_idx = 0;
+    float time = _group.data.temporal.x*8;
+    float times = int(time/15);
+    int tex_idx = int(time - times*15);
+    if (tex_idx > 15) {
+        tex_idx = 15;
+    } 
+    v_tex_idx = tex_idx;
 }

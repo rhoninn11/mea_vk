@@ -67,14 +67,12 @@ pub fn recordCommandBuffers(
         }, .@"inline");
         {
             defer gm.dev.cmdEndRenderPass(cbufr);
-            const vert_offset = models.offsets[state.model_idx];
-            const offset = [_]vk.DeviceSize{vert_offset * @sizeOf(v.Vertex)};
             gm.dev.cmdBindVertexBuffers(
                 cbufr,
                 0,
                 1,
                 @ptrCast(&models.vkBuffer),
-                &offset,
+                &.{0},
             );
 
             const uniform_offset: u32 = if (state.alt_proj) uniform_sz * 1 else 0;
@@ -100,7 +98,7 @@ pub fn recordCommandBuffers(
                 cbufr,
                 models.sizes[state.model_idx],
                 draw.instance_count,
-                0,
+                models.offsets[state.model_idx],
                 0,
             );
             if (state.alt_proj) {
@@ -116,13 +114,17 @@ pub fn recordCommandBuffers(
                     @intCast(dynamic_off.len),
                     dynamic_off.ptr,
                 );
+                const bilbo_idx = 3;
+                const full_grid = sht.GridSize.g64;
                 gm.dev.cmdDraw(
                     cbufr,
-                    models.sizes[state.model_idx],
-                    draw.instance_count,
-                    0,
+                    models.sizes[bilbo_idx],
+                    10,
+                    models.offsets[bilbo_idx],
+                    // full_grid.total, //glInstance shift woth that
                     0,
                 );
+                _ = full_grid;
             }
         }
         try gm.dev.endCommandBuffer(cbufr);

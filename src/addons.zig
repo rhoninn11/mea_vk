@@ -15,12 +15,16 @@ pub const PerfStats = utils.PerfStats;
 
 pub const Timeline = time.Timeline;
 
-pub const Gridor = struct {
-    pub fn gridMiddle(grid: *const sht.GridSize) m.vec3 {
+pub const GridOps = struct {
+    pub fn middle(grid: *const sht.GridSize) m.vec3 {
+        const mid_2d = middle2D(grid);
+        return .{ mid_2d[0], 0, mid_2d[1] };
+    }
+    pub fn middle2D(grid: *const sht.GridSize) m.vec2 {
         std.debug.print("grid is: {} {}\n", .{ grid.h, grid.w });
         const x_mid = @as(f32, @floatFromInt(grid.w - 1)) * 0.5;
         const z_mid = @as(f32, @floatFromInt(grid.h - 1)) * 0.5;
-        return .{ x_mid, 0, z_mid };
+        return .{ x_mid, z_mid };
     }
 
     pub fn gridDelta(grid: *const sht.GridSize) m.vec3 {
@@ -65,8 +69,11 @@ pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: bool) !MatPack {
 }
 
 pub fn guiVisor(x: f32, y: f32) MatPack {
+    const scale: f32 = 1.0 / 128.0;
+    const _x = x * scale;
+    const _y = y * scale;
     const interm = MatPack{
-        .proj = m.mat_ortho(x * 0.9, -x * 0.1, y * 0.9, -y * 0.1, 1024, 0).arr,
+        .proj = m.mat_ortho(_x * 0.5, -_x * 0.5, _y * 0.5, -_y * 0.5, 16, -16).arr,
         .view = m.mat_identity().arr,
         .model = m.mat_identity().arr,
         // .view = m.mat_translate(-pos).arr,

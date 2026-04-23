@@ -3,6 +3,7 @@ const source = @import("third_party/oklab.zig");
 const m = @import("math.zig");
 const dset = @import("dset.zig");
 const sht = @import("shaders/types.zig");
+const addons = @import("addons.zig");
 
 pub fn srgb_to_oklab(srgb: m.vec3) m.vec3 {
     const lms_conv: [3]m.vec3 = .{
@@ -124,8 +125,14 @@ pub const OkUnderstanding = struct {
                 };
                 phase += phase_delt;
                 l += l_delt;
-                const srgb_pos = oklab_to_srgb(lab);
+                var srgb_pos = oklab_to_srgb(lab);
                 var inst_data: sht.PerInstance = scratchpad[i];
+                const clamp_lim: f32 = 2;
+                for (0..3) |jj| {
+                    if (srgb_pos[jj] < 0) srgb_pos[jj] = 0;
+                    if (srgb_pos[jj] > clamp_lim) srgb_pos[jj] = clamp_lim;
+                }
+
                 inst_data.offset_4d = .{ srgb_pos[0], srgb_pos[1], srgb_pos[2], 0 };
                 inst_data.depth_ctrl[0] = 2;
                 inst_data.depth_ctrl[1] = 0;
@@ -134,5 +141,41 @@ pub const OkUnderstanding = struct {
             }
             @memcpy(mapping, scratchpad);
         }
+    }
+
+    pub fn sampleSpace(alloc: std.mem.Allocator, L: f32) ![]u8 {
+        const grid = sht.GridSize.g64;
+        const texture_mem = try alloc.alloc(u8, grid.total * 4);
+
+        const mid = addons.GridOps.middle2D(&grid);
+        const chroma = 0.05;
+        var invalid_pixels: u32 = 0;
+        for (0..grid.h) |yy| {
+            for (0..grid.w) |x| {
+                const idx: m.vec2 = .{ @as(f32, @floatFromInt(x)), @as(f32, @floatFromInt(yy)) };
+                var ab = idx - mid;
+                ab /= m.splat2d(3.5);
+                ab *= m.splat2d(chroma);
+                const srgb = oklab_to_srgb(.{ L, ab[0], ab[1] });
+                var valid = true;
+                for (0..3) |i| valid = valid and (srgb[i] > 0) and (srgb[i] <= 1);
+
+                const mem_idx = (yy * grid.w + x) * 4;
+                if (valid) {
+                    texture_mem[mem_idx] = @intFromFloat(srgb[0] * 255);
+                    texture_mem[mem_idx + 1] = @intFromFloat(srgb[1] * 255);
+                    texture_mem[mem_idx + 2] = @intFromFloat(srgb[2] * 255);
+                } else {
+                    invalid_pixels += 1;
+                    texture_mem[mem_idx] = 0;
+                    texture_mem[mem_idx + 1] = 0;
+                    texture_mem[mem_idx + 2] = 0;
+                }
+                texture_mem[mem_idx + 3] = 255;
+            }
+        }
+        std.debug.print("+++ there was {d} invalid pixels\n", .{invalid_pixels});
+
+        return texture_mem;
     }
 };

@@ -167,7 +167,7 @@ pub fn build(b: *std.Build) !void {
 
 fn find_glsl_files(prefix: []const u8) !DersMap {
     // std.fs.cwd().openDir(prefix, .{ .iterate = true });
-    var for_abs_name: [4096]u8 = undefined;
+    var for_abs_name: [std.fs.max_path_bytes]u8 = undefined;
 
     const prefix_abs = try std.fs.realpath(prefix, &for_abs_name);
     const shader_dir = try std.fs.openDirAbsolute(prefix_abs, .{ .iterate = true });

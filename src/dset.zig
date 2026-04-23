@@ -148,7 +148,7 @@ pub const DescriptorPrep = struct {
             if (self.set_type != .combined_image_sampler) {
                 const buf_info = vk.DescriptorBufferInfo{
                     .buffer = self.buff_arr.items[i].?.dvk_bfr,
-                    .range = data_info.element_size,
+                    .range = data_info.element_size, // relevent for dynamics offset but not exactly the same as single instance data
                     .offset = 0,
                 };
                 const write_ops: []const vk.WriteDescriptorSet = &.{vk.WriteDescriptorSet{
@@ -169,7 +169,7 @@ pub const DescriptorPrep = struct {
         return self;
     }
 
-    pub fn updateTexture(self: *Self, idx: usize, img: gm.RGBImage, array_idx: ?u32) void {
+    pub fn updateTexture(self: *Self, idx: usize, img: *const gm.RGBImage, array_idx: ?u32) void {
         const img_info = vk.DescriptorImageInfo{
             .image_layout = .shader_read_only_optimal,
             .image_view = img.vk_img_view.?,

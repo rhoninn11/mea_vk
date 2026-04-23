@@ -64,6 +64,9 @@ pub inline fn splat4d(a: f32) vec4 {
 pub inline fn splat3d(a: f32) vec3 {
     return @splat(a);
 }
+pub inline fn splat2d(a: f32) vec2 {
+    return @splat(a);
+}
 pub fn trim3d(a: vec4) vec3 {
     return .{ a[0], a[1], a[2] };
 }

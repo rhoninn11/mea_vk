@@ -2,6 +2,7 @@ const std = @import("std");
 const t = @import("types.zig");
 const m = @import("math.zig");
 const motion = @import("motion.zig");
+const phys = @import("phys.zig");
 
 pub fn Slider(vecTpy: type) type {
     return struct {
@@ -84,12 +85,15 @@ pub const PerfStats = struct {
         s.frame_num += 1;
     }
 };
+
+const IVec3 = phys.InertiaPack(m.vec3);
 pub const CappedPlayer = struct {
     pub const lim_r = Caped.init(1, 5);
     pub const lim_h = Caped.init(-10, 10);
 
     p: t.Player,
     phi_raw: f32,
+    inertia: IVec3.Inertia,
     pub const default: CappedPlayer = .{
         .phi_raw = 0,
         .p = .{
@@ -97,12 +101,29 @@ pub const CappedPlayer = struct {
             .r = lim_r.cap(1.75),
             .h = lim_h.cap(1.75),
         },
+        .inertia = .init(.{ 0, 0, 0 }),
     };
 
     pub fn pos(self: *CappedPlayer) m.vec3 {
         return playerPos(&self.p);
     }
     pub fn control(self: *CappedPlayer, input: *const motion.HoldsAxis, td: f32) void {
+        const phi_moved: f32 = switch (input.axes[0]) {
+            motion.Axis.positive => 1,
+            motion.Axis.negative => -1,
+            else => 0,
+        };
+
+        const phi_spead: f32 = 1;
+        const phi_delt = (-phi_moved) * td * std.math.tau * phi_spead;
+        self.phi_raw += phi_delt;
+
+        self.inertia.in(.{ self.phi_raw, 0, 0 });
+        self.inertia.simulate(td);
+
+        const phi_sim = self.inertia.out()[0];
+        self.p.phi = phi_sim;
+
         playerApplyInput(&self.p, input, td);
     }
 };
@@ -150,22 +171,21 @@ pub const ValMonit = struct {
     pub fn update(self: *ValMonit, new_val: f32) !void {
         var buffer: [1024]u8 = undefined;
         const stderr_f = std.fs.File.stderr();
-        var stderr = stderr_f.writer(buffer[0..]).interface;
-
+        var w = stderr_f.writer(&buffer);
+        //TODO: it is a bit broken on windows
         self.val = new_val;
 
         if (self.printed) {
             for (0..3) |_| {
-                try stderr.print("\x1b[2K", .{}); // wyczyść linię
-                try stderr.print("\x1b[1A", .{}); // w górę
+                try w.interface.print("\x1b[2K", .{}); // wyczyść linię
+                try w.interface.print("\x1b[1A", .{}); // w górę
             }
         }
 
-        try stderr.print("---------------\n", .{});
-        try stderr.print("-- {s} equals \x1b[31m{d}\x1b[0m \n", .{ self.name, self.val });
-        try stderr.print("---------------\n", .{});
-
-        try stderr.flush();
+        try w.interface.print("---------------\n", .{});
+        try w.interface.print("-- {s} equals \x1b[31m{d}\x1b[0m \n", .{ self.name, self.val });
+        try w.interface.print("---------------\n", .{});
+        try w.interface.flush();
 
         self.printed = true;
     }
