@@ -10,9 +10,9 @@ pub const FrameState = struct {
     model_idx: u8,
 };
 
-pub fn recordCommandBuffers(
+pub fn recordFrame(
     rec: *const gftx.FrameRecorder,
-    models: *const v.VertIndex,
+    models: *const v.VertRepo,
     extent: vk.Extent2D,
     render_pass: vk.RenderPass,
     framebuffers: []const vk.Framebuffer,
@@ -71,7 +71,7 @@ pub fn recordCommandBuffers(
                 cbufr,
                 0,
                 1,
-                @ptrCast(&models.vkBuffer),
+                @ptrCast(&models.vbo.?.dvk_bfr),
                 &.{0},
             );
 

@@ -21,7 +21,6 @@ pub const GridOps = struct {
         return .{ mid_2d[0], 0, mid_2d[1] };
     }
     pub fn middle2D(grid: *const sht.GridSize) m.vec2 {
-        std.debug.print("grid is: {} {}\n", .{ grid.h, grid.w });
         const x_mid = @as(f32, @floatFromInt(grid.w - 1)) * 0.5;
         const z_mid = @as(f32, @floatFromInt(grid.h - 1)) * 0.5;
         return .{ x_mid, z_mid };

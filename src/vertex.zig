@@ -1,4 +1,5 @@
 const std = @import("std");
+const gm = @import("graphics_context.zig");
 const vk = @import("third_party/vk.zig");
 const before = @import("before.zig");
 const m = @import("math.zig");
@@ -240,20 +241,44 @@ pub const Utils = struct {
     }
 };
 
-pub const VertIndex = struct {
+pub const VertRepo = struct {
     offsets: [4]u32 = .{ 0, 0, 0, 0 },
     sizes: [4]u32 = .{ 0, 0, 0, 0 },
     head: u8 = 0,
     total: u32 = 0,
-    vkBuffer: vk.Buffer = undefined,
+    vbo: ?gm.BufferData = null,
 
-    pub fn register(self: *VertIndex, new: []const Vertex) void {
+    pub fn register(self: *VertRepo, new: []const Vertex) void {
         self.sizes[self.head] = @intCast(new.len);
         self.offsets[self.head] = self.total;
         self.total += @intCast(new.len);
         self.head += 1;
     }
+
+    pub fn deinit(self: *VertRepo, gc: *const gm.GraphicsContext) void {
+        if (self.vbo) |vbo| vbo.deinit(gc);
+    }
 };
+
+pub fn repoSpawn(alloc: std.mem.Allocator, pic: *const gm.PoolInCtx) !VertRepo {
+    var arean: std.heap.ArenaAllocator = .init(alloc);
+    defer arean.deinit();
+
+    var verts: TriangleArray = try .initCapacity(arean.allocator(), 256);
+
+    var repo: VertRepo = .{};
+    try populateModels(arean.allocator(), &verts, &repo);
+
+    const vert_buffer = try gm.createBuffer(
+        pic.gc,
+        gm.baked.memory_gpu,
+        gm.baked.usage_vert_dst,
+        @sizeOf(Vertex) * verts.items.len,
+    );
+    gm.uploadVertices(pic, vert_buffer.dvk_bfr, verts.items) catch unreachable;
+    repo.vbo = vert_buffer;
+    return repo;
+}
 
 pub const VertexAlt1 = struct {
     pos: [3]f32,
@@ -270,7 +295,7 @@ pub fn probing() void {
     tinkering(VertexAlt1);
     tinkering(VertexAlt2);
 }
-pub fn populateModels(alloc: std.mem.Allocator, here: *TriangleArray, as: *VertIndex) !void {
+pub fn populateModels(alloc: std.mem.Allocator, here: *TriangleArray, as: *VertRepo) !void {
     var param = RingParams.default;
     var shape: TriangleArray = undefined;
 

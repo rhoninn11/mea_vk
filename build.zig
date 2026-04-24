@@ -1,25 +1,57 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const bt = @import("src/build/t.zig");
 
 const vkgen = @import("vulkan_zig");
 const protobuf = @import("protobuf");
 const Dependency = std.Build.Dependency;
 
 var scope_target: ?std.Build.ResolvedTarget = null;
+
+pub const Options = struct {
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+
+    pub fn read(b: *std.Build) Options {
+        return .{
+            .target = b.standardTargetOptions(.{}),
+            .optimize = b.standardOptimizeOption(.{}),
+        };
+    }
+};
+
+pub fn cmdsBuild(b: *std.Build, o: Options) !void {
+    const triangle_exe = b.addExecutable(.{
+        .name = "shader_reader",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/cmd/shader_reader.zig"),
+            .target = o.target,
+            .link_libc = true,
+            .optimize = o.optimize,
+        }),
+        // TODO: Remove this once x86_64 is stable
+        .use_llvm = true,
+    });
+    b.installArtifact(triangle_exe);
+
+    const triangle_run_cmd = b.addRunArtifact(triangle_exe);
+    triangle_run_cmd.step.dependOn(b.getInstallStep());
+}
+
 pub fn build(b: *std.Build) !void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    const o = Options.read(b);
     const maybe_override_registry = b.option([]const u8, "override-registry", "Override the path to the Vulkan registry used for the examples");
     const use_zig_shaders = b.option(bool, "zig-shader", "Use Zig shaders instead of GLSL") orelse false;
 
-    scope_target = target;
+    try cmdsBuild(b, o);
+
     const triangle_exe = b.addExecutable(.{
         .name = "vk_exp",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
-            .target = target,
+            .target = o.target,
+            .optimize = o.optimize,
             .link_libc = true,
-            .optimize = optimize,
         }),
         // TODO: Remove this once x86_64 is stable
         .use_llvm = true,
@@ -29,17 +61,14 @@ pub fn build(b: *std.Build) !void {
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/test.zig"),
-            .target = target,
-            .optimize = optimize,
+            .target = o.target,
+            .optimize = o.optimize,
         }),
         .use_llvm = true,
     });
 
-    const pbDep = b.dependency("protobuf", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    protoGen(b, pbDep, target);
+    const pbDep = b.dependency("protobuf", o);
+    protoGen(b, pbDep, o.target);
     triangle_exe.root_module.addImport("protobuf", pbDep.module("protobuf"));
 
     const glfw_lib_fmt: []const u8 = if (builtin.target.os.tag == .windows) "{s}/bin" else "{s}/lib";
@@ -78,39 +107,7 @@ pub fn build(b: *std.Build) !void {
     // triangle_exe.root_module.addImport("vulkan", vulkan);
 
     if (use_zig_shaders) {
-        // https://claude.ai/chat/77a20a99-779d-4ab5-9b05-55416f09f559
-        const spirv_target = b.resolveTargetQuery(.{
-            .cpu_arch = .spirv32,
-            .os_tag = .vulkan,
-            .cpu_model = .{ .explicit = &std.Target.spirv.cpu.vulkan_v1_2 },
-            .ofmt = .spirv,
-        });
-
-        const vert_spv = b.addObject(.{
-            .name = "vertex_shader",
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("src/shaders/ref_vert.zig"),
-                .target = spirv_target,
-            }),
-            .use_llvm = false,
-        });
-        triangle_exe.root_module.addAnonymousImport(
-            "vertex_shader",
-            .{ .root_source_file = vert_spv.getEmittedBin() },
-        );
-
-        const frag_spv = b.addObject(.{
-            .name = "fragment_shader",
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("src/shaders/ref_frag.zig"),
-                .target = spirv_target,
-            }),
-            .use_llvm = false,
-        });
-        triangle_exe.root_module.addAnonymousImport(
-            "fragment_shader",
-            .{ .root_source_file = frag_spv.getEmittedBin() },
-        );
+        zig2spirv(b, triangle_exe);
     } else {
         var scope_stack: [256]u8 = undefined;
         const prefix: []const u8 = "src/shaders";
@@ -126,7 +123,7 @@ pub fn build(b: *std.Build) !void {
 
             const basename = sdrs_map.names[i];
             const exts: [2][]const u8 = .{ "vert", "frag" };
-            var units: [2]DersUnit = undefined;
+            var units: [2]bt.ShdrUnit = undefined;
             for (exts, 0..) |ext, jj| {
                 units[jj].unit = try std.fmt.allocPrint(alloc, "{s}_{s}", .{ basename, ext });
                 units[jj].unit_spv = try std.fmt.allocPrint(alloc, "{s}.spv", .{units[jj].unit});
@@ -164,8 +161,44 @@ pub fn build(b: *std.Build) !void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&test_run_cmd.step);
 }
+fn zig2spirv(b: *std.Build, user_exe: *std.Build.Step.Compile) void {
+    // https://claude.ai/chat/77a20a99-779d-4ab5-9b05-55416f09f559
+    const spirv_target = b.resolveTargetQuery(.{
+        .cpu_arch = .spirv32,
+        .os_tag = .vulkan,
+        .cpu_model = .{ .explicit = &std.Target.spirv.cpu.vulkan_v1_2 },
+        .ofmt = .spirv,
+    });
 
-fn find_glsl_files(prefix: []const u8) !DersMap {
+    const vert_spv = b.addObject(.{
+        .name = "vertex_shader",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/shaders/ref_vert.zig"),
+            .target = spirv_target,
+        }),
+        .use_llvm = false,
+    });
+    const frag_spv = b.addObject(.{
+        .name = "fragment_shader",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/shaders/ref_frag.zig"),
+            .target = spirv_target,
+        }),
+        .use_llvm = false,
+    });
+
+    user_exe.root_module.addAnonymousImport(
+        "vertex_shader",
+        .{ .root_source_file = vert_spv.getEmittedBin() },
+    );
+
+    user_exe.root_module.addAnonymousImport(
+        "fragment_shader",
+        .{ .root_source_file = frag_spv.getEmittedBin() },
+    );
+}
+
+fn find_glsl_files(prefix: []const u8) !bt.DersMap {
     // std.fs.cwd().openDir(prefix, .{ .iterate = true });
     var for_abs_name: [std.fs.max_path_bytes]u8 = undefined;
 
@@ -181,7 +214,7 @@ fn find_glsl_files(prefix: []const u8) !DersMap {
             // std.debug.print("+++ found {s}\n", .{entry.name});
         }
     }
-    return DersMap{
+    return bt.DersMap{
         .names = &.{ "triangle", "sprite" },
         .files = &.{
             "triangle.vert",
@@ -192,16 +225,6 @@ fn find_glsl_files(prefix: []const u8) !DersMap {
     };
 }
 
-const DersMap = struct {
-    files: []const []const u8,
-    names: []const []const u8,
-};
-
-const DersUnit = struct {
-    src: []const u8,
-    unit: []const u8,
-    unit_spv: []const u8,
-};
 fn protoGen(b: *std.Build, dep: *Dependency, target: std.Build.ResolvedTarget) void {
     const gen_step = protobuf.RunProtocStep.create(
         dep.builder,

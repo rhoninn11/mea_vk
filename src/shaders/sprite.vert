@@ -48,6 +48,7 @@ layout(location = 1) flat out int v_tex_idx;
 // group locked at the middle of the screan
 // group gives info to precalculate surface
 void main() {
+    bool indepentednt = true;
     Instance m_inst = _storage.per_instance[gl_InstanceIndex];
     MatPack ems = _group.data.matrices;
 
@@ -60,11 +61,19 @@ void main() {
     
     v_uv = a_color.xy;
 
-    float time = _group.data.temporal.x*8;
-    float times = int(time/15);
-    int tex_idx = int(time - times*15);
-    if (tex_idx > 15) {
-        tex_idx = 15;
-    } 
-    v_tex_idx = tex_idx;
+    int every = 12;
+    if (indepentednt) {
+        float time = _group.data.temporal.x*8;
+        float times = int(time/every);
+        int tex_idx = int(time - times*every);
+        if (tex_idx >= every) {
+            tex_idx = every-1;
+        } 
+        v_tex_idx = tex_idx + 2;
+    } else {
+        float repurpused = round(m_inst.offset_2d.x);
+        int inst_tex = int(repurpused);
+        v_tex_idx = inst_tex;
+    }
+    
 }

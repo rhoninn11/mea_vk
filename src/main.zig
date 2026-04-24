@@ -25,7 +25,6 @@ const oklab = @import("oklab.zig");
 const InertiaVec2 = phx.InertiaPack(m.vec3);
 const Vertex = vertex.Vertex;
 
-const BufforingVert = MemCalc(Vertex);
 const Allocator = std.mem.Allocator;
 
 const motion = @import("motion.zig");
@@ -35,16 +34,6 @@ const pipe = @import("pipe.zig");
 
 const app_name = "vulkan-zig triangle example";
 const future_app_name = "oct_calculator";
-
-fn MemCalc(Base: type) type {
-    return struct {
-        pub fn memSize(based_on: []const Base) usize {
-            std.debug.assert(based_on.len >= 1);
-            const unit_size = @sizeOf(@TypeOf(based_on[0]));
-            return unit_size * based_on.len;
-        }
-    };
-}
 
 const KeyAction = motion.KeyAction;
 fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
@@ -205,7 +194,7 @@ fn deeper(access: EasyAcces) !void {
     defer img.deinit(deeper_allocator);
 
     var glass = proto.LookingGlass.init(&img, grid);
-    const ok_understanding = oklab.OkUnderstanding{ .size = grid };
+    const ok_understanding = oklab.OkUnderstanding{ .grid = grid };
 
     var swapchain_len: u8 = undefined;
     // const gc = access.vkctx.?.*;
@@ -347,28 +336,9 @@ fn deeper(access: EasyAcces) !void {
     );
     defer destroyFramebuffers(gc, allocator, framebuffers);
 
-    // geometry
-    var repo: vertex.VertIndex = .{ .offsets = undefined };
-
-    const _32kb = 8096 * 4;
-    var stack_8kb: [_32kb]u8 = undefined;
-    var small_stack_alloc: std.heap.FixedBufferAllocator = .init(stack_8kb[0..]);
-    const ssa = small_stack_alloc.allocator();
-    var verts: vertex.TriangleArray = try .initCapacity(ssa, 256);
-    try vertex.populateModels(ssa, &verts, &repo);
-    const as_slice: []const Vertex = verts.items;
-
-    const vert_buffer = try gftx.createBuffer(
-        gc,
-        gftx.baked.memory_gpu,
-        gftx.baked.usage_vert_dst,
-        @sizeOf(Vertex) * as_slice.len,
-    );
-    defer vert_buffer.deinit(gc);
-    try uploadVertices(&pic, vert_buffer.dvk_bfr, as_slice);
-    repo.vkBuffer = vert_buffer.dvk_bfr;
-    // container
-    std.debug.print("+++ total verts {d}\n", .{verts.items.len});
+    var repo = try vertex.repoSpawn(allocator, &pic);
+    defer repo.deinit(gc);
+    std.debug.print("+++ total verts {d}\n", .{repo.total});
 
     const draw_instanced_attempt: gftx.DrawInfo = .{
         .instance_count = grid.total,
@@ -410,7 +380,7 @@ fn deeper(access: EasyAcces) !void {
             .pool = pools[i],
             .cmds = &cmdbufs[i],
         };
-        try frame.recordCommandBuffers(
+        try frame.recordFrame(
             &recorders[i],
             &repo,
             swapchain.extent,
@@ -474,7 +444,7 @@ fn deeper(access: EasyAcces) !void {
             frame_state.alt_proj = !frame_state.alt_proj;
         }
         if (ok_vis_trigger.fired()) {
-            try ok_understanding.updateStorage(storage_dset);
+            try ok_understanding.splatSpace(storage_dset);
         }
 
         if (slide_r_trig.fired()) {
@@ -493,7 +463,7 @@ fn deeper(access: EasyAcces) !void {
             continue;
         }
         try swapchain.currentWaitG();
-        try frame.recordCommandBuffers(
+        try frame.recordFrame(
             &recorders[img_idx],
             &repo,
             swapchain.extent,
@@ -526,7 +496,7 @@ fn deeper(access: EasyAcces) !void {
             );
 
             for (recorders) |*recorder| {
-                try frame.recordCommandBuffers(
+                try frame.recordFrame(
                     recorder,
                     &repo,
                     swapchain.extent,
@@ -548,37 +518,6 @@ fn deeper(access: EasyAcces) !void {
 
     try swapchain.waitForAllFences();
     try gc.dev.deviceWaitIdle();
-}
-
-// przykład przesyłania danych na gpu, też jest potrze kolejka dla tej operacji
-fn uploadVertices(pic: *const gftx.PoolInCtx, buffer: vk.Buffer, vert_slice: []const Vertex) !void {
-    const buff_size = BufforingVert.memSize(vert_slice);
-
-    var buffer_ = try gftx.createBuffer(
-        pic.gc, //
-        gftx.baked.memory_cpu,
-        gftx.baked.usage_src,
-        buff_size,
-    );
-    defer buffer_.deinit(pic.gc);
-
-    const gpu_vertices: [*]Vertex = @ptrCast(@alignCast(buffer_.mapping));
-    //does one @memcpy operation is more effective then #storagePrefill
-    @memcpy(gpu_vertices, vert_slice);
-
-    try copyBuffer(pic, buffer, buffer_.dvk_bfr, buff_size);
-}
-
-fn copyBuffer(pic: *const gftx.PoolInCtx, dst: vk.Buffer, src: vk.Buffer, size: vk.DeviceSize) !void {
-    const vkdev = pic.gc.dev;
-    const one_shot = try gftx.OneShotCommanded.init(pic);
-    const region = vk.BufferCopy{
-        .src_offset = 0,
-        .dst_offset = 0,
-        .size = size,
-    };
-    vkdev.cmdCopyBuffer(one_shot.cmds, src, dst, 1, @ptrCast(&region));
-    try one_shot.resolve();
 }
 
 fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_pass: vk.RenderPass, swapchain: Swapchain) ![]vk.Framebuffer {

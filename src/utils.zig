@@ -190,3 +190,13 @@ pub const ValMonit = struct {
         self.printed = true;
     }
 };
+
+pub fn MemCalc(Base: type) type {
+    return struct {
+        pub fn memSize(based_on: []const Base) usize {
+            std.debug.assert(based_on.len >= 1);
+            const unit_size = @sizeOf(@TypeOf(based_on[0]));
+            return unit_size * based_on.len;
+        }
+    };
+}

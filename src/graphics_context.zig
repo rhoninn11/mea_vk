@@ -5,6 +5,9 @@ const vk = @import("third_party/vk.zig");
 const t = @import("types.zig");
 
 const c = @import("c.zig");
+const v = @import("vertex.zig");
+const u = @import("utils.zig");
+
 const Allocator = std.mem.Allocator;
 
 const swpchn = @import("swapchain.zig");
@@ -146,6 +149,35 @@ pub fn createBuffer(
         .mapping = mapping,
     };
 }
+
+const BufforingVert = u.MemCalc(v.Vertex);
+// przykład przesyłania danych na gpu, też jest potrze kolejka dla tej operacji
+pub fn uploadVertices(pic: *const PoolInCtx, buffer: vk.Buffer, vert_slice: []const v.Vertex) !void {
+    const buff_size = BufforingVert.memSize(vert_slice);
+
+    var buffer_ = try createBuffer(pic.gc, //
+        baked.memory_cpu, baked.usage_src, buff_size);
+    defer buffer_.deinit(pic.gc);
+
+    const gpu_vertices: [*]v.Vertex = @ptrCast(@alignCast(buffer_.mapping));
+    //does one @memcpy operation is more effective then #storagePrefill
+    @memcpy(gpu_vertices, vert_slice);
+
+    try copyBuffer(pic, buffer, buffer_.dvk_bfr, buff_size);
+}
+
+fn copyBuffer(pic: *const PoolInCtx, dst: vk.Buffer, src: vk.Buffer, size: vk.DeviceSize) !void {
+    const vkdev = pic.gc.dev;
+    const one_shot = try OneShotCommanded.init(pic);
+    const region = vk.BufferCopy{
+        .src_offset = 0,
+        .dst_offset = 0,
+        .size = size,
+    };
+    vkdev.cmdCopyBuffer(one_shot.cmds, src, dst, 1, @ptrCast(&region));
+    try one_shot.resolve();
+}
+
 pub const PoolInCtx = struct {
     gc: *const GraphicsContext,
     pool: vk.CommandPool,

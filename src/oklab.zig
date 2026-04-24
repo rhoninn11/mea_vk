@@ -92,10 +92,10 @@ pub fn demo() void {
 
 const U16max: f32 = 1 << 16;
 pub const OkUnderstanding = struct {
-    size: sht.GridSize,
+    grid: sht.GridSize,
 
-    pub fn updateStorage(self: *const OkUnderstanding, storage_dset: dset.DescriptorPrep) !void {
-        const total = self.size.total;
+    pub fn splatSpace(self: *const OkUnderstanding, storage_dset: dset.DescriptorPrep) !void {
+        const total = self.grid.total;
         const lim_num = 8096;
         std.debug.assert(total <= lim_num);
 
@@ -111,20 +111,20 @@ pub const OkUnderstanding = struct {
             const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
             @memcpy(scratchpad, mapping);
             var phase: f32 = 0;
-            var l: f32 = 0;
 
             const chroma: f32 = 0.2;
-            const l_delt: f32 = 0.001;
+            // L 0-1 -> just progress over iteration
+            const l_delt: f32 = 1.0 / @as(f32, @floatFromInt(self.grid.total - 1));
+            var l: f32 = -l_delt;
             const phase_delt: f32 = 0.01;
             for (0..total) |i| {
-                // TODO: adjust postion to be in lab space calc srgb and clamp
+                l += l_delt;
                 const lab: m.vec3 = .{
                     l,
                     chroma * @cos(std.math.tau * phase),
                     chroma * @sin(std.math.tau * phase),
                 };
                 phase += phase_delt;
-                l += l_delt;
                 var srgb_pos = oklab_to_srgb(lab);
                 var inst_data: sht.PerInstance = scratchpad[i];
                 const clamp_lim: f32 = 2;
