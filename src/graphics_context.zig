@@ -739,7 +739,7 @@ pub const baked = struct {
 
     pub const DSetDataInfo = struct {
         binding: u32,
-        element_size: u32,
+        element_size: u32 = 0,
         num: u32 = 1,
     };
 

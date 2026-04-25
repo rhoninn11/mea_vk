@@ -259,48 +259,45 @@ fn deeper(access: EasyAcces) !void {
     const size = 0.04;
     try prefils.storagePrefil(storage_dset, grid, spacing);
 
-    const atlas_size = 16;
-    var demo_rgb = try imgs.vulkanTexture(&pic, &imgs.demo_tex_rgb);
-    var demo_r = try imgs.vulkanTexture(&pic, &imgs.demo_tex_r);
-    defer demo_rgb.deinit();
-    defer demo_r.deinit();
-
-    const L_delt: f32 = 0.07;
-    var L: f32 = 0.2;
-    var ok_samples: [16]?gftx.RGBImage = undefined;
-    for (&ok_samples) |*sample| sample.* = null;
-    defer for (&ok_samples) |*sample| if (sample.*) |*valid| valid.deinit();
-    for (&ok_samples) |*sample| {
-        const oksample = try oklab.OkUnderstanding.sampleSpace(allocator, L);
-        defer allocator.free(oksample);
-        const ok_vk_tex = try imgs.vulkanTexture(&pic, oksample);
-        sample.* = ok_vk_tex;
-        L += L_delt;
-    }
-
-    var texture_dset_ak_attlas = try dset.DescriptorPrep.init(
+    const ATLAS_MAX = 64;
+    var dset_atlas = try dset.DescriptorPrep.init(
         allocator,
         gc,
         1,
         gftx.baked.texture_frag,
-        .{
-            .binding = 0,
-            .element_size = @as(u32, @intCast(demo_rgb.dvk_size)),
-        },
-        atlas_size,
+        .{ .binding = 0 },
+        ATLAS_MAX,
     );
-    defer texture_dset_ak_attlas.deinit(allocator);
+    defer dset_atlas.deinit(allocator);
 
-    texture_dset_ak_attlas.updateTexture(0, &demo_rgb, 0);
-    texture_dset_ak_attlas.updateTexture(0, &demo_r, 1);
-    var idx: u8 = 2;
-    for (ok_samples) |sample| {
-        if (idx >= atlas_size) {
-            break;
-        }
-        _ = sample orelse break;
-        texture_dset_ak_attlas.updateTexture(0, &sample.?, idx);
-        idx += 1;
+    var demo_rgb = try imgs.vulkanTexture(&pic, &imgs.demo_tex_rgb);
+    var demo_r = try imgs.vulkanTexture(&pic, &imgs.demo_tex_r);
+    defer demo_rgb.deinit();
+    defer demo_r.deinit();
+    dset_atlas.updateTexture(0, &demo_rgb, 0);
+    dset_atlas.updateTexture(0, &demo_r, 1);
+
+    const SWEEP_MAX = 32;
+    const L_delt: f32 = 1.0 / @as(f32, @floatFromInt(SWEEP_MAX - 1));
+    var L: f32 = 0.0;
+
+    var ok_samples: [SWEEP_MAX]?gftx.RGBImage = undefined;
+    for (&ok_samples) |*sample| sample.* = null;
+    defer for (&ok_samples) |*sample| if (sample.*) |*valid| valid.deinit();
+
+    var atlas_idx: u8 = 32;
+    const tex_g = sht.GridSize.g64;
+    sweeping: for (&ok_samples) |*sample| {
+        const oksample = try oklab.OkUnderstanding.sampleSpace(allocator, L, &tex_g);
+        defer allocator.free(oksample);
+        const ok_rgba = try imgs.vulkanTexture(&pic, oksample);
+        dset_atlas.updateTexture(0, &ok_rgba, atlas_idx);
+
+        L += L_delt;
+        atlas_idx += 1;
+        sample.* = ok_rgba;
+
+        if (atlas_idx >= ATLAS_MAX) break :sweeping;
     }
 
     // render pass
@@ -311,7 +308,7 @@ fn deeper(access: EasyAcces) !void {
     const dsets = [_]vk.DescriptorSetLayout{
         uniform_dset._d_set_layout.?,
         storage_dset._d_set_layout.?,
-        texture_dset_ak_attlas._d_set_layout.?,
+        dset_atlas._d_set_layout.?,
     };
     const pipeline_layout = try gc.dev.createPipelineLayout(&.{
         .flags = .{},
@@ -346,7 +343,7 @@ fn deeper(access: EasyAcces) !void {
         .pipeline_layout = pipeline_layout,
         .uniform_dsets = uniform_dset.d_set_arr,
         .storage_dsets = storage_dset.d_set_arr,
-        .texture_dset = texture_dset_ak_attlas.d_set_arr.items[0],
+        .texture_dset = dset_atlas.d_set_arr.items[0],
     };
 
     const frame_pools_config: vk.CommandPoolCreateInfo = .{

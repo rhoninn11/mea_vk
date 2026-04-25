@@ -90,10 +90,11 @@ pub const DescriptorPrep = struct {
             self.set_binding, self.set_type, //
             using.shader_stage, arr_size);
 
-        // duplicate
         for (0..frame_copies_num) |i| {
             self.d_set_layout_arr.items[i] = self._d_set_layout.?;
             self.buff_arr.items[i] = null;
+            if (data_info.element_size == 0) continue;
+
             self.buff_arr.items[i] = try gm.createBuffer(
                 self.gc,
                 using.memory_property,

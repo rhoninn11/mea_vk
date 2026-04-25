@@ -143,15 +143,14 @@ pub const OkUnderstanding = struct {
         }
     }
 
-    pub fn sampleSpace(alloc: std.mem.Allocator, L: f32) ![]u8 {
-        const grid = sht.GridSize.g64;
-        const texture_mem = try alloc.alloc(u8, grid.total * 4);
+    pub fn sampleSpace(alloc: std.mem.Allocator, L: f32, g: *const sht.GridSize) ![]u8 {
+        const texture_mem = try alloc.alloc(u8, g.total * @sizeOf(u32));
 
-        const mid = addons.GridOps.middle2D(&grid);
+        const mid = addons.GridOps.middle2D(g);
         const chroma = 0.05;
         var invalid_pixels: u32 = 0;
-        for (0..grid.h) |yy| {
-            for (0..grid.w) |x| {
+        for (0..g.h) |yy| {
+            for (0..g.w) |x| {
                 const idx: m.vec2 = .{ @as(f32, @floatFromInt(x)), @as(f32, @floatFromInt(yy)) };
                 var ab = idx - mid;
                 ab /= m.splat2d(3.5);
@@ -160,21 +159,26 @@ pub const OkUnderstanding = struct {
                 var valid = true;
                 for (0..3) |i| valid = valid and (srgb[i] > 0) and (srgb[i] <= 1);
 
-                const mem_idx = (yy * grid.w + x) * 4;
+                const mem_idx = (yy * g.w + x) * 4;
                 if (valid) {
                     texture_mem[mem_idx] = @intFromFloat(srgb[0] * 255);
                     texture_mem[mem_idx + 1] = @intFromFloat(srgb[1] * 255);
                     texture_mem[mem_idx + 2] = @intFromFloat(srgb[2] * 255);
+                    texture_mem[mem_idx + 3] = 255;
                 } else {
                     invalid_pixels += 1;
                     texture_mem[mem_idx] = 0;
                     texture_mem[mem_idx + 1] = 0;
                     texture_mem[mem_idx + 2] = 0;
+                    texture_mem[mem_idx + 3] = 0;
                 }
-                texture_mem[mem_idx + 3] = 255;
             }
         }
-        std.debug.print("+++ there was {d} invalid pixels\n", .{invalid_pixels});
+        //alpha-to-coverage: https://www.youtube.com/watch?v=ltvI_gatbic
+        const cover: u32 = ((g.total - invalid_pixels) * 1000) / g.total;
+        const cover_f: f32 = @as(f32, @floatFromInt(cover)) / 10;
+
+        std.debug.print("+++ L {d:.2} c {d} | tex full {d:.2}%\n", .{ L, chroma, cover_f });
 
         return texture_mem;
     }

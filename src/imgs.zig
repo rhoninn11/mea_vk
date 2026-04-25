@@ -5,6 +5,7 @@ const GraphicsContext = gm.GraphicsContext;
 const t = @import("types.zig");
 const m = @import("math.zig");
 const swpchn = @import("swapchain.zig");
+const sht = @import("shaders/types.zig");
 
 // Checkboard texture spawned in memory
 const pixel_size = 4;
@@ -140,14 +141,18 @@ pub const RGBImage = struct {
     vk_img_view: ?vk.ImageView = null,
     vk_sampler: ?vk.Sampler = null,
 
-    pub fn init(gc: *const GraphicsContext, x: u8, y: u8) !Self {
+    pub fn memSize(g: sht.GridSize) usize {
+        return g.total * @sizeOf(u32);
+    }
+
+    pub fn init(gc: *const GraphicsContext, g: sht.GridSize) !Self {
         const devk = gc.dev;
         const format: vk.Format = .a8b8g8r8_srgb_pack32;
 
         const img_create_info: vk.ImageCreateInfo = .{
             .image_type = .@"2d",
             .format = format,
-            .extent = .{ .height = y, .width = x, .depth = 1 },
+            .extent = .{ .height = g.h, .width = g.w, .depth = 1 },
             .mip_levels = 1,
             .array_layers = 1,
             .samples = .{ .@"1_bit" = true },
@@ -230,7 +235,8 @@ pub const RGBImage = struct {
 };
 
 pub fn vulkanTexture(pic: *const gm.PoolInCtx, pixdata: []const u8) !gm.RGBImage {
-    var test_img = try gm.RGBImage.init(pic.gc, 64, 64);
+    const g64 = sht.GridSize.g64;
+    var test_img = try gm.RGBImage.init(pic.gc, g64);
 
     const buff_size = test_img.dvk_size;
     const src_buff = try gm.createBuffer(

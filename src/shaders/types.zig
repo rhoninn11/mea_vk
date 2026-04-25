@@ -48,4 +48,10 @@ pub const GridSize = struct {
         .h = 64,
         .total = 4096,
     };
+
+    pub const g128: GridSize = .{
+        .w = 128,
+        .h = 128,
+        .total = 4096 * 4,
+    };
 };

@@ -61,7 +61,7 @@ void main() {
     
     v_uv = a_color.xy;
 
-    int every = 12;
+    int every = 32;
     if (indepentednt) {
         float time = _group.data.temporal.x*8;
         float times = int(time/every);
@@ -69,7 +69,7 @@ void main() {
         if (tex_idx >= every) {
             tex_idx = every-1;
         } 
-        v_tex_idx = tex_idx + 2;
+        v_tex_idx = 32 + tex_idx;
     } else {
         float repurpused = round(m_inst.offset_2d.x);
         int inst_tex = int(repurpused);

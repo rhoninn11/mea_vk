@@ -112,7 +112,7 @@ pub const Utils = struct {
         return triangles;
     }
 
-    pub fn Ringy(alloc: Allocator) !TriangleArray {
+    pub fn Pierced(alloc: Allocator) !TriangleArray {
         const unit: f32 = @sqrt(2.0);
 
         const hmm = RingParams{
@@ -241,9 +241,10 @@ pub const Utils = struct {
     }
 };
 
+const MODEL_MAX: u8 = 8;
 pub const VertRepo = struct {
-    offsets: [4]u32 = .{ 0, 0, 0, 0 },
-    sizes: [4]u32 = .{ 0, 0, 0, 0 },
+    offsets: [MODEL_MAX]u32 = .{0} ** MODEL_MAX,
+    sizes: [MODEL_MAX]u32 = .{0} ** MODEL_MAX,
     head: u8 = 0,
     total: u32 = 0,
     vbo: ?gm.BufferData = null,
@@ -301,7 +302,7 @@ pub fn populateModels(alloc: std.mem.Allocator, here: *TriangleArray, as: *VertR
 
     param.len = 5;
     param.flat = true;
-    shape = try Utils.Ringy(alloc);
+    shape = try Utils.Pierced(alloc);
     try here.appendSlice(alloc, shape.items);
     as.register(shape.items);
     shape.deinit(alloc);
