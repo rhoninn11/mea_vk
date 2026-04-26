@@ -5,6 +5,7 @@ pub const MatPack = extern struct {
     proj: [16]f32 = m.mat_identity().arr,
 };
 
+//uniform struct
 pub const GroupData = extern struct {
     // ||| added uniform, storage and texture
     osc_scale: [2]f32 = undefined,
@@ -16,6 +17,7 @@ pub const GroupData = extern struct {
     matrices: MatPack = undefined,
 };
 
+//alignment 16 cuz gpu
 pub const PerInstance = struct {
     offset_2d: [2]f32 = undefined,
     other_offsets: [2]f32 = undefined,
@@ -37,21 +39,11 @@ pub const GridSize = struct {
     w: u16,
     h: u16,
 
-    pub const default: GridSize = .{
-        .w = 32,
-        .h = 32,
-        .total = 1024,
-    };
+    fn g(side: u16) GridSize {
+        return .{ .w = side, .h = side, .total = side * side };
+    }
 
-    pub const g64: GridSize = .{
-        .w = 64,
-        .h = 64,
-        .total = 4096,
-    };
-
-    pub const g128: GridSize = .{
-        .w = 128,
-        .h = 128,
-        .total = 4096 * 4,
-    };
+    pub const default: GridSize = g(32);
+    pub const g64: GridSize = g(64);
+    pub const g128: GridSize = g(128);
 };

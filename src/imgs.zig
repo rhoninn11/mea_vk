@@ -1,3 +1,4 @@
+const std = @import("std");
 const vk = @import("third_party/vk.zig");
 const gm = @import("graphics_context.zig");
 const GraphicsContext = gm.GraphicsContext;
@@ -234,11 +235,11 @@ pub const RGBImage = struct {
     }
 };
 
-pub fn vulkanTexture(pic: *const gm.PoolInCtx, pixdata: []const u8) !gm.RGBImage {
-    const g64 = sht.GridSize.g64;
+pub fn vulkanTexture(pic: *const gm.PoolInCtx, g64: sht.GridSize, pixdata: []const u8) !gm.RGBImage {
     var test_img = try gm.RGBImage.init(pic.gc, g64);
 
     const buff_size = test_img.dvk_size;
+    std.debug.print("+++ image mem {d}\n", .{buff_size});
     const src_buff = try gm.createBuffer(
         pic.gc,
         gm.baked.memory_cpu,
@@ -263,6 +264,7 @@ pub fn vulkanTexture(pic: *const gm.PoolInCtx, pixdata: []const u8) !gm.RGBImage
         .buffer = src_buff.dvk_bfr,
         .image = test_img.dvk_img,
         .layout = dst_layout,
+        .g = g64,
     });
 
     try imgLTrans(pic, .{
@@ -315,6 +317,7 @@ pub fn imgLTrans(cmd_ctx: *const gm.PoolInCtx, cfg: t.ImgLTranConfig) !void {
 }
 
 const BfrToImgCpyCfg = struct {
+    g: sht.GridSize,
     image: vk.Image,
     buffer: vk.Buffer,
     layout: vk.ImageLayout,
@@ -326,8 +329,8 @@ pub fn bfr2ImgCopy(cmd_ctx: *const gm.PoolInCtx, cfg: BfrToImgCpyCfg) !void {
         .buffer_row_length = 0,
         .buffer_image_height = 0,
         .image_extent = .{
-            .width = m_img_side,
-            .height = m_img_side,
+            .width = cfg.g.w,
+            .height = cfg.g.h,
             .depth = 1,
         },
         .image_subresource = gm.baked.color_bfr2img_sublyr,

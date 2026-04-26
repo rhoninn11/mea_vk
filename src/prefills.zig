@@ -64,7 +64,7 @@ pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spac
         storage_baker.items[i] = -0.125;
     }
 
-    const middle = addons.GridOps.middle(&grid);
+    const middle = addons.GridOps.center(&grid);
     const min_dim = if (middle[0] > middle[2]) middle[2] else middle[0];
 
     const wave_scale = 1.5;
@@ -98,7 +98,7 @@ pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spac
             fresh_one.new_usage[1] = dist;
             fresh_one.new_usage[2] = g_idx[m.X];
             fresh_one.new_usage[3] = delt[m.X];
-            fresh_one.offset_4d = m.stack4d(pos_1, 1);
+            fresh_one.offset_4d = m.stack4(pos_1, 1);
 
             fresh_one.depth_ctrl[0] = 0;
             fresh_one.depth_ctrl[1] = 0;

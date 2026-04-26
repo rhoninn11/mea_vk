@@ -55,7 +55,7 @@ void main() {
     vec3 inst_pos = m_inst.offset_4d.xyz;
 
     vec3 base = a_pos;
-    vec4 before_transform = vec4(base, 1.0);
+    vec4 before_transform = vec4(base, 1.0) + vec4(0,1,0,0);
 
     gl_Position = ems.proj * before_transform;
     

@@ -16,11 +16,11 @@ pub const PerfStats = utils.PerfStats;
 pub const Timeline = time.Timeline;
 
 pub const GridOps = struct {
-    pub fn middle(grid: *const sht.GridSize) m.vec3 {
-        const mid_2d = middle2D(grid);
+    pub fn center(grid: *const sht.GridSize) m.vec3 {
+        const mid_2d = middle(grid);
         return .{ mid_2d[0], 0, mid_2d[1] };
     }
-    pub fn middle2D(grid: *const sht.GridSize) m.vec2 {
+    pub fn middle(grid: *const sht.GridSize) m.vec2 {
         const x_mid = @as(f32, @floatFromInt(grid.w - 1)) * 0.5;
         const z_mid = @as(f32, @floatFromInt(grid.h - 1)) * 0.5;
         return .{ x_mid, z_mid };

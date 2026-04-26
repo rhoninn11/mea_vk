@@ -255,6 +255,9 @@ pub const VertRepo = struct {
         self.total += @intCast(new.len);
         self.head += 1;
     }
+    pub fn populate(self: *VertRepo, alloc: std.mem.Allocator, here: *TriangleArray) !void {
+        return populateModels(alloc, here, self);
+    }
 
     pub fn deinit(self: *VertRepo, gc: *const gm.GraphicsContext) void {
         if (self.vbo) |vbo| vbo.deinit(gc);
@@ -268,7 +271,7 @@ pub fn repoSpawn(alloc: std.mem.Allocator, pic: *const gm.PoolInCtx) !VertRepo {
     var verts: TriangleArray = try .initCapacity(arean.allocator(), 256);
 
     var repo: VertRepo = .{};
-    try populateModels(arean.allocator(), &verts, &repo);
+    try repo.populate(arean.allocator(), &verts);
 
     const vert_buffer = try gm.createBuffer(
         pic.gc,

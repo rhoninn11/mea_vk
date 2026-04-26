@@ -1,6 +1,7 @@
 const vk = @import("third_party/vk.zig");
 const m = @import("math.zig");
 const gput = @import("shaders/types.zig");
+const sht = @import("shaders/types.zig");
 
 pub const TransitPrep = struct {
     const Stages = struct {

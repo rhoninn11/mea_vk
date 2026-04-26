@@ -8,6 +8,7 @@ const v = @import("vertex.zig");
 pub const FrameState = struct {
     alt_proj: bool,
     model_idx: u8,
+    ok_slices_num: u8,
 };
 
 pub fn recordFrame(
@@ -119,7 +120,7 @@ pub fn recordFrame(
                 gm.dev.cmdDraw(
                     cbufr,
                     models.sizes[bilbo_idx],
-                    10,
+                    state.ok_slices_num,
                     models.offsets[bilbo_idx],
                     // full_grid.total, //glInstance shift woth that
                     0,

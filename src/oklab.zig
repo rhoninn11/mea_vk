@@ -94,7 +94,32 @@ const U16max: f32 = 1 << 16;
 pub const OkUnderstanding = struct {
     grid: sht.GridSize,
 
-    pub fn splatSpace(self: *const OkUnderstanding, storage_dset: dset.DescriptorPrep) !void {
+    pub fn labSpliced(storage_dset: dset.DescriptorPrep, slice_num: u8) !void {
+        const lim_num = 8096;
+        std.debug.assert(slice_num <= lim_num);
+
+        const stack_size = lim_num * @sizeOf(sht.PerInstance);
+        var stack_mem: [stack_size]u8 = undefined;
+
+        var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
+        const local_a = provider.allocator();
+
+        var scratchpad: []sht.PerInstance = try local_a.alloc(sht.PerInstance, slice_num);
+        for (storage_dset.buff_arr.items) |possible_buffer| {
+            for (0..scratchpad.len) |i| {
+                var edit: sht.PerInstance = scratchpad[i];
+                edit.offset_4d = .{ @as(f32, @floatFromInt(0)), 0, 0, 0 };
+                scratchpad[i] = edit;
+            }
+
+            const storage = possible_buffer.?;
+            const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
+
+            @memcpy(mapping + sht.GridSize.g64.total, scratchpad);
+        }
+    }
+
+    pub fn labAtInfinitum(self: *const OkUnderstanding, storage_dset: dset.DescriptorPrep) !void {
         const total = self.grid.total;
         const lim_num = 8096;
         std.debug.assert(total <= lim_num);
@@ -114,7 +139,7 @@ pub const OkUnderstanding = struct {
 
             const chroma: f32 = 0.2;
             // L 0-1 -> just progress over iteration
-            const l_delt: f32 = 1.0 / @as(f32, @floatFromInt(self.grid.total - 1));
+            const l_delt: f32 = 1.0 / 1000.0;
             var l: f32 = -l_delt;
             const phase_delt: f32 = 0.01;
             for (0..total) |i| {
@@ -126,11 +151,15 @@ pub const OkUnderstanding = struct {
                 };
                 phase += phase_delt;
                 var srgb_pos = oklab_to_srgb(lab);
+                var srgb_col = srgb_pos;
                 var inst_data: sht.PerInstance = scratchpad[i];
                 const clamp_lim: f32 = 2;
                 for (0..3) |jj| {
-                    if (srgb_pos[jj] < 0) srgb_pos[jj] = 0;
-                    if (srgb_pos[jj] > clamp_lim) srgb_pos[jj] = clamp_lim;
+                    if (srgb_pos[jj] < 0) {
+                        srgb_pos[jj] = 0;
+                        srgb_col[jj] = 0;
+                    }
+                    if (srgb_col[jj] > clamp_lim) srgb_col[jj] = clamp_lim;
                 }
 
                 inst_data.offset_4d = .{ srgb_pos[0], srgb_pos[1], srgb_pos[2], 0 };
@@ -143,27 +172,35 @@ pub const OkUnderstanding = struct {
         }
     }
 
+    var _local_marker: bool = true;
     pub fn sampleSpace(alloc: std.mem.Allocator, L: f32, g: *const sht.GridSize) ![]u8 {
         const texture_mem = try alloc.alloc(u8, g.total * @sizeOf(u32));
 
-        const mid = addons.GridOps.middle2D(g);
-        const chroma = 0.05;
+        const g_mid = addons.GridOps.middle(g);
+        if (_local_marker) {
+            std.debug.print("+++ | mid of the grid {any}\n", .{g_mid});
+            _local_marker = !_local_marker;
+        }
+
+        const chroma = 0.4;
         var invalid_pixels: u32 = 0;
         for (0..g.h) |yy| {
             for (0..g.w) |x| {
                 const idx: m.vec2 = .{ @as(f32, @floatFromInt(x)), @as(f32, @floatFromInt(yy)) };
-                var ab = idx - mid;
-                ab /= m.splat2d(3.5);
+                var ab = idx - g_mid;
+                ab /= m.splat2d(g_mid[0]);
                 ab *= m.splat2d(chroma);
-                const srgb = oklab_to_srgb(.{ L, ab[0], ab[1] });
+                const s_rgb = oklab_to_srgb(.{ L, ab[0], ab[1] });
                 var valid = true;
-                for (0..3) |i| valid = valid and (srgb[i] > 0) and (srgb[i] <= 1);
+                for (0..3) |i| valid = valid and (s_rgb[i] > 0) and (s_rgb[i] <= 1);
 
                 const mem_idx = (yy * g.w + x) * 4;
                 if (valid) {
-                    texture_mem[mem_idx] = @intFromFloat(srgb[0] * 255);
-                    texture_mem[mem_idx + 1] = @intFromFloat(srgb[1] * 255);
-                    texture_mem[mem_idx + 2] = @intFromFloat(srgb[2] * 255);
+                    const pix = m.stack4(s_rgb * m.splat3d(255), 255);
+                    _ = pix;
+                    texture_mem[mem_idx] = @intFromFloat(s_rgb[0] * 255);
+                    texture_mem[mem_idx + 1] = @intFromFloat(s_rgb[1] * 255);
+                    texture_mem[mem_idx + 2] = @intFromFloat(s_rgb[2] * 255);
                     texture_mem[mem_idx + 3] = 255;
                 } else {
                     invalid_pixels += 1;
@@ -178,7 +215,7 @@ pub const OkUnderstanding = struct {
         const cover: u32 = ((g.total - invalid_pixels) * 1000) / g.total;
         const cover_f: f32 = @as(f32, @floatFromInt(cover)) / 10;
 
-        std.debug.print("+++ L {d:.2} c {d} | tex full {d:.2}%\n", .{ L, chroma, cover_f });
+        std.debug.print("+++ L {d:.2} c {d} | tex coverage {d:.2}%\n", .{ L, chroma, cover_f });
 
         return texture_mem;
     }

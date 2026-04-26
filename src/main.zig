@@ -181,14 +181,16 @@ pub fn main() !void {
     try deeper(access);
 }
 
+const OK_SWEEP: u8 = 32;
 var frame_state: frame.FrameState = .{
     .alt_proj = false,
     .model_idx = 0,
+    .ok_slices_num = OK_SWEEP,
 };
 
 fn deeper(access: EasyAcces) !void {
     // const grid = sht.GridSize.g64;
-    const grid = shu.xyGrid(64, 64);
+    const grid = sht.GridSize.g64;
     const deeper_allocator = std.heap.page_allocator;
     var img = try proto.serdesLoad(deeper_allocator);
     defer img.deinit(deeper_allocator);
@@ -269,36 +271,36 @@ fn deeper(access: EasyAcces) !void {
         ATLAS_MAX,
     );
     defer dset_atlas.deinit(allocator);
+    const g64 = sht.GridSize.g64;
 
-    var demo_rgb = try imgs.vulkanTexture(&pic, &imgs.demo_tex_rgb);
-    var demo_r = try imgs.vulkanTexture(&pic, &imgs.demo_tex_r);
+    var demo_rgb = try imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb);
+    var demo_r = try imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_r);
     defer demo_rgb.deinit();
     defer demo_r.deinit();
     dset_atlas.updateTexture(0, &demo_rgb, 0);
     dset_atlas.updateTexture(0, &demo_r, 1);
 
-    const SWEEP_MAX = 32;
-    const L_delt: f32 = 1.0 / @as(f32, @floatFromInt(SWEEP_MAX - 1));
+    const L_delt: f32 = 1.0 / @as(f32, @floatFromInt(OK_SWEEP - 1));
     var L: f32 = 0.0;
 
-    var ok_samples: [SWEEP_MAX]?gftx.RGBImage = undefined;
+    var ok_samples: [OK_SWEEP]?gftx.RGBImage = undefined;
     for (&ok_samples) |*sample| sample.* = null;
     defer for (&ok_samples) |*sample| if (sample.*) |*valid| valid.deinit();
 
     var atlas_idx: u8 = 32;
-    const tex_g = sht.GridSize.g64;
-    sweeping: for (&ok_samples) |*sample| {
-        const oksample = try oklab.OkUnderstanding.sampleSpace(allocator, L, &tex_g);
+    const ok_g = sht.GridSize.g128;
+    for (&ok_samples) |*sample| {
+        std.debug.assert(atlas_idx < ATLAS_MAX);
+        const oksample = try oklab.OkUnderstanding.sampleSpace(allocator, L, &ok_g);
         defer allocator.free(oksample);
-        const ok_rgba = try imgs.vulkanTexture(&pic, oksample);
+        const ok_rgba = try imgs.vulkanTexture(&pic, ok_g, oksample);
         dset_atlas.updateTexture(0, &ok_rgba, atlas_idx);
 
         L += L_delt;
         atlas_idx += 1;
         sample.* = ok_rgba;
-
-        if (atlas_idx >= ATLAS_MAX) break :sweeping;
     }
+    try oklab.OkUnderstanding.labSpliced(storage_dset, OK_SWEEP);
 
     // render pass
     const render_pass = try createRenderPass(gc, swapchain);
@@ -441,7 +443,7 @@ fn deeper(access: EasyAcces) !void {
             frame_state.alt_proj = !frame_state.alt_proj;
         }
         if (ok_vis_trigger.fired()) {
-            try ok_understanding.splatSpace(storage_dset);
+            try ok_understanding.labAtInfinitum(storage_dset);
         }
 
         if (slide_r_trig.fired()) {

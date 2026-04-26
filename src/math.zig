@@ -54,7 +54,7 @@ pub fn zero4() vec4 {
     return .{ 0, 0, 0, 0 };
 }
 
-pub fn stack4d(a: vec3, b: f32) vec4 {
+pub fn stack4(a: vec3, b: f32) vec4 {
     return .{ a[0], a[1], a[2], b };
 }
 
@@ -129,7 +129,7 @@ pub fn matXvec(m: mat4, v: vec4) vec4 {
 
 test "|mat_mul_vec" {
     const v = vec3{ 8, -2, 1 };
-    const b = matXvec(mat_identity().mat, stack4d(v, 1));
+    const b = matXvec(mat_identity().mat, stack4(v, 1));
 
     try std.testing.expect(len(v - trim3d(b)) < 0.001);
 }
@@ -202,7 +202,7 @@ test "|point_moved" {
     const b = vec3{ -1, 7, 18 };
     const assumed = a + b;
     const mat = mat_translate(a);
-    const t = matXvec(mat.mat, stack4d(b, 1));
+    const t = matXvec(mat.mat, stack4(b, 1));
 
     std.debug.print("translate \n", .{});
     std.debug.print("t {}\n", .{t});
@@ -225,10 +225,10 @@ pub fn lookRotation(pos: vec3, target: vec3, ref_up: vec3) mat4u {
     return .{
         .mat = .{
             // ratation transposition
-            stack4d(.{ right[X], up[X], forward[X] }, 0), //column-major
-            stack4d(.{ right[Y], up[Y], forward[Y] }, 0),
-            stack4d(.{ right[Z], up[Z], forward[Z] }, 0),
-            stack4d(zero3(), 1),
+            stack4(.{ right[X], up[X], forward[X] }, 0), //column-major
+            stack4(.{ right[Y], up[Y], forward[Y] }, 0),
+            stack4(.{ right[Z], up[Z], forward[Z] }, 0),
+            stack4(zero3(), 1),
         },
     };
 }
@@ -264,8 +264,8 @@ test "|ortho_to_vulkan" {
     const y1 = vec3{ -1, 1, 0 };
 
     const M1 = mat_ortho(10, 5, 10, 5, 1, -1);
-    const v0 = matXvec(M1.mat, stack4d(x0, 1));
-    const v1 = matXvec(M1.mat, stack4d(x1, 1));
+    const v0 = matXvec(M1.mat, stack4(x0, 1));
+    const v1 = matXvec(M1.mat, stack4(x1, 1));
     try std.testing.expect(len(y0 - trim3d(v0)) < 0.001);
     try std.testing.expect(len(y1 - trim3d(v1)) < 0.001);
 
@@ -275,8 +275,8 @@ test "|ortho_to_vulkan" {
     const y3 = vec3{ -1, 1, 0 };
 
     const M2 = mat_ortho_default();
-    const v2 = matXvec(M2.mat, stack4d(x2, 1));
-    const v3 = matXvec(M2.mat, stack4d(x3, 1));
+    const v2 = matXvec(M2.mat, stack4(x2, 1));
+    const v3 = matXvec(M2.mat, stack4(x3, 1));
     try std.testing.expect(len(y2 - trim3d(v2)) < 0.001);
     try std.testing.expect(len(y3 - trim3d(v3)) < 0.001);
 }
@@ -356,7 +356,7 @@ test "is_matrix_looking" {
     const pts: [3]vec3 = .{ point_m, point_r, point_u };
     var outs: [3]vec4 = undefined;
     for (pts, 0..) |x, i| {
-        outs[i] = matXvec(mat.mat, stack4d(x, 1));
+        outs[i] = matXvec(mat.mat, stack4(x, 1));
     }
 
     std.debug.print("---\n", .{});
