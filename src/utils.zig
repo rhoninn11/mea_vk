@@ -107,15 +107,19 @@ pub const CappedPlayer = struct {
     pub fn pos(self: *CappedPlayer) m.vec3 {
         return playerPos(&self.p);
     }
-    pub fn control(self: *CappedPlayer, input: *const motion.HoldsAxis, td: f32) void {
-        const phi_moved: f32 = switch (input.axes[0]) {
+
+    pub fn aroundAxis(phi_axis: motion.Axis) f32 {
+        const phi_moved: f32 = switch (phi_axis) {
             motion.Axis.positive => 1,
             motion.Axis.negative => -1,
             else => 0,
         };
+        return -phi_moved; //why minus
+    }
 
+    pub fn control(self: *CappedPlayer, input: *const motion.HoldsAxis, td: f32) void {
         const phi_spead: f32 = 1;
-        const phi_delt = (-phi_moved) * td * std.math.tau * phi_spead;
+        const phi_delt = aroundAxis(input.axes[0]) * td * std.math.tau * phi_spead;
         self.phi_raw += phi_delt;
 
         self.inertia.in(.{ self.phi_raw, 0, 0 });

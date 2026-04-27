@@ -125,7 +125,7 @@ pub const DescriptorPrep = struct {
             .max_sets = len_u32,
         }, null);
 
-        // eg. 16 bindles textures
+        // eg. "arr_size" bindles textures
         const variable_count: vk.DescriptorSetVariableDescriptorCountAllocateInfo = .{
             .descriptor_set_count = 1,
             .p_descriptor_counts = @ptrCast(&arr_size),

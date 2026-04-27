@@ -5,7 +5,7 @@ const vk = @import("third_party/vk.zig");
 
 const sht = @import("shaders/types.zig");
 const shu = @import("shaders/utils.zig");
-const gftx = @import("graphics_context.zig");
+const gm = @import("graphics_context.zig");
 
 const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
 const Swapchain = @import("swapchain.zig").Swapchain;
@@ -124,7 +124,7 @@ pub fn main() !void {
         glfw.KeyF, glfw.KeyR,
     });
 
-    vertex.probing();
+    vertex.probing(false);
 
     std.debug.print("+++ vertex info: {d}\n", .{Vertex.s_fields_num});
     try glfw.init();
@@ -188,6 +188,17 @@ var frame_state: frame.FrameState = .{
     .ok_slices_num = OK_SWEEP,
 };
 
+pub fn gpCommandQueue(gc: *const gm.GraphicsContext) !vk.CommandPool {
+    const pool_cinfo: vk.CommandPoolCreateInfo = .{
+        .queue_family_index = gc.graphics_queue.family,
+        .flags = .{
+            .reset_command_buffer_bit = true,
+            // .transient_bit = true,
+        },
+    };
+    return gc.dev.createCommandPool(&pool_cinfo, null);
+}
+
 fn deeper(access: EasyAcces) !void {
     // const grid = sht.GridSize.g64;
     const grid = sht.GridSize.g64;
@@ -213,28 +224,16 @@ fn deeper(access: EasyAcces) !void {
     std.debug.print("+++ Serial frames {}\n", .{swapchain_len});
 
     // texture image
-    const pool_cinfo: vk.CommandPoolCreateInfo = .{
-        .queue_family_index = gc.graphics_queue.family,
-        .flags = .{
-            .reset_command_buffer_bit = true,
-            // .transient_bit = true,
-        },
-    };
-    const pool_cmd = try gc.dev.createCommandPool(&pool_cinfo, null);
-    defer gc.dev.destroyCommandPool(pool_cmd, null);
-
-    const pic = gftx.PoolInCtx{
-        .gc = gc,
-        .pool = pool_cmd,
-    };
+    const general_cpool = try gpCommandQueue(gc);
+    defer gc.dev.destroyCommandPool(general_cpool, null);
+    const pic = gm.PoolInCtx{ .gc = gc, .pool = general_cpool };
 
     // fn theDeepest()
-
     var uniform_dset = try dset.DescriptorPrep.init(
         allocator,
         gc,
         swapchain_len,
-        gftx.baked.uniform_frag_vert_dyn,
+        gm.baked.uniform_frag_vert_dyn,
         .{
             .binding = 0,
             .element_size = @sizeOf(sht.GroupData),
@@ -248,7 +247,7 @@ fn deeper(access: EasyAcces) !void {
         allocator,
         gc,
         swapchain_len,
-        gftx.baked.storage_frag_vert,
+        gm.baked.storage_frag_vert,
         .{
             .binding = 0,
             .element_size = @sizeOf(sht.PerInstance) * @as(u32, grid.total) * 2,
@@ -266,7 +265,7 @@ fn deeper(access: EasyAcces) !void {
         allocator,
         gc,
         1,
-        gftx.baked.texture_frag,
+        gm.baked.texture_frag,
         .{ .binding = 0 },
         ATLAS_MAX,
     );
@@ -283,7 +282,7 @@ fn deeper(access: EasyAcces) !void {
     const L_delt: f32 = 1.0 / @as(f32, @floatFromInt(OK_SWEEP - 1));
     var L: f32 = 0.0;
 
-    var ok_samples: [OK_SWEEP]?gftx.RGBImage = undefined;
+    var ok_samples: [OK_SWEEP]?gm.RGBImage = undefined;
     for (&ok_samples) |*sample| sample.* = null;
     defer for (&ok_samples) |*sample| if (sample.*) |*valid| valid.deinit();
 
@@ -339,7 +338,7 @@ fn deeper(access: EasyAcces) !void {
     defer repo.deinit(gc);
     std.debug.print("+++ total verts {d}\n", .{repo.total});
 
-    const draw_instanced_attempt: gftx.DrawInfo = .{
+    const draw_instanced_attempt: gm.DrawInfo = .{
         .instance_count = grid.total,
         .pipeline = [4]vk.Pipeline{ pipeline, pipeline_2nd, undefined, undefined },
         .pipeline_layout = pipeline_layout,
@@ -361,7 +360,7 @@ fn deeper(access: EasyAcces) !void {
     var loc_stack: std.heap.FixedBufferAllocator = .init(inflight_stack[0..1024]);
     const cmdbufs: []vk.CommandBuffer = try loc_stack.allocator().alloc(vk.CommandBuffer, swapchain_len);
     const pools: []vk.CommandPool = try loc_stack.allocator().alloc(vk.CommandPool, swapchain_len);
-    const recorders: []gftx.FrameRecorder = try loc_stack.allocator().alloc(gftx.FrameRecorder, swapchain_len);
+    const recorders: []gm.FrameRecorder = try loc_stack.allocator().alloc(gm.FrameRecorder, swapchain_len);
 
     var created: u8 = 0;
     for (0..swapchain_len) |i| {
@@ -373,7 +372,7 @@ fn deeper(access: EasyAcces) !void {
     };
 
     for (0..swapchain_len) |i| {
-        recorders[i] = gftx.FrameRecorder{
+        recorders[i] = gm.FrameRecorder{
             .id = @intCast(i),
             .gm = pic.gc,
             .pool = pools[i],
@@ -401,11 +400,11 @@ fn deeper(access: EasyAcces) !void {
     const s_interval = std.time.us_per_s;
     timeline1.arm(s_interval * 0.5);
 
-    var cplr: u.CappedPlayer = .default;
-    cplr.inertia.phx = .default;
+    var pamperek: u.CappedPlayer = .default;
+    pamperek.inertia.phx = .default;
 
     const IVec3 = phx.InertiaPack(m.vec3);
-    var inertia = IVec3.Inertia.init(.{ cplr.phi_raw, 0, 0 });
+    var inertia = IVec3.Inertia.init(.{ pamperek.phi_raw, 0, 0 });
     inertia.phx = .default;
 
     var phi_val_monit = u.ValMonit{
@@ -430,8 +429,8 @@ fn deeper(access: EasyAcces) !void {
         }
 
         const td = timeline.deltaS();
-        cplr.control(&plr_input, td);
-        try phi_val_monit.update(cplr.p.phi);
+        pamperek.control(&plr_input, td);
+        try phi_val_monit.update(pamperek.p.phi);
 
         if (glass.update(&glass_input)) {
             try glass.updateStorage(storage_dset, true);
@@ -475,7 +474,7 @@ fn deeper(access: EasyAcces) !void {
             uniform_dset,
             @intCast(img_idx),
             timeline.total_s,
-            cplr.pos(),
+            pamperek.pos(),
             size,
             win_size,
         );

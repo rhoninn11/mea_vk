@@ -339,15 +339,26 @@ pub const GraphicsContext = struct {
     }
 
     fn propsExplore(self: *const Self) !void {
-        const props = self.instance.getPhysicalDeviceProperties(self.pdev);
+        var mv_props: vk.PhysicalDeviceMultiviewProperties = .{
+            .max_multiview_instance_index = undefined,
+            .max_multiview_view_count = undefined,
+        };
 
-        const ubo_alingment = props.limits.min_uniform_buffer_offset_alignment;
-        const sbo_alignment = props.limits.min_storage_buffer_offset_alignment;
+        var phys_pros: vk.PhysicalDeviceProperties2 = .{
+            .properties = undefined,
+            .p_next = &mv_props,
+        };
 
-        std.debug.print("--------------- \n", .{});
-        std.debug.print("+++ essunia ubo every {}bytes\n", .{ubo_alingment});
-        std.debug.print("+++ essunia sbo every {}bytes \n", .{sbo_alignment});
-        std.debug.print("--------------- \n", .{});
+        self.instance.getPhysicalDeviceProperties2(self.pdev, &phys_pros);
+        const lim = phys_pros.properties.limits;
+        std.debug.print("------- essunia -------- \n", .{});
+        std.debug.print("--- multiview props: {d} - (views), {d} - (instances)\n", .{
+            mv_props.max_multiview_view_count,
+            mv_props.max_multiview_instance_index,
+        });
+        std.debug.print("--- uniform allign: {d}_B\n", .{lim.min_uniform_buffer_offset_alignment});
+        std.debug.print("--- storage allign: {d}_B\n", .{lim.min_storage_buffer_offset_alignment});
+        std.debug.print("------------------------ \n", .{});
     }
 
     pub fn deinit(self: GraphicsContext) void {
@@ -563,9 +574,13 @@ fn checkSuitable(
         };
 
         instance.getPhysicalDeviceProperties2(pdev, &phys_pros);
-        std.debug.print("+++ multiview props: {d} - (views), {d} - (instances)\n", .{
+        std.debug.print("+++ props | multiview props: {d} - (views), {d} - (instances)\n", .{
             mv_props.max_multiview_view_count,
             mv_props.max_multiview_instance_index,
+        });
+        std.debug.print("+++ props | uniform allign: {d}_B, storage allign: {d}_B\n", .{
+            phys_pros.properties.limits.min_uniform_buffer_offset_alignment,
+            phys_pros.properties.limits.min_storage_buffer_offset_alignment,
         });
 
         var pds2: vk.PhysicalDeviceSynchronization2FeaturesKHR = .{ .synchronization_2 = .true };

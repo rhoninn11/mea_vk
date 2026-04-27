@@ -292,12 +292,14 @@ pub const VertexAlt2 = struct {
     pos: [5]f32,
 };
 
-fn tinkering(ToProbe: type) void {
-    std.debug.print("{s} | size {d}, aligments {d}\n", .{ @typeName(ToProbe), @sizeOf(ToProbe), @alignOf(ToProbe) });
+fn tinkering(ToProbe: type, show: bool) void {
+    if (show) {
+        std.debug.print("{s} | size {d}, aligments {d}\n", .{ @typeName(ToProbe), @sizeOf(ToProbe), @alignOf(ToProbe) });
+    }
 }
-pub fn probing() void {
-    tinkering(VertexAlt1);
-    tinkering(VertexAlt2);
+pub fn probing(show: bool) void {
+    tinkering(VertexAlt1, show);
+    tinkering(VertexAlt2, show);
 }
 pub fn populateModels(alloc: std.mem.Allocator, here: *TriangleArray, as: *VertRepo) !void {
     var param = RingParams.default;

@@ -108,7 +108,8 @@ pub const OkUnderstanding = struct {
         for (storage_dset.buff_arr.items) |possible_buffer| {
             for (0..scratchpad.len) |i| {
                 var edit: sht.PerInstance = scratchpad[i];
-                edit.offset_4d = .{ @as(f32, @floatFromInt(0)), 0, 0, 0 };
+                const i_f: f32 = @as(f32, @floatFromInt(i));
+                edit.offset_4d = .{ i_f * 0.2, 0, 0, i_f };
                 scratchpad[i] = edit;
             }
 
@@ -215,7 +216,8 @@ pub const OkUnderstanding = struct {
         const cover: u32 = ((g.total - invalid_pixels) * 1000) / g.total;
         const cover_f: f32 = @as(f32, @floatFromInt(cover)) / 10;
 
-        std.debug.print("+++ L {d:.2} c {d} | tex coverage {d:.2}%\n", .{ L, chroma, cover_f });
+        // std.debug.print("+++ L {d:.2} c {d} | tex coverage {d:.2}%\n", .{ L, chroma, cover_f });
+        _ = cover_f;
 
         return texture_mem;
     }

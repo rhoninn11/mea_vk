@@ -239,7 +239,6 @@ pub fn vulkanTexture(pic: *const gm.PoolInCtx, g64: sht.GridSize, pixdata: []con
     var test_img = try gm.RGBImage.init(pic.gc, g64);
 
     const buff_size = test_img.dvk_size;
-    std.debug.print("+++ image mem {d}\n", .{buff_size});
     const src_buff = try gm.createBuffer(
         pic.gc,
         gm.baked.memory_cpu,

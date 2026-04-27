@@ -52,6 +52,8 @@ pub fn recordFrame(
     };
 
     const uniform_sz = @sizeOf(sht.GroupData);
+    const instace_sz = @sizeOf(sht.PerInstance);
+    _ = instace_sz;
     {
         try gm.dev.beginCommandBuffer(cbufr, &.{});
 
@@ -104,6 +106,7 @@ pub fn recordFrame(
             );
             if (state.alt_proj) {
                 dynamic_off = &.{uniform_sz * 2};
+
                 gm.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[1]);
                 gm.dev.cmdBindDescriptorSets(
                     cbufr,
@@ -122,10 +125,8 @@ pub fn recordFrame(
                     models.sizes[bilbo_idx],
                     state.ok_slices_num,
                     models.offsets[bilbo_idx],
-                    // full_grid.total, //glInstance shift woth that
-                    0,
+                    full_grid.total,
                 );
-                _ = full_grid;
             }
         }
         try gm.dev.endCommandBuffer(cbufr);

@@ -25,10 +25,10 @@ const Hold = struct {
     }
 };
 
-pub const Axis = enum(u8) {
+pub const Axis = enum(i8) {
     none = 0,
     positive = 1,
-    negative = 2,
+    negative = -1,
 };
 
 const Allocator = std.mem.Allocator;
