@@ -112,8 +112,6 @@ var slide_l_trig: motion.Trigger = .{};
 var slide_r_trig: motion.Trigger = .{};
 
 pub fn main() !void {
-    oklab.demo();
-
     glass_input = try motion.HoldsAxis.init(&.{
         glfw.KeyJ, glfw.KeyK, //
         glfw.KeyH, glfw.KeyL,

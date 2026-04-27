@@ -48,48 +48,6 @@ pub fn oklab_to_srgb(lab: m.vec3) m.vec3 {
     return srgb;
 }
 
-pub fn demo() void {
-    const rgbs: [3]m.vec3 = .{
-        .{ 1, 0, 0 },
-        .{ 0, 1, 0 },
-        .{ 0, 0, 1 },
-    };
-    var labs: [3]m.vec3 = undefined;
-    for (0..3) |i| labs[i] = srgb_to_oklab(rgbs[i]);
-    // std.debug.print("-------", .{});
-    // for (0..3) |i| std.debug.print("+++ srgb: {} -> lab: {}\n", .{ rgbs[i], labs[i] });
-    // std.debug.print("-------", .{});
-
-    const L: f32 = 0.37;
-    const C: f32 = 0.15;
-    const delta: f32 = 0.026;
-    const steps: u8 = 32;
-    // std.debug.print("|-------\n", .{});
-    for (0..steps) |i| {
-        const phase = m.floaty(i) * delta * std.math.tau;
-        const a = C * @cos(phase);
-        const b = C * @sin(phase);
-        const lab: m.vec3 = .{ L, a, b };
-        const rgb: m.vec3 = oklab_to_srgb(lab);
-        // std.debug.print("phase {} | lab: {} -> srgb {}\n", .{ m.floaty(i) * delta * 360, lab, rgb });
-        _ = rgb;
-    }
-    // std.debug.print("|-------\n", .{});
-
-    const r_delta: f32 = 1 / m.floaty(steps);
-    for (0..3) |jj| {
-        for (0..steps) |i| {
-            const rdv = m.splat3d(m.floaty(i) * r_delta);
-            var srgb: m.vec3 = .{ 0, 0, 0 };
-            srgb[jj] = 1;
-            srgb *= rdv;
-            const lab = srgb_to_oklab(srgb);
-            // std.debug.print("srgb: {} -> lab {}\n", .{ srgb, lab });
-            _ = lab;
-        }
-    }
-}
-
 const U16max: f32 = 1 << 16;
 pub const OkUnderstanding = struct {
     grid: sht.GridSize,
