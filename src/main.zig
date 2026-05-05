@@ -179,7 +179,7 @@ pub fn main() !void {
     try deeper(access);
 }
 
-const OK_SWEEP: u8 = 32;
+const OK_SWEEP: u8 = 128;
 var frame_state: frame.FrameState = .{
     .alt_proj = false,
     .model_idx = 0,
@@ -258,7 +258,7 @@ fn deeper(access: EasyAcces) !void {
     const size = 0.04;
     try prefils.storagePrefil(storage_dset, grid, spacing);
 
-    const ATLAS_MAX = 64;
+    const ATLAS_MAX = 256;
     var dset_atlas = try dset.DescriptorPrep.init(
         allocator,
         gc,
@@ -297,7 +297,6 @@ fn deeper(access: EasyAcces) !void {
         atlas_idx += 1;
         sample.* = ok_rgba;
     }
-    try oklab.OkUnderstanding.labSpliced(storage_dset, OK_SWEEP);
 
     // render pass
     const render_pass = try createRenderPass(gc, swapchain);
@@ -410,6 +409,7 @@ fn deeper(access: EasyAcces) !void {
         .val = 0,
     };
 
+    var okphi: f32 = 0;
     while (!glfw.windowShouldClose(window)) {
         const img_idx = swapchain.image_index;
         const win_size = windowExtext(window);
@@ -427,9 +427,10 @@ fn deeper(access: EasyAcces) !void {
         }
 
         const td = timeline.deltaS();
+        okphi += td * 0.1;
         pamperek.control(&plr_input, td);
-        try phi_val_monit.update(pamperek.p.phi);
 
+        try phi_val_monit.update(pamperek.p.phi);
         if (glass.update(&glass_input)) {
             try glass.updateStorage(storage_dset, true);
         }
@@ -475,6 +476,11 @@ fn deeper(access: EasyAcces) !void {
             pamperek.pos(),
             size,
             win_size,
+        );
+        try oklab.OkUnderstanding.labSpliced(
+            storage_dset,
+            OK_SWEEP,
+            okphi,
         );
 
         if (state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {

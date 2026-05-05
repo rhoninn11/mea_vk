@@ -52,7 +52,7 @@ const U16max: f32 = 1 << 16;
 pub const OkUnderstanding = struct {
     grid: sht.GridSize,
 
-    pub fn labSpliced(storage_dset: dset.DescriptorPrep, slice_num: u8) !void {
+    pub fn labSpliced(storage_dset: dset.DescriptorPrep, slice_num: u8, offset: f32) !void {
         const lim_num = 8096;
         std.debug.assert(slice_num <= lim_num);
 
@@ -64,10 +64,15 @@ pub const OkUnderstanding = struct {
 
         var scratchpad: []sht.PerInstance = try local_a.alloc(sht.PerInstance, slice_num);
         for (storage_dset.buff_arr.items) |possible_buffer| {
+            const denominator = @as(f32, @floatFromInt(scratchpad.len - 1));
+            const r = 3.0;
             for (0..scratchpad.len) |i| {
                 var edit: sht.PerInstance = scratchpad[i];
                 const i_f: f32 = @as(f32, @floatFromInt(i));
-                edit.offset_4d = .{ i_f * 0.2, 0, 0, i_f };
+                const progress = i_f / denominator;
+                const phi = (progress + offset) * 5;
+                edit.offset_4d = .{ r * @cos(phi), r * @sin(phi), 0, i_f };
+
                 scratchpad[i] = edit;
             }
 

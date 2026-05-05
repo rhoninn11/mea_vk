@@ -69,8 +69,6 @@ void main() {
         
     float inst_tex_idx_f = m_inst.offset_4d.a;
     int inst_tex = int(inst_tex_idx_f);
-
-    inst_tex = int(mod(float(inst_tex + time_off), float(every)));
         
     v_tex_idx = 32 + inst_tex;
 }
