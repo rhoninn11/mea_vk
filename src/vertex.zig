@@ -76,12 +76,28 @@ pub const RingParams = struct {
 
 pub const Utils = struct {
     pub const Math = struct {
-        pub fn matApply(tris: *TriangleArray, mat: m.mat3) void {
-            const len = tris.items.len;
+        pub fn matApply(tris: []Vertex, mat: m.mat3) void {
+            const len = tris.len;
             for (0..len) |i| {
-                const vert = m.vec3u{ .arr = tris.items[i].pos };
+                const vert = m.vec3u{ .arr = tris[i].pos };
                 const newpos = m.vec3u{ .vec = m.matXvec3(mat, vert.vec) };
-                tris.items[i].pos = newpos.arr;
+                tris[i].pos = newpos.arr;
+            }
+        }
+        pub fn scaleApply(verts: []Vertex, scale: m.vec3) void {
+            const len = verts.len;
+            for (0..len) |i| {
+                const vert = m.vec3u{ .arr = verts[i].pos };
+                const newpos = m.vec3u{ .vec = vert.vec * scale };
+                verts[i].pos = newpos.arr;
+            }
+        }
+        pub fn transApply(verts: []Vertex, offset: m.vec3) void {
+            const len = verts.len;
+            for (0..len) |i| {
+                const vert = m.vec3u{ .arr = verts[i].pos };
+                const newpos = m.vec3u{ .vec = vert.vec + offset };
+                verts[i].pos = newpos.arr;
             }
         }
     };
@@ -126,24 +142,45 @@ pub const Utils = struct {
         for (0..ring_tris.items.len) |i| ring_tris.items[i].color[0] = 1;
         const rotmat = m.rotMatY(0.125);
 
-        Math.matApply(&ring_tris, rotmat);
+        Math.matApply(ring_tris.items, rotmat);
         try addSides(alloc, &ring_tris);
         return ring_tris;
+    }
+
+    pub fn Pierced2(alloc: Allocator) !TriangleArray {
+        var triangles: TriangleArray = try .initCapacity(alloc, 6);
+        errdefer triangles.deinit(alloc);
+
+        try blitQuad(alloc, triangles);
+        Math.scaleApply(&triangles, .{ 1, 0.2, 1 });
+        Math.transApply(&triangles, .{ 0, 0.4, 0.4 });
+        return triangles;
+    }
+
+    fn blitQuad(alloc: Allocator, ta: *TriangleArray) !void {
+        var lid: [6]Vertex = undefined;
+        for (0.., tri_loops) |i, ti| {
+            lid[i] = quad[ti];
+        }
+        return ta.appendSlice(alloc, &lid);
     }
 
     pub fn Bilboard(alloc: Allocator) !TriangleArray {
         var triangles: TriangleArray = try .initCapacity(alloc, 6);
         errdefer triangles.deinit(alloc);
 
-        var lid: [6]Vertex = undefined;
-
-        for (0.., tri_loops) |i, ti| {
-            lid[i] = quad[ti];
-        }
-        try triangles.appendSlice(alloc, &lid);
+        try blitQuad(alloc, &triangles);
         const rotmat = m.rotMatX(0.25);
-        Math.matApply(&triangles, rotmat);
+        Math.matApply(triangles.items, rotmat);
         return triangles;
+    }
+
+    fn blitting(alloc: Allocator, stencil: *TriangleArray) !TriangleArray {
+        const rotX = m.rotMatX(0.25);
+
+        _ = alloc;
+        _ = stencil;
+        _ = rotX;
     }
 
     fn addSides(alloc: Allocator, tris: *TriangleArray) !void {
@@ -153,20 +190,14 @@ pub const Utils = struct {
             face[i] = quad[ti];
             const u: f32 = if (ti < 2) 0 else 1;
             face[i].color = .{ u, 1, 0 };
-            const _pos: m.vec3u = .{ .arr = face[i].pos };
-            const rotated = m.matXvec3(rotX, _pos.vec);
-            const pos_: m.vec3u = .{ .vec = rotated + m.vec3{ 0, -1, -1 } };
-            face[i].pos = pos_.arr;
         }
+        Math.matApply(face[0..], rotX);
+        Math.transApply(face[0..], .{ 0, -1, -1 });
         try tris.appendSlice(alloc, face[0..]);
 
         const rotY = m.rotMatY(0.25);
         for (0..3) |_| {
-            for (0..6) |jj| {
-                const _pos: m.vec3u = .{ .arr = face[jj].pos };
-                const pos_: m.vec3u = .{ .vec = m.matXvec3(rotY, _pos.vec) };
-                face[jj].pos = pos_.arr;
-            }
+            Math.matApply(face[0..], rotY);
             try tris.appendSlice(alloc, face[0..]);
         }
     }
