@@ -19,7 +19,7 @@ const t = @import("types.zig");
 const u = @import("utils.zig");
 const phx = @import("phys.zig");
 const imgs = @import("imgs.zig");
-const prefils = @import("prefills.zig");
+const prefils = @import("refills.zig");
 const oklab = @import("oklab.zig");
 
 const InertiaVec2 = phx.InertiaPack(m.vec3);
@@ -235,7 +235,7 @@ fn deeper(access: EasyAcces) !void {
         .{
             .binding = 0,
             .element_size = @sizeOf(sht.GroupData),
-            .num = 3,
+            .num = 16,
         },
         null,
     );

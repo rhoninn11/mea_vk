@@ -105,7 +105,9 @@ pub fn recordFrame(
                 0,
             );
             if (state.alt_proj) {
-                dynamic_off = &.{uniform_sz * 2};
+                //flat display
+                dynamic_off = &.{uniform_sz * 4};
+                dynamic_off = &.{uniform_sz * 3};
 
                 gm.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[1]);
                 gm.dev.cmdBindDescriptorSets(

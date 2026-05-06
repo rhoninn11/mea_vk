@@ -65,13 +65,16 @@ pub const OkUnderstanding = struct {
         var scratchpad: []sht.PerInstance = try local_a.alloc(sht.PerInstance, slice_num);
         for (storage_dset.buff_arr.items) |possible_buffer| {
             const denominator = @as(f32, @floatFromInt(scratchpad.len - 1));
-            const r = 3.0;
+            const r = 2.5;
             for (0..scratchpad.len) |i| {
                 var edit: sht.PerInstance = scratchpad[i];
                 const i_f: f32 = @as(f32, @floatFromInt(i));
                 const progress = i_f / denominator;
                 const phi = (progress + offset) * 5;
-                edit.offset_4d = .{ r * @cos(phi), r * @sin(phi), 0, i_f };
+                const qphi = phi * 4;
+                const r_var = r + @sin(qphi) * 0.2;
+
+                edit.offset_4d = .{ r_var * @cos(phi), progress, r_var * @sin(phi), i_f };
 
                 scratchpad[i] = edit;
             }

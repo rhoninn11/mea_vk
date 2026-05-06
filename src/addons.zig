@@ -53,13 +53,13 @@ pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: bool) !MatPack {
     const ref_up: m.vec3 = .{ 0, 1, 0 };
     const trans = m.mat_translate(-pos);
     const rot = m.lookRotation(pos, targ, ref_up);
-    const camera_mat = m.matXmat(rot.mat, trans.mat);
+    const view_mat = m.matXmat(rot.mat, trans.mat);
 
     const model_mat = m.lookRotation(m.zero3(), .{ 1, 0, 0 }, .{ 0, 1, 0 });
 
     const interm = MatPack{
         .proj = persp_window.arr,
-        .view = camera_mat.arr,
+        .view = view_mat.arr,
         .model = model_mat.arr,
         // .view = m.mat_translate(-pos).arr,
         // .view = m.lookRotation(.{ 0, 0, -1 }, pos).arr,
