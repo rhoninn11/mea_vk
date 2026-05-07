@@ -61,12 +61,18 @@ void main() {
     vec3 base = a_pos + inst_pos;
     vec4 before_transform = vec4(base, 1.0);
 
+    // transform reconsturct
+    vec3 front = m_inst.new_usage.xyz;
+    vec3 up = m_inst.depth_ctrl.xyz;
+    vec3 right = cross(front, up);
+    mat4 rot = mat4(vec4(right, 0), vec4(up, 0), vec4(front, 0), vec4(0,0,0,1));
+
     gl_Position = ems.proj * ems.view * ems.model * before_transform;
+    // gl_Position = ems.proj * ems.view * rot *before_transform;
     
     v_uv = a_color.xy;
 
-    vec3 front = unzip(m_inst.new_usage.xy);
-    vec3 up = unzip(m_inst.new_usage.zw);
+
 
     //to choose right slice per instance
     int slices_at = 32;

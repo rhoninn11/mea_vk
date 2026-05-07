@@ -70,11 +70,20 @@ pub const OkUnderstanding = struct {
                 var edit: sht.PerInstance = scratchpad[i];
                 const i_f: f32 = @as(f32, @floatFromInt(i));
                 const progress = i_f / denominator;
-                const phi = (progress + offset) * 5;
-                const qphi = phi * 4;
-                const r_var = r + @sin(qphi) * 0.2;
 
-                edit.offset_4d = .{ r_var * @cos(phi), progress, r_var * @sin(phi), i_f };
+                const amp = 0.2;
+                const phi0 = (progress + offset) * 5;
+                const r0 = r + @sin(phi0 * 4) * amp;
+                const p0: m.vec3 = .{ r0 * @cos(phi0), 0, r0 * @sin(phi0) };
+                edit.offset_4d = m.stack4(p0, i_f);
+
+                const phi1 = phi0 + 0.05;
+                const p1: m.vec3 = .{ r0 * @cos(phi1), 0, r0 * @sin(phi1) };
+
+                const front: m.vec3 = m.norm(p1 - p0);
+                const up: m.vec3 = .{ 0, 1, 0 };
+                edit.new_usage = m.stack4(front, 0);
+                edit.depth_ctrl = m.stack4(up, 0);
 
                 scratchpad[i] = edit;
             }
