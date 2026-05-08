@@ -54,40 +54,23 @@ void main() {
     bool indepentednt = false;
     Instance m_inst = _storage.per_instance[gl_InstanceIndex];
     MatPack ems = _group.data.matrices;
-
-    vec3 inst_pos = m_inst.offset_4d.xyz;
-    float idx = m_inst.offset_4d.a;
-
-    vec3 base = a_pos + inst_pos;
-    vec4 before_transform = vec4(base, 1.0);
-
-    // transform reconsturct
+    
+    // per instance transform matrix
     vec3 front = m_inst.new_usage.xyz;
     vec3 up = m_inst.depth_ctrl.xyz;
-    vec3 right = cross(front, up);
-    mat4 rot = mat4(vec4(right, 0), vec4(up, 0), vec4(front, 0), vec4(0,0,0,1));
+    vec3 right = cross(up, front);
+    vec3 inst_pos = m_inst.offset_4d.xyz;
 
-    gl_Position = ems.proj * ems.view * ems.model * before_transform;
-    // gl_Position = ems.proj * ems.view * rot *before_transform;
-    
-    v_uv = a_color.xy;
+    mat4 per_inst_t = mat4(vec4(right, 0), vec4(up, 0), vec4(front, 0), vec4(inst_pos,1));
+    vec4 before_ems = per_inst_t * vec4(a_pos, 1);
 
-
+    gl_Position = ems.proj * ems.view * ems.model * before_ems;
 
     //to choose right slice per instance
     int slices_at = 32;
     float inst_tex_idx_f = m_inst.offset_4d.a;
     int inst_tex = int(inst_tex_idx_f);
     v_tex_idx = slices_at + inst_tex;
-}
-
-vec3 unzip(vec2 zip) {
-    float s = signDecoded(zip.x);
-    return vec3(zip, s*sqrt(1 - dot(zip, zip)));
-}
-
-float signDecoded(float val) {
-    uint bitExtract = floatBitsToUint(val);
-    bitExtract = bitExtract & ~1u;
-    return 1-float(bitExtract*2);
+    
+    v_uv = a_color.xy;
 }
