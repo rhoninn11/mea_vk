@@ -11,6 +11,15 @@ pub const FrameState = struct {
     ok_slices_num: u8,
 };
 
+fn Dynamic(t: type) type {
+    const stride = @sizeOf(t);
+    return struct {
+        pub fn offset(slot: u32) u32 {
+            return slot * stride;
+        }
+    };
+}
+
 pub fn recordFrame(
     rec: *const gftx.FrameRecorder,
     models: *const v.VertRepo,
@@ -51,7 +60,7 @@ pub fn recordFrame(
         .extent = extent,
     };
 
-    const uniform_sz = @sizeOf(sht.GroupData);
+    const Udyn = Dynamic(sht.GroupData);
     const instace_sz = @sizeOf(sht.PerInstance);
     _ = instace_sz;
     {
@@ -78,8 +87,9 @@ pub fn recordFrame(
                 &.{0},
             );
 
-            const uniform_offset: u32 = if (state.alt_proj) uniform_sz * 1 else 0;
-            var dynamic_off: []const u32 = &.{uniform_offset};
+            var dynamic_off: []const u32 = &.{
+                if (state.alt_proj) Udyn.offset(1) else Udyn.offset(0),
+            };
             const all_sets: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
                 draw.uniform_dsets.items[rec.id],
                 draw.storage_dsets.items[rec.id],
@@ -104,10 +114,10 @@ pub fn recordFrame(
                 models.offsets[state.model_idx],
                 0,
             );
+
             if (state.alt_proj) {
                 //flat display
-                dynamic_off = &.{uniform_sz * 4};
-                dynamic_off = &.{uniform_sz * 3};
+                dynamic_off = &.{Udyn.offset(3)};
 
                 gm.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[1]);
                 gm.dev.cmdBindDescriptorSets(
@@ -130,6 +140,12 @@ pub fn recordFrame(
                     full_grid.total,
                 );
             }
+
+            // TODO: render text here xD
+            // but how?! meaby use https://github.com/Chlumsky/msdf-atlas-gen as offline step?
+            // but i need to build that. Cmake project will be problematic
+            // maybe https://github.com/nothings/stb/blob/master/stb_truetype.h as a lighter_alternative
+
         }
         try gm.dev.endCommandBuffer(cbufr);
     }

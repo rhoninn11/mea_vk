@@ -1,7 +1,7 @@
 HERE=$PWD
 
-GLFW_REPO="https://github.com/glfw/glfw.git"
 GLFW_VER=3.4
+GLFW_REPO="https://github.com/glfw/glfw.git"
 GLFW_DIR="fs/_glfw"
 GLFW_INSTALL_DIR="fs/glfw"
 CMAKE_ADDON="os/lin/zig.cmake"
