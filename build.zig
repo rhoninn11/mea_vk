@@ -43,7 +43,14 @@ pub fn build(b: *std.Build) !void {
     const maybe_override_registry = b.option([]const u8, "override-registry", "Override the path to the Vulkan registry used for the examples");
     const use_zig_shaders = b.option(bool, "zig-shader", "Use Zig shaders instead of GLSL") orelse false;
 
-    try cmdsBuild(b, o);
+    // try cmdsBuild(b, o);
+    // const sdl_dep = b.dependency("sdl", o);
+    // const sdl_c_translate = b.addTranslateC(.{
+    //     .root_source_file = b.path("SDL3/SDL.h"),
+    //     .target = o.target,
+    //     .optimize = o.optimize,
+    // });
+    // _ = sdl_c_translate;
 
     const triangle_exe = b.addExecutable(.{
         .name = "vk_exp",
@@ -52,6 +59,10 @@ pub fn build(b: *std.Build) !void {
             .target = o.target,
             .optimize = o.optimize,
             .link_libc = true,
+            // .imports = &.{.{
+            //     .name = "csdl",
+            //     .module = sdl_c_translate.createModule(),
+            // }},
         }),
         // TODO: Remove this once x86_64 is stable
         .use_llvm = true,
@@ -70,6 +81,8 @@ pub fn build(b: *std.Build) !void {
     const pbDep = b.dependency("protobuf", o);
     protoGen(b, pbDep, o.target);
     triangle_exe.root_module.addImport("protobuf", pbDep.module("protobuf"));
+
+    // triangle_exe.root_module.linkLibrary(sdl_dep.artifact("SDL3"));
 
     const glfw_lib_fmt: []const u8 = if (builtin.target.os.tag == .windows) "{s}/bin" else "{s}/lib";
     const glfw_name: []const u8 = if (builtin.target.os.tag == .windows) "glfw3" else "glfw";

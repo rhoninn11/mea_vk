@@ -14,6 +14,10 @@
             .url = "git+https://github.com/arwalk/zig-protobuf.git?ref=v5.0.0#1f6cb06156b3ff4f52f98bc14f829c0b8393a6fc",
             .hash = "protobuf-5.0.0-0e82avKUKAAVwTWJzTIEZ14Fu0zC11_lElR8tE6H__y1",
         },
+        .sdl = .{
+            .url = "https://github.com/allyourcodebase/SDL3/archive/refs/tags/1.0.0+3.4.4.tar.gz",
+            .hash = "sdl-1.0.0+3.4.4-i4QD0XSAqQBKbp9DITVMlxhI0QRGylegbPhtm-afaUXE",
+        },
     },
     .paths = .{""},
 }

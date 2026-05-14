@@ -1,5 +1,7 @@
 $HERE=$PWD
 
+$SDL_REPO = "https://github.com/libsdl-org/SDL.git"
+$SDL_VER = "release-3.4.8"
 $GLFW_REPO = "https://github.com/glfw/glfw.git"
 $GLFW_VER = 3.4
 $GLFW_DIR = "fs\_glfw"
