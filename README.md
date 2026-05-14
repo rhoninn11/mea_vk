@@ -7,6 +7,9 @@ next steps:
 learning vulkan in zig:
 ![screanshot](logo.png)
 
+git diff --no-index a/ b/ > delta.patch
+patch --verbose -p2 --directory=b < delta.patch
+
 # gpu memory spaces
 generic
 gs

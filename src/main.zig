@@ -32,9 +32,9 @@ const frame = @import("frame.zig");
 
 const pipe = @import("pipe.zig");
 
-// const c = @cImport({
-//     @cInclude("SDL3/SDL.h");
-// });
+const c = @cImport({
+    @cInclude("SDL3/SDL.h");
+});
 
 const app_name = "vulkan-zig triangle example";
 const future_app_name = "oct_calculator";
@@ -129,12 +129,12 @@ pub fn main(init: std.process.Init) !void {
 
     vertex.probing(false);
 
-    // const resutl = c.SDL_Init(c.SDL_INIT_VIDEO);
-    // if (resutl) {
-    //     std.debug.print("!!! sdl possible to init\n", .{});
-    // } else {
-    //     std.debug.print("--- sdl init failed\n", .{});
-    // }
+    const resutl = c.SDL_Init(c.SDL_INIT_VIDEO);
+    if (resutl) {
+        std.debug.print("+++ sdl possible to init\n", .{u.});
+    } else {
+        std.debug.print("--- sdl init failed\n", .{});
+    }
 
     std.debug.print("+++ vertex info: {d}\n", .{Vertex.s_fields_num});
     try glfw.init();
