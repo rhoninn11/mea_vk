@@ -34,8 +34,8 @@ pub fn oklab_to_srgb(lab: m.vec3) m.vec3 {
     };
 
     var lms: m.vec3 = undefined;
-    for (0..3) |i| lms[i] = m.dot(lms_conv[i], lab);
-    for (0..3) |i| lms[i] = lms[i] * lms[i] * lms[i];
+    inline for (0..3) |i| lms[i] = m.dot(lms_conv[i], lab);
+    inline for (0..3) |i| lms[i] = lms[i] * lms[i] * lms[i];
 
     const srgb_conv: [3]m.vec3 = .{
         .{ 4.0767416621, -3.3077115913, 0.2309699292 },
@@ -44,7 +44,7 @@ pub fn oklab_to_srgb(lab: m.vec3) m.vec3 {
     };
 
     var srgb: m.vec3 = undefined;
-    for (0..3) |i| srgb[i] = m.dot(srgb_conv[i], lms);
+    inline for (0..3) |i| srgb[i] = m.dot(srgb_conv[i], lms);
     return srgb;
 }
 
@@ -107,6 +107,7 @@ pub const OkUnderstanding = struct {
         const local_a = provider.allocator();
 
         var scratchpad = try local_a.alloc(sht.PerInstance, total);
+
         for (storage_dset.buff_arr.items) |possible_buffer| {
             const storage = possible_buffer.?;
             const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
@@ -126,7 +127,7 @@ pub const OkUnderstanding = struct {
                     chroma * @sin(std.math.tau * phase),
                 };
                 phase += phase_delt;
-                var srgb_pos = oklab_to_srgb(lab);
+                var srgb_pos: [3]f32 = oklab_to_srgb(lab);
                 var srgb_col = srgb_pos;
                 var inst_data: sht.PerInstance = scratchpad[i];
                 const clamp_lim: f32 = 2;
@@ -168,7 +169,7 @@ pub const OkUnderstanding = struct {
                 ab *= m.splat2d(chroma);
                 const s_rgb = oklab_to_srgb(.{ L, ab[0], ab[1] });
                 var valid = true;
-                for (0..3) |i| valid = valid and (s_rgb[i] > 0) and (s_rgb[i] <= 1);
+                inline for (0..3) |i| valid = valid and (s_rgb[i] > 0) and (s_rgb[i] <= 1);
 
                 const mem_idx = (yy * g.w + x) * 4;
                 if (valid) {

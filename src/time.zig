@@ -14,8 +14,9 @@ pub const Timeline = struct {
 
     time_passage: bool = true,
 
-    pub fn init() Timeline {
-        const now = std.time.microTimestamp();
+    pub fn init(io: std.Io) Timeline {
+        const ts = std.Io.Timestamp.now(io, .real);
+        const now = std.Io.Timestamp.toMicroseconds(ts);
         return Timeline{
             ._t0 = now,
             ._t_last = now,
@@ -24,8 +25,9 @@ pub const Timeline = struct {
         };
     }
 
-    pub fn update(self: *Timeline) void {
-        const now = std.time.microTimestamp();
+    pub fn update(self: *Timeline, io: std.Io) void {
+        const ts = std.Io.Timestamp.now(io, .real);
+        const now = std.Io.Timestamp.toMicroseconds(ts);
 
         const delta = @as(f32, @floatFromInt(now - self._t_last));
 

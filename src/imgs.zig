@@ -304,12 +304,9 @@ pub fn imgLTrans(cmd_ctx: *const gm.PoolInCtx, cfg: t.ImgLTranConfig) !void {
         cfg.flags.stages.src,
         cfg.flags.stages.dst,
         .{},
-        0,
         null,
-        0,
         null,
-        @intCast(img_lyr_barriers.len),
-        img_lyr_barriers.ptr,
+        img_lyr_barriers,
     );
 
     try one_shot.resolve();
@@ -323,17 +320,19 @@ const BfrToImgCpyCfg = struct {
 };
 
 pub fn bfr2ImgCopy(cmd_ctx: *const gm.PoolInCtx, cfg: BfrToImgCpyCfg) !void {
-    const bfr_img_cpy: vk.BufferImageCopy = .{
-        .buffer_offset = 0,
-        .buffer_row_length = 0,
-        .buffer_image_height = 0,
-        .image_extent = .{
-            .width = cfg.g.w,
-            .height = cfg.g.h,
-            .depth = 1,
+    const bfr_img_cpy: []const vk.BufferImageCopy = &.{
+        vk.BufferImageCopy{
+            .buffer_offset = 0,
+            .buffer_row_length = 0,
+            .buffer_image_height = 0,
+            .image_extent = .{
+                .width = cfg.g.w,
+                .height = cfg.g.h,
+                .depth = 1,
+            },
+            .image_subresource = gm.baked.color_bfr2img_sublyr,
+            .image_offset = .{ .x = 0, .y = 0, .z = 0 },
         },
-        .image_subresource = gm.baked.color_bfr2img_sublyr,
-        .image_offset = .{ .x = 0, .y = 0, .z = 0 },
     };
 
     const one_shot = try gm.OneShotCommanded.init(cmd_ctx);
@@ -342,8 +341,7 @@ pub fn bfr2ImgCopy(cmd_ctx: *const gm.PoolInCtx, cfg: BfrToImgCpyCfg) !void {
         cfg.buffer,
         cfg.image,
         cfg.layout,
-        1,
-        @ptrCast(&bfr_img_cpy),
+        bfr_img_cpy,
     );
 
     try one_shot.resolve();

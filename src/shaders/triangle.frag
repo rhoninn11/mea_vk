@@ -23,6 +23,7 @@ layout(location = 4) in vec2 v_color_rest;
 
 layout(location = 0) out vec4 f_color;
 
+// propably taylor series, but it is ai generated
 vec3 inferno(float t) {
     const vec3 c0 = vec3(+0.0002, +0.0016, -0.0371);
     const vec3 c1 = vec3(+0.1059, +0.5664, +4.1179);

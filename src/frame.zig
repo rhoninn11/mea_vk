@@ -43,18 +43,18 @@ pub fn recordFrame(
     try rec.begin(gm);
     const cbufr: vk.CommandBuffer = rec.cmds.*;
 
-    const viewport = vk.Viewport{
+    const viewport = &.{vk.Viewport{
         .x = 0,
         .y = 0,
         .width = @floatFromInt(extent.width),
         .height = @floatFromInt(extent.height),
         .min_depth = 0,
         .max_depth = 1,
-    };
-    const scissor = vk.Rect2D{
+    }};
+    const scissor = &.{vk.Rect2D{
         .offset = .{ .x = 0, .y = 0 },
         .extent = extent,
-    };
+    }};
     const render_area = vk.Rect2D{
         .offset = .{ .x = 0, .y = 0 },
         .extent = extent,
@@ -66,8 +66,8 @@ pub fn recordFrame(
     {
         try gm.dev.beginCommandBuffer(cbufr, &.{});
 
-        gm.dev.cmdSetViewport(cbufr, 0, 1, @ptrCast(&viewport));
-        gm.dev.cmdSetScissor(cbufr, 0, 1, @ptrCast(&scissor));
+        gm.dev.cmdSetViewport(cbufr, 0, viewport);
+        gm.dev.cmdSetScissor(cbufr, 0, scissor);
 
         // oscilationg ring
         gm.dev.cmdBeginRenderPass(cbufr, &.{
@@ -82,8 +82,7 @@ pub fn recordFrame(
             gm.dev.cmdBindVertexBuffers(
                 cbufr,
                 0,
-                1,
-                @ptrCast(&models.vbo.?.dvk_bfr),
+                &.{models.vbo.?.dvk_bfr},
                 &.{0},
             );
 
@@ -102,10 +101,8 @@ pub fn recordFrame(
                 .graphics,
                 draw.pipeline_layout,
                 0,
-                @intCast(all_sets.len),
-                all_sets.ptr,
-                @intCast(dynamic_off.len),
-                dynamic_off.ptr,
+                all_sets,
+                dynamic_off,
             );
             gm.dev.cmdDraw(
                 cbufr,
@@ -125,10 +122,8 @@ pub fn recordFrame(
                     .graphics,
                     draw.pipeline_layout,
                     0,
-                    @intCast(all_sets.len),
-                    all_sets.ptr,
-                    @intCast(dynamic_off.len),
-                    dynamic_off.ptr,
+                    all_sets,
+                    dynamic_off,
                 );
                 const bilbo_idx = 3;
                 const full_grid = sht.GridSize.g64;

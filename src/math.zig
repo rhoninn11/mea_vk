@@ -115,13 +115,13 @@ const mat3u = extern union {
     mat: mat3,
     arr: [9]f32,
 };
-pub fn matXvec3(m: mat3, v: vec3) vec3 {
+pub fn matXvec3(m: mat3, v: [3]f32) [3]f32 {
     var out: vec3 = m[0] * splat3d(v[0]);
     for (1..3) |i| out += m[i] * splat3d(v[i]);
     return out;
 }
 
-pub fn matXvec(m: mat4, v: vec4) vec4 {
+pub fn matXvec(m: mat4, v: [4]f32) [4]f32 {
     var out: vec4 = m[0] * splat4d(v[0]);
     for (1..4) |i| out += m[i] * splat4d(v[i]);
     return out;

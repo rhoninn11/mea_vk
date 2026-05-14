@@ -86,6 +86,7 @@ fn windowExtext(window: *c_long) vk.Extent2D {
 }
 
 const EasyAcces = struct {
+    io: std.Io,
     alloc: std.mem.Allocator,
     window: *c_long,
     vkctx: *const GraphicsContext,
@@ -111,7 +112,7 @@ var slide_r: motion.KeyAction = .{ .key = glfw.KeyB, .action = glfw.KeyDown };
 var slide_l_trig: motion.Trigger = .{};
 var slide_r_trig: motion.Trigger = .{};
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     glass_input = try motion.HoldsAxis.init(&.{
         glfw.KeyJ, glfw.KeyK, //
         glfw.KeyH, glfw.KeyL,
@@ -163,18 +164,17 @@ pub fn main() !void {
     // };
     resolution_extent = windowExtext(window);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const gpa = init.gpa;
 
-    const vkctx = try GraphicsContext.init(allocator, app_name, window);
+    const vkctx = try GraphicsContext.init(gpa, app_name, window);
     defer vkctx.deinit();
 
     std.log.debug("Using device: {s}", .{vkctx.deviceName()});
     const access = EasyAcces{
         .window = window,
         .vkctx = &vkctx,
-        .alloc = allocator,
+        .alloc = gpa,
+        .io = init.io,
     };
     try deeper(access);
 }
@@ -201,7 +201,7 @@ fn deeper(access: EasyAcces) !void {
     // const grid = sht.GridSize.g64;
     const grid = sht.GridSize.g64;
     const deeper_allocator = std.heap.page_allocator;
-    var img = try proto.serdesLoad(deeper_allocator);
+    var img = try proto.serdesLoad(access.io, deeper_allocator);
     defer img.deinit(deeper_allocator);
 
     var glass = proto.LookingGlass.init(&img, grid);
@@ -388,10 +388,10 @@ fn deeper(access: EasyAcces) !void {
 
     _ = glfw.setKeyCallback(window, key_callback);
 
-    var timeline = addons.Timeline.init();
-    var timeline1 = addons.Timeline.init();
+    var timeline = addons.Timeline.init(access.io);
+    var timeline1 = addons.Timeline.init(access.io);
     time_glob = &timeline;
-    var perf_stats = addons.PerfStats.init();
+    var perf_stats = addons.PerfStats.init(access.io);
     var state: Swapchain.PresentState = .optimal;
 
     const s_interval = std.time.us_per_s;
@@ -418,9 +418,9 @@ fn deeper(access: EasyAcces) !void {
         plr_input.update();
 
         // Don't present or resize swapchain while the window is minimized
-        perf_stats.messure();
-        timeline.update();
-        timeline1.update();
+        perf_stats.messure(access.io);
+        timeline.update(access.io);
+        timeline1.update(access.io);
 
         if (timeline1.triggerd()) {
             // std.debug.print("+++ interval info:D\n", .{});
@@ -430,7 +430,7 @@ fn deeper(access: EasyAcces) !void {
         okphi += td * 0.1;
         pamperek.control(&plr_input, td);
 
-        try phi_val_monit.update(pamperek.p.phi);
+        try phi_val_monit.update(access.io, pamperek.p.phi);
         if (glass.update(&glass_input)) {
             try glass.updateStorage(storage_dset, true);
         }

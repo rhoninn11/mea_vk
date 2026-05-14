@@ -214,8 +214,7 @@ pub const Swapchain = struct {
         // Step 2: Submit the command buffer
         try self.gc.dev.queueSubmit2KHR(
             self.gc.graphics_queue.handle,
-            m.uinty(render_submits.len),
-            render_submits.ptr,
+            render_submits,
             current.frame_fence,
         );
         // https://claude.ai/chat/398d5ba8-7355-4093-9a37-3361c5f3c45e
@@ -302,11 +301,11 @@ const SwapImage = struct {
     }
 
     fn waitForFence(self: SwapImage, gc: *const GraphicsContext) !void {
-        _ = try gc.dev.waitForFences(1, @ptrCast(&self.frame_fence), .true, std.math.maxInt(u64));
+        _ = try gc.dev.waitForFences(@ptrCast(&self.frame_fence), .true, std.math.maxInt(u64));
     }
 
     fn resetFence(self: SwapImage, gc: *const GraphicsContext) !void {
-        try gc.dev.resetFences(1, @ptrCast(&self.frame_fence));
+        try gc.dev.resetFences(@ptrCast(&self.frame_fence));
     }
 };
 

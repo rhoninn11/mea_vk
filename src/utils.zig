@@ -52,17 +52,20 @@ pub const PerfStats = struct {
     t0: i64,
     frame_num: u32,
 
-    pub fn init() PerfStats {
+    pub fn init(io: std.Io) PerfStats {
         std.debug.print("--- empty line ---\n", .{});
+        const ts = std.Io.Timestamp.now(io, .real);
+        const now_ms = std.Io.Timestamp.toMilliseconds(ts);
         return PerfStats{
-            .t0 = std.time.milliTimestamp(),
+            .t0 = now_ms,
             .frame_num = 0,
         };
     }
 
-    pub fn messure(s: *PerfStats) void {
-        const now = std.time.milliTimestamp();
-        const delta = now - s.t0;
+    pub fn messure(s: *PerfStats, io: std.Io) void {
+        const ts = std.Io.Timestamp.now(io, .real);
+        const now_ms = std.Io.Timestamp.toMilliseconds(ts);
+        const delta = now_ms - s.t0;
 
         const messure_interval = 1000.0;
         const update_interval = 500;
@@ -172,10 +175,10 @@ pub const ValMonit = struct {
     name: []const u8,
     val: f32,
 
-    pub fn update(self: *ValMonit, new_val: f32) !void {
+    pub fn update(self: *ValMonit, io: std.Io, new_val: f32) !void {
         var buffer: [1024]u8 = undefined;
-        const stderr_f = std.fs.File.stderr();
-        var w = stderr_f.writer(&buffer);
+        const stderr_f = std.Io.File.stderr();
+        var w = stderr_f.writer(io, &buffer);
         //TODO: it is a bit broken on windows
         self.val = new_val;
 

@@ -76,14 +76,18 @@ pub fn build(b: *std.Build) !void {
 
     var lib_path_mem: [1024]u8 = undefined;
     var include_path_mem: [1024]u8 = undefined;
-    const glfw_path = try std.process.getEnvVarOwned(b.allocator, "GLFW_LIB");
+    const glfw_path = b.graph.environ_map.get("GLFW_LIB").?;
+    // const glfw_path = try std.process.getEnvVarOwned(b.allocator, "GLFW_LIB");
     const include_path = try std.fmt.bufPrint(&include_path_mem, "{s}/include", .{glfw_path});
     const lib_path = try std.fmt.bufPrint(&lib_path_mem, glfw_lib_fmt, .{glfw_path});
 
-    triangle_exe.addIncludePath(.{ .cwd_relative = include_path });
-    triangle_exe.addLibraryPath(.{ .cwd_relative = lib_path });
+    // triangle_exe.lib
+    triangle_exe.root_module.addIncludePath(.{ .cwd_relative = include_path });
+    triangle_exe.root_module.addLibraryPath(.{ .cwd_relative = lib_path });
+    // triangle_exe.addIncludePath(.{ .cwd_relative = include_path });
+    // triangle_exe.addLibraryPath(.{ .cwd_relative = lib_path });
 
-    triangle_exe.linkSystemLibrary(glfw_name);
+    triangle_exe.root_module.linkSystemLibrary(glfw_name, .{ .needed = true });
 
     // const glfw_module = b.addModule("glwf", .{
     //     .root_source_file = "glfw.zig",
@@ -111,7 +115,7 @@ pub fn build(b: *std.Build) !void {
     } else {
         var scope_stack: [256]u8 = undefined;
         const prefix: []const u8 = "src/shaders";
-        const sdrs_map = try find_glsl_files(prefix);
+        const sdrs_map = try find_glsl_files(b, prefix);
         const bld_cmd: []const []const u8 = &.{
             "glslc",
             "--target-env=vulkan1.2",
@@ -198,22 +202,30 @@ fn zig2spirv(b: *std.Build, user_exe: *std.Build.Step.Compile) void {
     );
 }
 
-fn find_glsl_files(prefix: []const u8) !bt.DersMap {
+fn find_glsl_files(b: *std.Build, prefix: []const u8) !bt.DersMap {
     // std.fs.cwd().openDir(prefix, .{ .iterate = true });
-    var for_abs_name: [std.fs.max_path_bytes]u8 = undefined;
+    var some_mem: [1024]u8 = undefined;
 
-    const prefix_abs = try std.fs.realpath(prefix, &for_abs_name);
-    const shader_dir = try std.fs.openDirAbsolute(prefix_abs, .{ .iterate = true });
+    const cwd = std.Io.Dir.cwd();
+    var cwd2 = try cwd.openDir(b.graph.io, ".", .{ .iterate = true });
+    defer cwd2.close(b.graph.io);
+    const size = try cwd2.realPath(b.graph.io, &some_mem);
+    std.debug.print("+++ somehnting {s}\n", .{some_mem[0..size]});
+    _ = prefix;
 
-    var iter = shader_dir.iterate();
-    while (try iter.next()) |entry| {
-        if (std.mem.endsWith(u8, entry.name, ".vert")) {
-            // std.debug.print("+++ found {s}\n", .{entry.name});
-        }
-        if (std.mem.endsWith(u8, entry.name, ".vert")) {
-            // std.debug.print("+++ found {s}\n", .{entry.name});
-        }
-    }
+    // const shader_dir = try cwd2.openDir(b.graph.io, prefix, .{ .iterate = true });
+    // defer shader_dir.close(b.graph.io);
+
+    // var iter = shader_dir.iterate();
+    // while (try iter.next()) |entry| {
+    //     std.debug.print("+++ entry name is {s}\n", .{entry.name});
+    //     if (std.mem.endsWith(u8, entry.name, ".vert")) {
+    //         // std.debug.print("+++ found {s}\n", .{entry.name});
+    //     }
+    //     if (std.mem.endsWith(u8, entry.name, ".vert")) {
+    //         // std.debug.print("+++ found {s}\n", .{entry.name});
+    //     }
+    // }
     return bt.DersMap{
         .names = &.{ "triangle", "sprite" },
         .files = &.{
@@ -231,11 +243,10 @@ fn protoGen(b: *std.Build, dep: *Dependency, target: std.Build.ResolvedTarget) v
         target,
         .{
             .destination_directory = b.path("src/gen"),
-            .source_files = &.{"proto/comfy.proto"},
+            .source_files = &.{b.path("proto/comfy.proto")},
             .include_directories = &.{},
         },
     );
-
     const cmdname: []const u8 = "proto_gen";
     std.debug.print("You can always call {s}! (wink, wink)\n", .{cmdname});
     const run_step = b.step(cmdname, "compilation of .proto file in proto/");

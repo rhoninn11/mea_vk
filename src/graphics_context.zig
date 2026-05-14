@@ -66,14 +66,16 @@ pub const OneShotCommanded = struct {
 
         try vkdev.endCommandBuffer(self.cmds);
 
-        const submmit_info: vk.SubmitInfo = .{
-            .command_buffer_count = 1,
-            .p_command_buffers = @ptrCast(&self.cmds),
+        const submmit_info: []const vk.SubmitInfo = &.{
+            vk.SubmitInfo{
+                .command_buffer_count = 1,
+                .p_command_buffers = @ptrCast(&self.cmds),
+            },
         };
-        try vkdev.queueSubmit(vkq, 1, @ptrCast(&submmit_info), .null_handle);
+        try vkdev.queueSubmit(vkq, submmit_info, .null_handle);
         try vkdev.queueWaitIdle(vkq);
 
-        vkdev.freeCommandBuffers(self.pic.pool, 1, @ptrCast(&self.cmds));
+        vkdev.freeCommandBuffers(self.pic.pool, &.{self.cmds});
     }
     pub fn init(pic: *const PoolInCtx) !OneShotCommanded {
         const vkd = pic.gc.dev;
@@ -169,12 +171,12 @@ pub fn uploadVertices(pic: *const PoolInCtx, buffer: vk.Buffer, vert_slice: []co
 fn copyBuffer(pic: *const PoolInCtx, dst: vk.Buffer, src: vk.Buffer, size: vk.DeviceSize) !void {
     const vkdev = pic.gc.dev;
     const one_shot = try OneShotCommanded.init(pic);
-    const region = vk.BufferCopy{
+    const region = &.{vk.BufferCopy{
         .src_offset = 0,
         .dst_offset = 0,
         .size = size,
-    };
-    vkdev.cmdCopyBuffer(one_shot.cmds, src, dst, 1, @ptrCast(&region));
+    }};
+    vkdev.cmdCopyBuffer(one_shot.cmds, src, dst, region);
     try one_shot.resolve();
 }
 

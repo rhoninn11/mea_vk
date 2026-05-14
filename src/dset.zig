@@ -163,7 +163,7 @@ pub const DescriptorPrep = struct {
                     .p_image_info = &.{},
                     .p_texel_buffer_view = &.{},
                 }};
-                self.gc.dev.updateDescriptorSets(m.uinty(write_ops.len), write_ops.ptr, 0, null);
+                self.gc.dev.updateDescriptorSets(write_ops, &.{});
             }
         }
 
@@ -176,7 +176,7 @@ pub const DescriptorPrep = struct {
             .image_view = img.vk_img_view.?,
             .sampler = img.vk_sampler.?,
         };
-        const write_image_dsc_set = vk.WriteDescriptorSet{
+        const write_image_dsc_set = &.{vk.WriteDescriptorSet{
             .dst_set = self.d_set_arr.items[idx],
             .dst_binding = self.set_binding,
             .dst_array_element = if (array_idx) |i| i else 0,
@@ -185,8 +185,8 @@ pub const DescriptorPrep = struct {
             .p_buffer_info = &.{},
             .p_image_info = @ptrCast(&img_info),
             .p_texel_buffer_view = &.{},
-        };
-        self.gc.dev.updateDescriptorSets(1, @ptrCast(&write_image_dsc_set), 0, null);
+        }};
+        self.gc.dev.updateDescriptorSets(write_image_dsc_set, &.{});
     }
 
     pub fn deinit(self: *Self, alloc: std.mem.Allocator) void {

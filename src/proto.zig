@@ -73,18 +73,19 @@ pub fn spawHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     };
 }
 
-pub fn serdesLoad(alloc: std.mem.Allocator) !meagen.Image {
+pub fn serdesLoad(io: std.Io, alloc: std.mem.Allocator) !meagen.Image {
     const filename = "fs/serdes/img_0034.serdes";
-    const file = std.fs.cwd().openFile(filename, .{
+
+    const file = std.Io.Dir.cwd().openFile(io, filename, .{
         .mode = .read_only,
     }) catch {
         std.debug.print("!+- theres no file named {s}\n", .{filename});
         return try spawHdr(alloc, shu.xyGrid(256, 880));
     };
-    defer file.close();
+    defer file.close(io);
 
     var file_buffer: [8096]u8 = undefined;
-    var rader = file.reader(&file_buffer);
+    var rader = file.reader(io, &file_buffer);
 
     return meagen.Image.decode(&rader.interface, alloc);
 }
