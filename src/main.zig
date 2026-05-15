@@ -131,7 +131,7 @@ pub fn main(init: std.process.Init) !void {
 
     const resutl = c.SDL_Init(c.SDL_INIT_VIDEO);
     if (resutl) {
-        std.debug.print("+++ sdl possible to init\n", .{u.});
+        std.debug.print("+++ sdl possible to init\n", .{});
     } else {
         std.debug.print("--- sdl init failed\n", .{});
     }
@@ -297,11 +297,18 @@ fn deeper(access: EasyAcces) !void {
 
     var atlas_idx: u8 = 32;
     const ok_g = sht.GridSize.g128;
+    var testing = true;
     for (&ok_samples) |*sample| {
         std.debug.assert(atlas_idx < ATLAS_MAX);
-        const oksample = try oklab.OkUnderstanding.sampleSpace(allocator, L, &ok_g);
-        defer allocator.free(oksample);
-        const ok_rgba = try imgs.vulkanTexture(&pic, ok_g, oksample);
+        var sampled: []const u8 = undefined;
+        if (testing) {
+            testing = false;
+            sampled = try oklab.OkUnderstanding.sampleInfernoAlt(allocator, &ok_g);
+        } else {
+            sampled = try oklab.OkUnderstanding.sampleSpace(allocator, L, &ok_g);
+        }
+        defer allocator.free(sampled);
+        const ok_rgba = try imgs.vulkanTexture(&pic, ok_g, sampled);
         dset_atlas.updateTexture(0, &ok_rgba, atlas_idx);
 
         L += L_delt;

@@ -54,19 +54,34 @@ pub fn testInit(b: *std.Build, o: *const Options) *std.Build.Step.Compile {
     });
 }
 
+pub fn cRelated(b: *std.Build, o: *const Options) void {
+    const sdl_c_translate = b.addTranslateC(.{
+        .root_source_file = b.path("SDL3/SDL.h"),
+        .target = o.target,
+        .optimize = o.optimize,
+    });
+
+    const stb_tt_c_translate = b.addTranslateC(.{
+        .root_source_file = b.path("src/third_party/stb_truetype.h"),
+        .target = o.target,
+        .optimize = o.optimize,
+    });
+
+    const TransC = std.Build.Step.TranslateC;
+    const essa_c = [_]*TransC{ sdl_c_translate, stb_tt_c_translate };
+    for (essa_c, 0..) |unit, i| {
+        const hmm = unit.getOutput();
+        std.debug.print("**essa_c***{d} some text {s}\n", .{ i, hmm.getDisplayName() });
+    }
+}
+
 pub fn build(b: *std.Build) !void {
     const o = Options.read(b);
     const maybe_override_registry = b.option([]const u8, "override-registry", "Override the path to the Vulkan registry used for the examples");
     const use_zig_shaders = b.option(bool, "zig-shader", "Use Zig shaders instead of GLSL") orelse false;
 
     try cmdsBuild(b, o);
-    const sdl_dep = b.dependency("sdl", o);
-    const sdl_c_translate = b.addTranslateC(.{
-        .root_source_file = b.path("SDL3/SDL.h"),
-        .target = o.target,
-        .optimize = o.optimize,
-    });
-    _ = sdl_c_translate;
+    cRelated(b, &o);
 
     const triangle_exe = b.addExecutable(.{
         .name = "vk_exp",
@@ -85,6 +100,7 @@ pub fn build(b: *std.Build) !void {
         .use_llvm = true,
     });
     b.installArtifact(triangle_exe);
+    const sdl_dep = b.dependency("sdl", o);
 
     const pbDep = b.dependency("protobuf", o);
     protoGen(b, pbDep, o.target);

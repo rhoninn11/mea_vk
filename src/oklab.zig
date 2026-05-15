@@ -149,15 +149,9 @@ pub const OkUnderstanding = struct {
         }
     }
 
-    var _local_marker: bool = true;
     pub fn sampleSpace(alloc: std.mem.Allocator, L: f32, g: *const sht.GridSize) ![]u8 {
         const texture_mem = try alloc.alloc(u8, g.total * @sizeOf(u32));
-
         const g_mid = addons.GridOps.middle(g);
-        if (_local_marker) {
-            std.debug.print("+++ | mid of the grid {any}\n", .{g_mid});
-            _local_marker = !_local_marker;
-        }
 
         const chroma = 0.4;
         var invalid_pixels: u32 = 0;
@@ -195,6 +189,31 @@ pub const OkUnderstanding = struct {
         // std.debug.print("+++ L {d:.2} c {d} | tex coverage {d:.2}%\n", .{ L, chroma, cover_f });
         _ = cover_f;
 
+        return texture_mem;
+    }
+
+    const LabSpot = struct { key: f32, lab: m.vec3 };
+    pub fn sampleInfernoAlt(alloc: std.mem.Allocator, g: *const sht.GridSize) ![]u8 {
+        const path: []const LabSpot = &.{
+            .{ .key = 0.0, .lab = .{ 0.4, 0.2, 0.0 } },
+            .{ .key = 1.0, .lab = .{ 0.7, 0.0, 0.2 } },
+        };
+        _ = path;
+
+        const texture_mem = try alloc.alloc(u8, g.total * @sizeOf(u32));
+
+        // var spot: u8 = 0;
+        for (0..g.h) |yy| {
+            for (0..g.w) |x| {
+                const gwf = @as(f32, @floatFromInt(g.w));
+                const sf = @as(f32, @floatFromInt(x));
+                const mem_idx = (yy * g.w + x) * 4;
+                const progress = sf / (gwf - 1);
+
+                texture_mem[mem_idx] = @as(u8, @intFromFloat(progress * 255));
+                texture_mem[mem_idx + 3] = 255;
+            }
+        }
         return texture_mem;
     }
 };

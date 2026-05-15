@@ -44,21 +44,33 @@ const uHdr = extern union {
     hdr: u16,
 };
 
-pub fn spawHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
+pub inline fn trygZero1(val: f32) f32 {
+    return (val + 1) * 0.5;
+}
+
+pub inline fn tryg2u16f(val: f32) f32 {
+    return ((val + 1) * 0.5 * ((1 << 16) - 3) + 1);
+}
+
+pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     var pixels = try alloc.alloc(u8, g.total * @sizeOf(u16));
     const fy: f32 = 1;
+    const f1y: f32 = 0.12;
     const fx: f32 = 1;
     for (0..g.h) |y| {
         const y_phase = m.floaty(y) / 16; // give him some samples per cycle
         const y_sin = @sin(y_phase * std.math.tau * fy);
-        const y_ufit = ((y_sin + 1) * 0.5 * ((1 << 16) - 3) + 1);
+        const y_ufit = tryg2u16f(y_sin);
+
+        const yl = trygZero1(@sin(y_phase * std.math.tau * f1y));
+        // _ = yl_sin;
 
         for (0..g.w) |xx| {
             const x_phase = m.floaty(xx) / 16;
             const x_sin = @sin(x_phase * std.math.tau * fx);
-            const x_ufit = ((x_sin + 1) * 0.5 * ((1 << 16) - 3) + 1);
+            const x_ufit = tryg2u16f(x_sin);
 
-            const combined = x_ufit * 0.5 + y_ufit * 0.5;
+            const combined = x_ufit * 0.5 + y_ufit * 0.5 * yl;
             const hdrval: uHdr = .{ .hdr = @as(u16, @intFromFloat(combined)) };
 
             const gdx = shu.gridI(g, xx, y);
@@ -73,14 +85,38 @@ pub fn spawHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     };
 }
 
+pub fn checkSedes(io: std.Io, alloc: std.mem.Allocator, here: []const u8) ![]const u8 {
+    const serdes_dir = try std.Io.Dir.cwd().openDir(
+        io,
+        here,
+        .{ .iterate = true },
+    );
+    defer serdes_dir.close(io);
+
+    var iterator = serdes_dir.iterate();
+    while (try iterator.next(io)) |entry| {
+        _ = entry;
+        std.debug.print("+++ so there is something here:D", .{});
+    }
+    _ = alloc;
+    return "essa";
+}
+
 pub fn serdesLoad(io: std.Io, alloc: std.mem.Allocator) !meagen.Image {
+    const serdes_prefix = "fs/serdes";
+    const available = checkSedes(io, alloc, serdes_prefix) catch {
+        std.debug.print("!+- serdes check failed\n", .{});
+        return try xyTrygHdr(alloc, shu.xyGrid(256, 880));
+    };
+    _ = available;
+
     const filename = "fs/serdes/img_0034.serdes";
 
     const file = std.Io.Dir.cwd().openFile(io, filename, .{
         .mode = .read_only,
     }) catch {
         std.debug.print("!+- theres no file named {s}\n", .{filename});
-        return try spawHdr(alloc, shu.xyGrid(256, 880));
+        return try xyTrygHdr(alloc, shu.xyGrid(256, 880));
     };
     defer file.close(io);
 
