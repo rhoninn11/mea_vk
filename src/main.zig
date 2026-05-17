@@ -112,7 +112,7 @@ var slide_r: motion.KeyAction = .{ .key = glfw.KeyB, .action = glfw.KeyDown };
 var slide_l_trig: motion.Trigger = .{};
 var slide_r_trig: motion.Trigger = .{};
 
-const sdl = @import("sdl_wrap.zig");
+const sdl = @import("sdl_wrap2.zig");
 pub fn main(init: std.process.Init) !void {
     glass_input = try motion.HoldsAxis.init(&.{
         glfw.KeyJ, glfw.KeyK, //
@@ -125,7 +125,7 @@ pub fn main(init: std.process.Init) !void {
     });
 
     vertex.probing(false);
-    sdl.sdlDemo();
+    sdl.sdlDemo(init.io);
 
     std.debug.print("+++ vertex info: {d}\n", .{Vertex.s_fields_num});
     try glfw.init();

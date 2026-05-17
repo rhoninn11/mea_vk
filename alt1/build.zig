@@ -1,18 +1,33 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+const TarOpt = struct {
+    t: std.Build.ResolvedTarget,
+    o: std.builtin.OptimizeMode,
+};
 
-    const linkage: std.builtin.LinkMode = .dynamic;
+pub fn dependencies(b: *std.Build, teo: *const TarOpt) *std.Build.Dependency {
+    const raylib_dep = b.dependency("raylib", .{
+        .target = teo.t,
+        .optimize = teo.o,
+        .linkage = .dynamic,
+    });
+
+    return raylib_dep;
+}
+
+pub fn build(b: *std.Build) void {
+    const teo = TarOpt{
+        .t = b.standardTargetOptions(.{}),
+        .o = b.standardOptimizeOption(.{}),
+    };
+
     const c_exe = b.addExecutable(.{
         .name = "c_sample",
         .root_module = b.createModule(.{
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
+            .target = teo.t,
+            .optimize = teo.o,
         }),
-        .linkage = linkage,
+        .linkage = .dynamic,
         .version = .{
             .major = 0,
             .minor = 0,
@@ -25,10 +40,18 @@ pub fn build(b: *std.Build) void {
         .language = .c,
         .file = b.path("src/main.c"),
         .flags = &.{
-            "-std=c89", "-Wall", "-Wextra", //
+            "-std=c99", "-Wall", "-Wextra", //
         },
     });
+
+    const raylib_dep = dependencies(b, &teo);
+    const raylib_build = raylib_dep.artifact("raylib");
+
+    c_exe.root_module.link_libc = true;
+    c_exe.root_module.linkLibrary(raylib_build);
+
     b.installArtifact(c_exe);
+    b.installArtifact(raylib_build);
 
     const run_step = b.step("run", "Run the app");
     const run_cmd = b.addRunArtifact(c_exe);

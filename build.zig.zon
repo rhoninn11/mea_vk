@@ -18,6 +18,10 @@
             .url = "https://github.com/allyourcodebase/SDL3/archive/refs/tags/1.0.0+3.4.4.tar.gz",
             .hash = "sdl-1.0.0+3.4.4-i4QD0XSAqQBKbp9DITVMlxhI0QRGylegbPhtm-afaUXE",
         },
+        .sdl3 = .{
+            .url = "git+https://codeberg.org/7Games/zig-sdl3?ref=v0.2.0#40c2e4b579aa556db37a502c936426aa1c8b5c95",
+            .hash = "sdl3-0.2.0-NmT1Q0mFJwBi9kZmArzh2rfJ_mFshydV0zPGULVlpACc",
+        },
     },
     .paths = .{""},
 }

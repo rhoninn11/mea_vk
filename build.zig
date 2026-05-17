@@ -55,11 +55,11 @@ pub fn testInit(b: *std.Build, o: *const Options) *std.Build.Step.Compile {
 }
 
 pub fn cRelated(b: *std.Build, o: *const Options) void {
-    const sdl_c_translate = b.addTranslateC(.{
-        .root_source_file = b.path("SDL3/SDL.h"),
-        .target = o.target,
-        .optimize = o.optimize,
-    });
+    // const sdl_c_translate = b.addTranslateC(.{
+    //     .root_source_file = b.path("SDL3/SDL.h"),
+    //     .target = o.target,
+    //     .optimize = o.optimize,
+    // });
 
     const stb_tt_c_translate = b.addTranslateC(.{
         .root_source_file = b.path("src/third_party/stb_truetype.h"),
@@ -68,7 +68,7 @@ pub fn cRelated(b: *std.Build, o: *const Options) void {
     });
 
     const TransC = std.Build.Step.TranslateC;
-    const essa_c = [_]*TransC{ sdl_c_translate, stb_tt_c_translate };
+    const essa_c = [_]*TransC{stb_tt_c_translate};
     for (essa_c, 0..) |unit, i| {
         const hmm = unit.getOutput();
         std.debug.print("**essa_c***{d} some text {s}\n", .{ i, hmm.getDisplayName() });
@@ -100,12 +100,23 @@ pub fn build(b: *std.Build) !void {
         .use_llvm = true,
     });
     b.installArtifact(triangle_exe);
-    const sdl_dep = b.dependency("sdl", o);
+    const sdl3_lib = b.dependency("sdl", .{
+        .target = o.target,
+        .optimize = o.optimize,
+        .linkage = .static,
+    });
+    const sdl3_bind = b.dependency("sdl3", .{
+        .target = o.target,
+        .optimize = o.optimize,
+    });
 
     const pbDep = b.dependency("protobuf", o);
     protoGen(b, pbDep, o.target);
     triangle_exe.root_module.addImport("protobuf", pbDep.module("protobuf"));
-    triangle_exe.root_module.linkLibrary(sdl_dep.artifact("SDL3"));
+    triangle_exe.root_module.addImport("sdl3", sdl3_bind.module("sdl3"));
+
+    triangle_exe.root_module.linkLibrary(sdl3_lib.artifact("SDL3"));
+    b.installArtifact(sdl3_lib.artifact("SDL3"));
 
     const glfw_lib_fmt: []const u8 = if (builtin.target.os.tag == .windows) "{s}/bin" else "{s}/lib";
     const glfw_name: []const u8 = if (builtin.target.os.tag == .windows) "glfw3" else "glfw";
