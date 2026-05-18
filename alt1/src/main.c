@@ -20,7 +20,7 @@
 #define TXT_CLEAR "\x1b[0m"
 
 typedef struct{
-    Matrix m4x4;
+    Quaternion quat;
     Vector3 pos;
 }PlacementInfo;
 
@@ -38,13 +38,17 @@ void genSomePlacements(PlacementInfo **dynamic_array) {
 
     for(int i = 0; i < 12; i++) {
         PlacementInfo new_place = {
-            .m4x4 = MatrixIdentity(),
             .pos = {.x = (float)i},
         };
         arrput(*dynamic_array, new_place);
         int len = arrlen(*dynamic_array);
     }
 }
+
+typedef enum{
+    RS_PHASE_A = 1,
+    RS_PHASE_B = 2,
+}READ_STATE;
 
 void readImages(const char *file, PlacementInfo **dynamic_array) {
 
@@ -61,7 +65,42 @@ void readImages(const char *file, PlacementInfo **dynamic_array) {
     }
 
     // TODO: implement file reading 
-    genSomePlacements(dynamic_array);
+    printf("+++ reading a file\n");
+    #define BIG_LINE_SIZE 2*1024*1024
+    char line_buffer[BIG_LINE_SIZE];
+
+    int line_count = 0;
+    READ_STATE state = RS_PHASE_A;
+    int img_id;
+    int img_pnts_num;
+    PlacementInfo p_info;
+    char name_holder[256];
+    while (fgets(line_buffer, BIG_LINE_SIZE, img_file)){
+        line_count += 1;
+        // if (line_count>32) {
+        //     break;
+        // }
+
+        if (line_buffer[0] == '#'){
+            continue;
+        }
+
+        if (state == RS_PHASE_A) {
+            // printf("line %d %s\n", line_count, line_buffer);
+            sscanf_s(line_buffer, "%d %f %f %f %f %f %f %f %d %255s", 
+                &img_id, &p_info.quat.x, &p_info.quat.y, &p_info.quat.z, &p_info.quat.w,
+                &p_info.pos.x, &p_info.pos.y, &p_info.pos.z, &img_pnts_num, name_holder);
+            state = RS_PHASE_B;
+            arrput(*dynamic_array, p_info);
+            continue;
+        }
+        if (state == RS_PHASE_B) {
+            state = RS_PHASE_A;
+            continue;
+        }
+
+    }
+    
     fclose(img_file);
 }
 
@@ -69,7 +108,7 @@ int main(void)
 {
 
 
-    InitWindow(800, 600, "raylib cubes");
+    InitWindow(1600, 900, "colmap data preview");
     SetTargetFPS(60);
 
     Camera3D camera = {
@@ -89,7 +128,8 @@ int main(void)
     };
 
     float angle = 0.0f;
-    float radius = 8.0f;
+    float radius = 16.0f;
+    bool rot_flag = true;
 
         
     char *some_info = &easy_access_stack[0];
@@ -112,7 +152,13 @@ int main(void)
     colored(some_info, "is looping", TXT_GREAN);
     printf("+++ main loop %s\n", some_info);
     while (!WindowShouldClose()) {
-        angle += 0.5f * GetFrameTime();
+        if (IsKeyPressed(KEY_SPACE)) {
+            rot_flag = !rot_flag;            
+        }
+
+        if (rot_flag) {
+            angle += 0.5f * GetFrameTime();
+        }
         camera.position = (Vector3){
             cosf(angle) * radius,
             5.0f,
@@ -126,6 +172,11 @@ int main(void)
         for (int i = 0; i < 8; i++) {
             DrawCube(positions[i], 1.0f, 1.0f, 1.0f, colors[i]);
             DrawCubeWires(positions[i], 1.0f, 1.0f, 1.0f, BLACK);
+        }
+        float cube_size = 0.2f;
+        for (int i = 0; i < img_num; i++) {
+            PlacementInfo info = img_placements[i];
+            DrawCube(info.pos, cube_size, cube_size, cube_size, colors[0]);
         }
         DrawGrid(10, 1.0f);
         EndMode3D();

@@ -80,7 +80,7 @@ pub fn build(b: *std.Build) !void {
     const maybe_override_registry = b.option([]const u8, "override-registry", "Override the path to the Vulkan registry used for the examples");
     const use_zig_shaders = b.option(bool, "zig-shader", "Use Zig shaders instead of GLSL") orelse false;
 
-    try cmdsBuild(b, o);
+    // try cmdsBuild(b, o);
     cRelated(b, &o);
 
     const zglfw = b.dependency("zglfw", .{
