@@ -112,7 +112,7 @@ var slide_r: motion.KeyAction = .{ .key = glfw.KeyB, .action = glfw.KeyDown };
 var slide_l_trig: motion.Trigger = .{};
 var slide_r_trig: motion.Trigger = .{};
 
-const sdl = @import("sdl_wrap2.zig");
+const sdl_wrap = @import("sdl_wrap2.zig");
 pub fn main(init: std.process.Init) !void {
     glass_input = try motion.HoldsAxis.init(&.{
         glfw.KeyJ, glfw.KeyK, //
@@ -125,12 +125,16 @@ pub fn main(init: std.process.Init) !void {
     });
 
     vertex.probing(false);
-    sdl.sdlDemo(init.io);
-
     std.debug.print("+++ vertex info: {d}\n", .{Vertex.s_fields_num});
+
+    try sdl_wrap.initSDL();
+    defer sdl_wrap.exitSDL();
     try glfw.init();
     defer glfw.terminate();
-
+    if (!sdl_wrap.vulkanSupported()) {
+        std.log.err("!!! SDL could not find libvulkan", .{});
+        return error.NoVulkan;
+    }
     if (!glfw.vulkanSupported()) {
         std.log.err("GLFW could not find libvulkan", .{});
         return error.NoVulkan;
@@ -148,6 +152,8 @@ pub fn main(init: std.process.Init) !void {
     );
     defer glfw.destroyWindow(window);
 
+    try sdl_wrap.createWindow();
+    defer sdl_wrap.destroyWindow();
     // According to the GLFW docs:
     //
     // > Window systems put limits on window sizes. Very large or very small window dimensions
@@ -525,6 +531,7 @@ fn deeper(access: EasyAcces) !void {
         };
 
         glfw.pollEvents();
+        sdl_wrap.pollEvents();
     }
 
     try swapchain.waitForAllFences();
