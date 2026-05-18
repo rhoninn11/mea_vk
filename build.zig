@@ -83,6 +83,13 @@ pub fn build(b: *std.Build) !void {
     try cmdsBuild(b, o);
     cRelated(b, &o);
 
+    const zglfw = b.dependency("zglfw", .{
+        .target = o.target,
+        .optimize = o.optimize,
+        .shared = true,
+    });
+    const zglfw_lib = zglfw.artifact("glfw");
+
     const triangle_exe = b.addExecutable(.{
         .name = "vk_exp",
         .root_module = b.createModule(.{
@@ -118,31 +125,23 @@ pub fn build(b: *std.Build) !void {
     triangle_exe.root_module.linkLibrary(sdl3_lib.artifact("SDL3"));
     b.installArtifact(sdl3_lib.artifact("SDL3"));
 
-    const glfw_lib_fmt: []const u8 = if (builtin.target.os.tag == .windows) "{s}/bin" else "{s}/lib";
-    const glfw_name: []const u8 = if (builtin.target.os.tag == .windows) "glfw3" else "glfw";
+    // { // if it can be swaped, zls will be working fully again, and some files will in project can be erased
+    //     const glfw_lib_fmt: []const u8 = if (builtin.target.os.tag == .windows) "{s}/bin" else "{s}/lib";
+    //     const glfw_name: []const u8 = if (builtin.target.os.tag == .windows) "glfw3" else "glfw";
 
-    var lib_path_mem: [1024]u8 = undefined;
-    var include_path_mem: [1024]u8 = undefined;
-    const glfw_path = b.graph.environ_map.get("GLFW_LIB").?;
-    // const glfw_path = try std.process.getEnvVarOwned(b.allocator, "GLFW_LIB");
-    const include_path = try std.fmt.bufPrint(&include_path_mem, "{s}/include", .{glfw_path});
-    const lib_path = try std.fmt.bufPrint(&lib_path_mem, glfw_lib_fmt, .{glfw_path});
+    //     var lib_path_mem: [1024]u8 = undefined;
+    //     var include_path_mem: [1024]u8 = undefined;
+    //     const glfw_path = b.graph.environ_map.get("GLFW_LIB").?;
+    //     // const glfw_path = try std.process.getEnvVarOwned(b.allocator, "GLFW_LIB");
+    //     const include_path = try std.fmt.bufPrint(&include_path_mem, "{s}/include", .{glfw_path});
+    //     const lib_path = try std.fmt.bufPrint(&lib_path_mem, glfw_lib_fmt, .{glfw_path});
 
-    // triangle_exe.lib
-    triangle_exe.root_module.addIncludePath(.{ .cwd_relative = include_path });
-    triangle_exe.root_module.addLibraryPath(.{ .cwd_relative = lib_path });
-    // triangle_exe.addIncludePath(.{ .cwd_relative = include_path });
-    // triangle_exe.addLibraryPath(.{ .cwd_relative = lib_path });
-
-    triangle_exe.root_module.linkSystemLibrary(glfw_name, .{ .needed = true });
-
-    // const glfw_module = b.addModule("glwf", .{
-    //     .root_source_file = "glfw.zig",
-    //     .target = target,
-    //     .optimize = optimize,
-    //     .link_libc = true,
-    // });
-    // triangle_exe.root_module.addImport("glfw", glfw_module);
+    //     // triangle_exe.lib
+    //     triangle_exe.root_module.addIncludePath(.{ .cwd_relative = include_path });
+    //     triangle_exe.root_module.addLibraryPath(.{ .cwd_relative = lib_path });
+    //     triangle_exe.root_module.linkSystemLibrary(glfw_name, .{ .needed = true });
+    // }
+    triangle_exe.root_module.linkLibrary(zglfw_lib);
 
     _ = maybe_override_registry;
     // const registry = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");

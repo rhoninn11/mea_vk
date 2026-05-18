@@ -1,5 +1,6 @@
+// implement of | src/third_party/oklab.h |
+
 const std = @import("std");
-const source = @import("third_party/oklab.zig");
 const m = @import("math.zig");
 const dset = @import("dset.zig");
 const sht = @import("shaders/types.zig");

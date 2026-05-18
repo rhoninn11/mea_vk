@@ -22,6 +22,10 @@
             .url = "git+https://codeberg.org/7Games/zig-sdl3?ref=v0.2.0#40c2e4b579aa556db37a502c936426aa1c8b5c95",
             .hash = "sdl3-0.2.0-NmT1Q0mFJwBi9kZmArzh2rfJ_mFshydV0zPGULVlpACc",
         },
+        .zglfw = .{
+            .url = "git+https://github.com/zig-gamedev/zglfw.git#51003c105d23db378bb59ce415a387b22f1b0892",
+            .hash = "zglfw-0.10.0-dev-zgVDNIy4IQDJNRy4jrP1As-SZxfJpuWhU1iJ-wBab_VD",
+        },
     },
     .paths = .{""},
 }
