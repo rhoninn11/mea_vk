@@ -1,5 +1,7 @@
 #include "stdio.h"
 #include "string.h"
+#include "stdint.h"
+#include "math.h"
 
 #include "raylib.h"
 #include "raymath.h"
@@ -35,14 +37,33 @@ int printV3(char *out, const Vector3 v) {
 }
 
 void genSomePlacements(PlacementInfo **dynamic_array) {
-
-    for(int i = 0; i < 12; i++) {
+    const int fake_sample_num = 12;
+    for(int i = 0; i < fake_sample_num; i++) {
         PlacementInfo new_place = {
             .pos = {.x = (float)i},
         };
         arrput(*dynamic_array, new_place);
-        int len = arrlen(*dynamic_array);
+        // int len = arrlen(*dynamic_array);
     }
+    printf("+++ generated fake samples (%d)\n", fake_sample_num);
+}
+
+PlacementInfo readPlacementLine(const char* line_read) {
+    PlacementInfo p_info;
+    uint32_t img_id, pnt_num;
+    char name_buff[256];
+    sscanf(line_read, "%d %g %g %g %g %g %g %g %d %255s", //sscanf_s limited for windows
+        &img_id, &p_info.quat.w, &p_info.quat.x, &p_info.quat.y, &p_info.quat.z,
+        &p_info.pos.x, &p_info.pos.y, &p_info.pos.z, &pnt_num, name_buff);
+
+
+    // C = -R^T * T  
+    Matrix R = QuaternionToMatrix(p_info.quat);
+    Vector3 new_pos = Vector3Transform(Vector3Scale(p_info.pos, -1), MatrixTranspose(R));
+    p_info.pos = new_pos;
+
+
+    return p_info;
 }
 
 typedef enum{
@@ -63,52 +84,44 @@ void readImages(const char *file, PlacementInfo **dynamic_array) {
         genSomePlacements(dynamic_array);
         return;
     }
+    FILE* img_out = fopen("fs/images_short.txt", "wb");
+    bool to_rewrite = img_out != NULL;
+    if (!to_rewrite) {
+        printf("!!! error: %s -> %s, so we gen some data\n", str_a, str_b);
+        genSomePlacements(dynamic_array);
+        return;
+    }
 
     // TODO: implement file reading 
     printf("+++ reading a file\n");
-    #define BIG_LINE_SIZE 2*1024*1024
+    #define BIG_LINE_SIZE 2*1024*1024 //a kto mi zabroni
     char line_buffer[BIG_LINE_SIZE];
 
-    int line_count = 0;
     READ_STATE state = RS_PHASE_A;
-    int img_id;
-    int img_pnts_num;
-    PlacementInfo p_info;
-    char name_holder[256];
     while (fgets(line_buffer, BIG_LINE_SIZE, img_file)){
-        line_count += 1;
-        // if (line_count>32) {
-        //     break;
-        // }
-
         if (line_buffer[0] == '#'){
             continue;
         }
-
         if (state == RS_PHASE_A) {
-            // printf("line %d %s\n", line_count, line_buffer);
-            sscanf_s(line_buffer, "%d %f %f %f %f %f %f %f %d %255s", 
-                &img_id, &p_info.quat.x, &p_info.quat.y, &p_info.quat.z, &p_info.quat.w,
-                &p_info.pos.x, &p_info.pos.y, &p_info.pos.z, &img_pnts_num, name_holder);
             state = RS_PHASE_B;
-            arrput(*dynamic_array, p_info);
+            fwrite(line_buffer, 1, strlen(line_buffer), img_out);
+            arrput(*dynamic_array, readPlacementLine(line_buffer));
             continue;
         }
         if (state == RS_PHASE_B) {
             state = RS_PHASE_A;
             continue;
         }
-
     }
-    
     fclose(img_file);
+    if (to_rewrite){
+        fclose(img_out);
+    }
 }
 
 int main(void)
 {
-
-
-    InitWindow(1600, 900, "colmap data preview");
+    InitWindow(1920, 1080, "colmap data preview");
     SetTargetFPS(60);
 
     Camera3D camera = {
@@ -141,13 +154,13 @@ int main(void)
     readImages("fs/images.txt", &img_placements); 
 
     int img_num = arrlen(img_placements);
+    int show_num = img_num;
     printf("recorded (%d)\n", img_num);
-    for(int i = 0; i < img_num; i++) {
+    if (img_num > 32) show_num = 32;
+    for(int i = 0; i < show_num; i++) {
         printV3(some_info, img_placements[i].pos);
         printf("Img (%4d) at %s\n", i, some_info);
     } 
-
-
 
     colored(some_info, "is looping", TXT_GREAN);
     printf("+++ main loop %s\n", some_info);
@@ -158,12 +171,14 @@ int main(void)
 
         if (rot_flag) {
             angle += 0.5f * GetFrameTime();
+            camera.position = (Vector3){
+                cosf(angle) * radius,
+                5.0f,
+                sinf(angle) * radius,
+            };
+        } else {
+            UpdateCamera(&camera, CAMERA_FREE);
         }
-        camera.position = (Vector3){
-            cosf(angle) * radius,
-            5.0f,
-            sinf(angle) * radius,
-        };
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
@@ -173,7 +188,7 @@ int main(void)
             DrawCube(positions[i], 1.0f, 1.0f, 1.0f, colors[i]);
             DrawCubeWires(positions[i], 1.0f, 1.0f, 1.0f, BLACK);
         }
-        float cube_size = 0.2f;
+        float cube_size = 0.5f;
         for (int i = 0; i < img_num; i++) {
             PlacementInfo info = img_placements[i];
             DrawCube(info.pos, cube_size, cube_size, cube_size, colors[0]);

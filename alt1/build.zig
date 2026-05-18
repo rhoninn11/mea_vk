@@ -53,7 +53,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(c_exe);
     b.installArtifact(raylib_build);
 
-    const run_step = b.step("run", "Run the app");
+    const run_step = b.step("main", "Run main");
     const run_cmd = b.addRunArtifact(c_exe);
     run_step.dependOn(&run_cmd.step);
 
