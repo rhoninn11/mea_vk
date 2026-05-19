@@ -35,14 +35,14 @@ const EvCounter = struct {
                 if (entry.value.* == 0) continue;
                 defer flip = !flip;
                 if (flip) {
-                    try sink.print("{s}{d: >8} | {s: <25} |", .{
+                    try sink.print("{s}{d: >8} | {s: <32} |", .{
                         prefix,
                         entry.value.*,
                         @tagName(entry.key),
                     });
                     baseline += 1;
                 } else {
-                    try sink.print(" {d: >8} | {s: >25}\n", .{
+                    try sink.print(" {d: >8} | {s: >32}\n", .{
                         entry.value.*,
                         @tagName(entry.key),
                     });
@@ -54,25 +54,30 @@ const EvCounter = struct {
     }
 };
 
-const system: sdl3.InitFlags = .{ .video = true, .gamepad = true };
-const SdlContext = struct {
+const system: sdl3.InitFlags = .{
+    .video = true,
+    .gamepad = true,
+};
+pub const SdlContext = struct {
     window: ?sdl3.video.Window = null,
     ev_capture: EvCounter = .init(),
 
+    pub fn getWindow(self: *const SdlContext) sdl3.video.Window {
+        return self.window.?;
+    }
+
     fn init(name: [:0]const u8) !SdlContext {
-        const self: SdlContext = .{};
+        var self: SdlContext = .{};
         try sdl3.init(system);
-        _ = name;
-        // errdefer self.deinit();
-        // self.window = try sdl3.video.Window.init(name, 800, 600, .{});
+        errdefer self.deinit();
+        self.window = try sdl3.video.Window.init(name, 800, 600, .{ .vulkan = true });
         return self;
     }
     fn deinit(self: *SdlContext) void {
-        _ = self;
-        // if (self.window) |win| {
-        //     self.window = null;
-        //     win.deinit();
-        // }
+        if (self.window) |win| {
+            self.window = null;
+            win.deinit();
+        }
         sdl3.quit(system);
     }
 };
@@ -81,6 +86,9 @@ var sdl_state: SdlContext = .{};
 
 pub fn getEvCounter() *EvCounter {
     return &sdl_state.ev_capture;
+}
+pub fn getContext() *SdlContext {
+    return &sdl_state;
 }
 
 pub fn initSDL() !void {

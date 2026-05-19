@@ -127,14 +127,8 @@ pub fn main(init: std.process.Init) !void {
     vertex.probing(false);
     std.debug.print("+++ vertex info: {d}\n", .{Vertex.s_fields_num});
 
-    try sdl_wrap.initSDL();
-    defer sdl_wrap.exitSDL();
     try glfw.init();
     defer glfw.terminate();
-    if (!sdl_wrap.vulkanSupported()) {
-        std.log.err("!!! SDL could not find libvulkan", .{});
-        return error.NoVulkan;
-    }
     if (!glfw.vulkanSupported()) {
         std.log.err("GLFW could not find libvulkan", .{});
         return error.NoVulkan;
@@ -152,8 +146,8 @@ pub fn main(init: std.process.Init) !void {
     );
     defer glfw.destroyWindow(window);
 
-    try sdl_wrap.createWindow();
-    defer sdl_wrap.destroyWindow();
+    // try sdl_wrap.createWindow();
+    // defer sdl_wrap.destroyWindow();
     // According to the GLFW docs:
     //
     // > Window systems put limits on window sizes. Very large or very small window dimensions
@@ -174,16 +168,28 @@ pub fn main(init: std.process.Init) !void {
 
     const gpa = init.gpa;
 
-    const vkctx = try GraphicsContext.init(gpa, app_name, window);
-    defer vkctx.deinit();
+    // const vkctx = try GraphicsContext.init(gpa, app_name, window);
+    // defer vkctx.deinit();
 
-    std.log.debug("Using device: {s}", .{vkctx.deviceName()});
+    try sdl_wrap.initSDL();
+    defer sdl_wrap.exitSDL();
+
+    if (!sdl_wrap.vulkanSupported()) {
+        std.log.err("!!! SDL could not find libvulkan", .{});
+        return error.NoVulkan;
+    }
+    const sdl_window = sdl_wrap.getContext().window.?;
+    const vkctx_sdl = try GraphicsContext.initUnderSdl(gpa, app_name, sdl_window);
+    defer vkctx_sdl.deinit();
+
+    std.log.debug("Using device: {s}", .{vkctx_sdl.deviceName()});
     const access = EasyAcces{
         .window = window,
-        .vkctx = &vkctx,
+        .vkctx = &vkctx_sdl,
         .alloc = gpa,
         .io = init.io,
     };
+
     try deeper(access);
 }
 

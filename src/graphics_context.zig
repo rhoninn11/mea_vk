@@ -1,6 +1,8 @@
 const std = @import("std");
 
 const glfw = @import("third_party/glfw.zig");
+const sdl = @import("sdl3");
+
 const vk = @import("third_party/vk.zig");
 const t = @import("types.zig");
 
@@ -224,6 +226,95 @@ pub const GraphicsContext = struct {
     dev: Device,
     graphics_queue: Queue,
     present_queue: Queue,
+    pub fn initUnderSdl(allocator: Allocator, app_name: [*:0]const u8, window: sdl.video.Window) !GraphicsContext {
+        var self: GraphicsContext = undefined;
+        self.allocator = allocator;
+
+        // ofc signature is for extern function, but signature should reflect that as callconv(.c)
+        const Signature = *const fn (instance: vk.Instance, procname: [*:0]const u8) callconv(.c) vk.PfnVoidFunction;
+        const raw = try sdl.vulkan.getVkGetInstanceProcAddr();
+        const callback: Signature = @ptrCast(raw);
+        self.vkb = BaseWrapper.load(callback);
+
+        std.debug.print("whats the problem?\n", .{});
+        if (try checkLayerSupport(&self.vkb, self.allocator) == false) {
+            return error.MissingLayer;
+        }
+
+        var extension_names: std.ArrayList([*:0]const u8) = .empty;
+        defer extension_names.deinit(allocator);
+        try extension_names.append(allocator, vk.extensions.ext_debug_utils.name);
+        // try extension_names.append(allocator, vk.extensions.khr_portability_enumeration.name); //for apple
+        try extension_names.append(allocator, vk.extensions.khr_get_physical_device_properties_2.name);
+
+        const sdl_ext_required = try sdl.vulkan.getInstanceExtensions();
+        try extension_names.appendSlice(allocator, sdl_ext_required);
+
+        for (extension_names.items) |name| {
+            std.debug.print("+++ we are looking for {s} exension\n", .{name});
+        }
+
+        const instance = try self.vkb.createInstance(&.{
+            .p_application_info = &.{
+                .p_application_name = app_name,
+                .application_version = @bitCast(vk.makeApiVersion(0, 0, 0, 0)),
+                .p_engine_name = app_name,
+                .engine_version = @bitCast(vk.makeApiVersion(0, 0, 0, 0)),
+                .api_version = @bitCast(vk.API_VERSION_1_2),
+            },
+
+            .enabled_layer_count = required_layer_names.len,
+            .pp_enabled_layer_names = @ptrCast(&required_layer_names),
+            .enabled_extension_count = @intCast(extension_names.items.len),
+            .pp_enabled_extension_names = extension_names.items.ptr,
+            .flags = .{ .enumerate_portability_bit_khr = false }, //true for apple
+        }, null);
+
+        const vki = try allocator.create(InstanceWrapper);
+        errdefer allocator.destroy(vki);
+        vki.* = InstanceWrapper.load(instance, self.vkb.dispatch.vkGetInstanceProcAddr.?);
+        self.instance = Instance.init(instance, vki);
+        errdefer self.instance.destroyInstance(null);
+
+        self.debug_messenger = try self.instance.createDebugUtilsMessengerEXT(&.{
+            .message_severity = .{
+                //.verbose_bit_ext = true,
+                //.info_bit_ext = true,
+                .warning_bit_ext = true,
+                .error_bit_ext = true,
+            },
+            .message_type = .{
+                .general_bit_ext = true,
+                .validation_bit_ext = true,
+                .performance_bit_ext = true,
+            },
+            .pfn_user_callback = &debugUtilsMessengerCallback,
+            .p_user_data = null,
+        }, null);
+
+        self.surface = try createSurfaceSdl(self.instance.handle, window);
+        errdefer self.instance.destroySurfaceKHR(self.surface, null);
+
+        const candidate = try pickPhysicalDevice(self.instance, allocator, self.surface);
+        self.pdev = candidate.pdev;
+        self.props = candidate.props;
+
+        const dev = try initializeCandidate(self.instance, candidate);
+
+        const vkd = try allocator.create(DeviceWrapper);
+        errdefer allocator.destroy(vkd);
+        vkd.* = DeviceWrapper.load(dev, self.instance.wrapper.dispatch.vkGetDeviceProcAddr.?);
+        self.dev = Device.init(dev, vkd);
+        errdefer self.dev.destroyDevice(null);
+
+        self.graphics_queue = Queue.init(self.dev, candidate.queues.graphics_family);
+        self.present_queue = Queue.init(self.dev, candidate.queues.present_family);
+
+        try self.memoryPropsWithExp();
+        try self.propsExplore();
+
+        return self;
+    }
 
     pub fn init(allocator: Allocator, app_name: [*:0]const u8, window: *glfw.Window) !GraphicsContext {
         var self: GraphicsContext = undefined;
@@ -440,6 +531,13 @@ fn createSurface(instance: Instance, window: *glfw.Window) !vk.SurfaceKHR {
     }
 
     return @enumFromInt(surface);
+}
+
+fn createSurfaceSdl(instance: vk.Instance, window: sdl.video.Window) !vk.SurfaceKHR {
+    const instance_int = @intFromEnum(instance);
+    const sdl_surface = try sdl.vulkan.Surface.init(window, @ptrFromInt(instance_int), null);
+    const surface_int = @intFromPtr(sdl_surface.surface);
+    return @enumFromInt(surface_int);
 }
 
 fn initializeCandidate(instance: Instance, candidate: DeviceCandidate) !vk.Device {
