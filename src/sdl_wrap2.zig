@@ -2,34 +2,92 @@ const std = @import("std");
 
 const escChar = @import("escapeChar.zig");
 
-const DemoErrs = error{
-    InitFailed,
-    NoGamepad,
-    OpenFailed,
-    NotImplemented,
-};
-
-pub fn sdlDemo(io: std.Io) void {
-    std.debug.print("---------- SDL DEMO --------\n", .{});
-    sdlDemoDeeper(io) catch |err| std.debug.print("!!! error {}\n", .{err});
-    std.debug.print("--------- SDL DEMO END ---------\n", .{});
-}
-
 const sdl3 = @import("sdl3");
+const SdlEvTpy = sdl3.events.Type;
+const EvCounter = struct {
+    bins: std.EnumMap(SdlEvTpy, u32),
 
-const init_flags: sdl3.InitFlags = .{ .video = true, .gamepad = true };
+    fn init() EvCounter {
+        return EvCounter{ .bins = .initFull(0) };
+    }
 
-const LocalState = struct {
-    window: ?sdl3.video.Window = null,
+    pub fn inc(self: *EvCounter, this_one: SdlEvTpy) void {
+        if (self.bins.getPtr(this_one)) |counter| counter.* += 1;
+    }
+
+    pub fn raport(self: *EvCounter, prefix: []const u8, sink: *std.Io.Writer) !u8 {
+        var ev_num: u32 = 0;
+        var it = self.bins.iterator();
+        while (it.next()) |entry| ev_num += entry.value.*;
+
+        try sink.print("{s}event_bins({d}) > event_counted({d})\n", .{
+            prefix,
+            self.bins.count(),
+            ev_num,
+        });
+        var baseline: u8 = 1;
+        try sink.print("{s}additional info\n", .{prefix});
+        baseline += 1;
+        {
+            var it2 = self.bins.iterator();
+            var flip: bool = true;
+            while (it2.next()) |entry| {
+                if (entry.value.* == 0) continue;
+                defer flip = !flip;
+                if (flip) {
+                    try sink.print("{s}{d: >8} | {s: <25} |", .{
+                        prefix,
+                        entry.value.*,
+                        @tagName(entry.key),
+                    });
+                    baseline += 1;
+                } else {
+                    try sink.print(" {d: >8} | {s: >25}\n", .{
+                        entry.value.*,
+                        @tagName(entry.key),
+                    });
+                }
+            }
+            if (!flip) try sink.print("\n", .{});
+        }
+        return baseline;
+    }
 };
 
-var sdl_state: LocalState = .{};
+const system: sdl3.InitFlags = .{ .video = true, .gamepad = true };
+const SdlContext = struct {
+    window: ?sdl3.video.Window = null,
+    ev_capture: EvCounter = .init(),
+
+    fn init(name: [:0]const u8) !SdlContext {
+        const self: SdlContext = .{};
+        try sdl3.init(system);
+        _ = name;
+        // errdefer self.deinit();
+        // self.window = try sdl3.video.Window.init(name, 800, 600, .{});
+        return self;
+    }
+    fn deinit(self: *SdlContext) void {
+        _ = self;
+        // if (self.window) |win| {
+        //     self.window = null;
+        //     win.deinit();
+        // }
+        sdl3.quit(system);
+    }
+};
+
+var sdl_state: SdlContext = .{};
+
+pub fn getEvCounter() *EvCounter {
+    return &sdl_state.ev_capture;
+}
 
 pub fn initSDL() !void {
-    return sdl3.init(init_flags);
+    sdl_state = try SdlContext.init("somebody once told me...");
 }
 pub fn exitSDL() void {
-    sdl3.quit(init_flags);
+    sdl_state.deinit();
 }
 
 pub fn vulkanSupported() bool {
@@ -48,13 +106,14 @@ pub fn destroyWindow() void {
 
 pub fn pollEvents() void {
     while (sdl3.events.poll()) |ev| {
-        std.debug.print("!+!+ sdl event type {s}\n", .{@tagName(ev)});
+        sdl_state.ev_capture.inc(ev);
+        // std.debug.print("!+!+ sdl event type {s}\n", .{@tagName(ev)});
     }
 }
 
 pub fn sdlDemoDeeper(io: std.Io) !void {
-    try sdl3.init(init_flags);
-    defer sdl3.quit(init_flags);
+    try sdl3.init(system);
+    defer sdl3.quit(system);
     std.debug.print("| inited\n", .{});
 
     const gamepads: []sdl3.joystick.Id = try sdl3.gamepad.getGamepads();
@@ -80,6 +139,4 @@ pub fn sdlDemoDeeper(io: std.Io) !void {
             std.debug.print("!+!+ sdl event type {s}\n", .{@tagName(ev)});
         }
     }
-
-    return DemoErrs.NotImplemented;
 }

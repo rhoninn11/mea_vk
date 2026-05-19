@@ -4,6 +4,8 @@ const m = @import("math.zig");
 const motion = @import("motion.zig");
 const phys = @import("phys.zig");
 
+const sdl = @import("sdl_wrap2.zig");
+
 pub fn Slider(vecTpy: type) type {
     return struct {
         const Self = @This();
@@ -171,30 +173,31 @@ pub inline fn DefaultRng() !std.Random {
 }
 
 pub const ValMonit = struct {
-    printed: bool = false,
+    linecount: u8 = 0,
     name: []const u8,
     val: f32,
 
     pub fn update(self: *ValMonit, io: std.Io, new_val: f32) !void {
-        var buffer: [1024]u8 = undefined;
-        const stderr_f = std.Io.File.stderr();
-        var w = stderr_f.writer(io, &buffer);
-        //TODO: it is a bit broken on windows
         self.val = new_val;
 
-        if (self.printed) {
-            for (0..3) |_| {
-                try w.interface.print("\x1b[2K", .{}); // wyczyść linię
-                try w.interface.print("\x1b[1A", .{}); // w górę
-            }
-        }
+        var buffer: [1024]u8 = undefined;
+        const stdout: std.Io.File = .stderr();
+        var w = stdout.writer(io, &buffer);
 
-        try w.interface.print("---------------\n", .{});
-        try w.interface.print("-- {s} equals \x1b[31m{d}\x1b[0m \n", .{ self.name, self.val });
-        try w.interface.print("---------------\n", .{});
-        try w.interface.flush();
+        //const pointer to interface was the right way on windows
+        const iowriter: *std.Io.Writer = &w.interface;
 
-        self.printed = true;
+        if (self.linecount != 0) for (0..self.linecount) |_| {
+            try iowriter.print("\x1b[2K", .{}); // wyczyść linię
+            try iowriter.print("\x1b[1A", .{}); // w górę
+        };
+        const base_linecount = 3;
+        try iowriter.print("---------------\n", .{});
+        try iowriter.print("--- {s} equals \x1b[31m{d}\x1b[0m \n", .{ self.name, self.val });
+        const raport_linecount = try sdl.getEvCounter().raport("--- ", iowriter);
+        try iowriter.print("---------------\n", .{});
+        try iowriter.flush();
+        self.linecount = base_linecount + raport_linecount;
     }
 };
 
