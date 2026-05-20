@@ -32,100 +32,33 @@ const frame = @import("frame.zig");
 
 const pipe = @import("pipe.zig");
 
-const app_name = "vulkan-zig triangle example";
+const app_name = "oct_anotator";
 const future_app_name = "oct_calculator";
-
-const KeyAction = motion.KeyAction;
-fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
-    _ = scancode;
-    _ = mods;
-    const x: KeyAction = .{
-        .action = action,
-        .key = key,
-    };
-    if (x.down(glfw.KeyEscape)) {
-        std.debug.print("exititng\n", .{});
-        glfw.setWindowShouldClose(win, true);
-    }
-    if (x.down(glfw.KeySpace)) {
-        if (time_glob) |hey| {
-            hey.time_passage = !hey.time_passage;
-        }
-    }
-
-    if (x.down(shader_reset.key)) {
-        shader_reset_trigger.activated = true;
-    }
-
-    if (x.down(uniform_shift.key)) {
-        uniform_shift_trigger.activated = true;
-    }
-    if (x.down(slide_l.key)) {
-        slide_l_trig.activated = true;
-    }
-    if (x.down(slide_r.key)) {
-        slide_r_trig.activated = true;
-    }
-    if (x.down(ok_vis.key)) {
-        ok_vis_trigger.activated = true;
-    }
-
-    glass_input.reciveInput(&x);
-    plr_input.reciveInput(&x);
-}
-
-fn windowExtext(window: *c_long) vk.Extent2D {
-    var resolution_extent: vk.Extent2D = undefined;
-    resolution_extent.width, resolution_extent.height = blk: {
-        var w: c_int = undefined;
-        var h: c_int = undefined;
-        glfw.getFramebufferSize(window, &w, &h);
-        break :blk .{ @intCast(w), @intCast(h) };
-    };
-    return resolution_extent;
-}
-
-const EasyAcces = struct {
-    io: std.Io,
-    alloc: std.mem.Allocator,
-    window: *c_long,
-    vkctx: *const GraphicsContext,
-};
 
 var time_glob: ?*addons.Timeline = null;
 const BasicErrs = error{
     NoCtx,
 };
 
+const sdl_wrap = @import("sdl_wrap2.zig");
+const sdl = @import("sdl3");
+
+const input = @import("input.zig");
+const host = @import("host.zig");
+const EasyAcces = host.EasyAcces;
+
 const proto = @import("proto.zig");
 
-var glass_input: motion.HoldsAxis = undefined;
-var plr_input: motion.HoldsAxis = undefined;
-var ok_vis: motion.KeyAction = .{ .key = glfw.KeyY, .action = glfw.KeyDown };
-var ok_vis_trigger: motion.Trigger = .{};
-var shader_reset: motion.KeyAction = .{ .key = glfw.KeyQ, .action = glfw.KeyDown };
-var shader_reset_trigger: motion.Trigger = .{};
-var uniform_shift: motion.KeyAction = .{ .key = glfw.KeyE, .action = glfw.KeyDown };
-var uniform_shift_trigger: motion.Trigger = .{};
-var slide_l: motion.KeyAction = .{ .key = glfw.KeyV, .action = glfw.KeyDown };
-var slide_r: motion.KeyAction = .{ .key = glfw.KeyB, .action = glfw.KeyDown };
-var slide_l_trig: motion.Trigger = .{};
-var slide_r_trig: motion.Trigger = .{};
-
-const sdl_wrap = @import("sdl_wrap2.zig");
 pub fn main(init: std.process.Init) !void {
-    glass_input = try motion.HoldsAxis.init(&.{
-        glfw.KeyJ, glfw.KeyK, //
-        glfw.KeyH, glfw.KeyL,
-    });
-    plr_input = try motion.HoldsAxis.init(&.{
-        glfw.KeyA, glfw.KeyD, //
-        glfw.KeyS, glfw.KeyW,
-        glfw.KeyF, glfw.KeyR,
-    });
+    const use_glfw: bool = false;
+    try input.init();
 
-    vertex.probing(false);
-    std.debug.print("+++ vertex info: {d}\n", .{Vertex.s_fields_num});
+    if (use_glfw) {
+        host.glfwHost(init, deeper) catch {
+            std.debug.print("glfw host reporting error\n", .{});
+        };
+        return;
+    }
 
     try glfw.init();
     defer glfw.terminate();
@@ -135,7 +68,7 @@ pub fn main(init: std.process.Init) !void {
     }
 
     // czym się różni vk.Rect2D od vk.Extend2D?
-    var resolution_extent = vk.Extent2D{ .width = 1600, .height = 900 };
+    const resolution_extent = vk.Extent2D{ .width = 800, .height = 600 };
     glfw.windowHint(glfw.ClientAPI, glfw.NoAPI);
     const window = try glfw.createWindow(
         @intCast(resolution_extent.width),
@@ -145,31 +78,7 @@ pub fn main(init: std.process.Init) !void {
         null,
     );
     defer glfw.destroyWindow(window);
-
-    // try sdl_wrap.createWindow();
-    // defer sdl_wrap.destroyWindow();
-    // According to the GLFW docs:
-    //
-    // > Window systems put limits on window sizes. Very large or very small window dimensions
-    // > may be overridden by the window system on creation. Check the actual size after creation.
-    // -- https://www.glfw.org/docs/3.3/group__window.html#ga3555a418df92ad53f917597fe2f64aeb
-    //
-    // This happens in practice, for example, when using Wayland with a scaling factor that is not a
-    // divisor of the initial window size (see https://github.com/Snektron/vulkan-zig/pull/192).
-    // To fix it, just fetch the actual size here, after the windowing system has had the time to
-    // update the window.
-    // resolution_extent.width, resolution_extent.height = blk: {
-    //     var w: c_int = undefined;
-    //     var h: c_int = undefined;
-    //     glfw.getFramebufferSize(window, &w, &h);
-    //     break :blk .{ @intCast(w), @intCast(h) };
-    // };
-    resolution_extent = windowExtext(window);
-
-    const gpa = init.gpa;
-
-    // const vkctx = try GraphicsContext.init(gpa, app_name, window);
-    // defer vkctx.deinit();
+    _ = glfw.setKeyCallback(window, input.key_callback);
 
     try sdl_wrap.initSDL();
     defer sdl_wrap.exitSDL();
@@ -178,15 +87,15 @@ pub fn main(init: std.process.Init) !void {
         std.log.err("!!! SDL could not find libvulkan", .{});
         return error.NoVulkan;
     }
-    const sdl_window = sdl_wrap.getContext().window.?;
-    const vkctx_sdl = try GraphicsContext.initUnderSdl(gpa, app_name, sdl_window);
+    const sdl_window: sdl.video.Window = sdl_wrap.getContext().window.?;
+    const vkctx_sdl = try GraphicsContext.initUnderSdl(init.gpa, app_name, sdl_window);
     defer vkctx_sdl.deinit();
 
     std.log.debug("Using device: {s}", .{vkctx_sdl.deviceName()});
-    const access = EasyAcces{
-        .window = window,
+    const access = host.EasyAcces{
+        .window = .{ .glfw_h = window },
         .vkctx = &vkctx_sdl,
-        .alloc = gpa,
+        .alloc = init.gpa,
         .io = init.io,
     };
 
@@ -211,7 +120,14 @@ pub fn gpCommandQueue(gc: *const gm.GraphicsContext) !vk.CommandPool {
     return gc.dev.createCommandPool(&pool_cinfo, null);
 }
 
-fn deeper(access: EasyAcces) !void {
+fn deeper(access: EasyAcces) host.OnHostErrors!void {
+    theDeepest(access) catch {
+        std.debug.print("passenger error, converting to one of MainErrors\n", .{});
+        return host.OnHostErrors.passengerError;
+    };
+}
+
+fn theDeepest(access: EasyAcces) !void {
     // const grid = sht.GridSize.g64;
     const grid = sht.GridSize.g64;
     const deeper_allocator = std.heap.page_allocator;
@@ -222,27 +138,25 @@ fn deeper(access: EasyAcces) !void {
     const ok_understanding = oklab.OkUnderstanding{ .grid = grid };
 
     var swapchain_len: u8 = undefined;
-    // const gc = access.vkctx.?.*;
+
+    const gpa = access.alloc;
     const gc = access.vkctx;
-    const window = access.window;
-    const allocator = access.alloc;
+    var window = access.window;
 
-    var resolution_extent = windowExtext(window);
+    var resolution_extent = try window.extent();
 
-    var swapchain = try Swapchain.init(gc, allocator, resolution_extent);
+    var swapchain = try Swapchain.init(gc, gpa, resolution_extent);
     defer swapchain.deinit() catch std.debug.print("... well swapchaing deinit failed\n", .{});
 
     swapchain_len = @intCast(swapchain.swap_images.len);
     std.debug.print("+++ Serial frames {}\n", .{swapchain_len});
 
-    // texture image
     const general_cpool = try gpCommandQueue(gc);
     defer gc.dev.destroyCommandPool(general_cpool, null);
     const pic = gm.PoolInCtx{ .gc = gc, .pool = general_cpool };
 
-    // fn theDeepest()
     var uniform_dset = try dset.DescriptorPrep.init(
-        allocator,
+        gpa,
         gc,
         swapchain_len,
         gm.baked.uniform_frag_vert_dyn,
@@ -253,10 +167,10 @@ fn deeper(access: EasyAcces) !void {
         },
         null,
     );
-    defer uniform_dset.deinit(allocator);
+    defer uniform_dset.deinit(gpa);
 
     var storage_dset = try dset.DescriptorPrep.init(
-        allocator,
+        gpa,
         gc,
         swapchain_len,
         gm.baked.storage_frag_vert,
@@ -266,7 +180,7 @@ fn deeper(access: EasyAcces) !void {
         },
         null,
     );
-    defer storage_dset.deinit(allocator);
+    defer storage_dset.deinit(gpa);
 
     const spacing = 0.1;
     const size = 0.04;
@@ -274,14 +188,14 @@ fn deeper(access: EasyAcces) !void {
 
     const ATLAS_MAX = 256;
     var dset_atlas = try dset.DescriptorPrep.init(
-        allocator,
+        gpa,
         gc,
         1,
         gm.baked.texture_frag,
         .{ .binding = 0 },
         ATLAS_MAX,
     );
-    defer dset_atlas.deinit(allocator);
+    defer dset_atlas.deinit(gpa);
     const g64 = sht.GridSize.g64;
 
     var demo_rgb = try imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb);
@@ -306,11 +220,11 @@ fn deeper(access: EasyAcces) !void {
         var sampled: []const u8 = undefined;
         if (testing) {
             testing = false;
-            sampled = try oklab.OkUnderstanding.sampleInfernoAlt(allocator, &ok_g);
+            sampled = try oklab.OkUnderstanding.sampleInfernoAlt(gpa, &ok_g);
         } else {
-            sampled = try oklab.OkUnderstanding.sampleSpace(allocator, L, &ok_g);
+            sampled = try oklab.OkUnderstanding.sampleSpace(gpa, L, &ok_g);
         }
-        defer allocator.free(sampled);
+        defer gpa.free(sampled);
         const ok_rgba = try imgs.vulkanTexture(&pic, ok_g, sampled);
         dset_atlas.updateTexture(0, &ok_rgba, atlas_idx);
 
@@ -346,13 +260,13 @@ fn deeper(access: EasyAcces) !void {
     // framebuffers
     var framebuffers = try createFramebuffers(
         gc,
-        allocator,
+        gpa,
         render_pass,
         swapchain,
     );
-    defer destroyFramebuffers(gc, allocator, framebuffers);
+    defer destroyFramebuffers(gc, gpa, framebuffers);
 
-    var repo = try vertex.repoSpawn(allocator, &pic);
+    var repo = try vertex.repoSpawn(gpa, &pic);
     defer repo.deinit(gc);
     std.debug.print("+++ total verts {d}\n", .{repo.total});
 
@@ -407,8 +321,6 @@ fn deeper(access: EasyAcces) !void {
         );
     }
 
-    _ = glfw.setKeyCallback(window, key_callback);
-
     var timeline = addons.Timeline.init(access.io);
     var timeline1 = addons.Timeline.init(access.io);
     time_glob = &timeline;
@@ -431,12 +343,12 @@ fn deeper(access: EasyAcces) !void {
     };
 
     var okphi: f32 = 0;
-    while (!glfw.windowShouldClose(window)) {
+    while (!window.shoudClose()) {
         const img_idx = swapchain.image_index;
-        const win_size = windowExtext(window);
+        const win_size = try window.extent();
         // input_continue();
-        glass_input.update();
-        plr_input.update();
+        input.glass_input.update();
+        input.plr_input.update();
 
         // Don't present or resize swapchain while the window is minimized
         perf_stats.messure(access.io);
@@ -447,30 +359,33 @@ fn deeper(access: EasyAcces) !void {
             // std.debug.print("+++ interval info:D\n", .{});
         }
 
+        if (input.exit_trig.fired()) window.setShoudClose(true);
+        if (input.time_stop_trig.fired()) if (time_glob) |line| line.passageToggle();
+
         const td = timeline.deltaS();
         okphi += td * 0.1;
-        pamperek.control(&plr_input, td);
+        pamperek.control(&input.plr_input, td);
 
         try phi_val_monit.update(access.io, pamperek.p.phi);
-        if (glass.update(&glass_input)) {
+        if (glass.update(&input.glass_input)) {
             try glass.updateStorage(storage_dset, true);
         }
-        if (shader_reset_trigger.fired()) {
+        if (input.shader_reset_trigger.fired()) {
             try glass.updateStorage(storage_dset, false);
         }
-        if (uniform_shift_trigger.fired()) {
+        if (input.uniform_shift_trigger.fired()) {
             frame_state.alt_proj = !frame_state.alt_proj;
         }
-        if (ok_vis_trigger.fired()) {
+        if (input.ok_vis_trigger.fired()) {
             try ok_understanding.labAtInfinitum(storage_dset);
         }
 
-        if (slide_r_trig.fired()) {
+        if (input.slide_r_trig.fired()) {
             const last = frame_state.model_idx == repo.head - 1;
             frame_state.model_idx = if (last) 0 else frame_state.model_idx + 1;
         }
 
-        if (slide_l_trig.fired()) {
+        if (input.slide_l_trig.fired()) {
             const first = frame_state.model_idx == 0;
             frame_state.model_idx = if (first) repo.head - 1 else frame_state.model_idx - 1;
         }
@@ -510,10 +425,10 @@ fn deeper(access: EasyAcces) !void {
             try gc.dev.deviceWaitIdle();
             try swapchain.recreate(resolution_extent);
 
-            destroyFramebuffers(gc, allocator, framebuffers);
+            destroyFramebuffers(gc, gpa, framebuffers);
             framebuffers = try createFramebuffers(
                 gc,
-                allocator,
+                gpa,
                 render_pass,
                 swapchain,
             );

@@ -65,4 +65,8 @@ pub const Timeline = struct {
     pub fn deltaS(self: *Timeline) f32 {
         return self.delta_ms / 1000;
     }
+
+    pub fn passageToggle(self: *Timeline) void {
+        self.time_passage = !self.time_passage;
+    }
 };

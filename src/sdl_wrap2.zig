@@ -70,7 +70,10 @@ pub const SdlContext = struct {
         var self: SdlContext = .{};
         try sdl3.init(system);
         errdefer self.deinit();
-        self.window = try sdl3.video.Window.init(name, 800, 600, .{ .vulkan = true });
+        self.window = try sdl3.video.Window.init(name, 800, 600, .{
+            .vulkan = true,
+            .resizable = true,
+        });
         return self;
     }
     fn deinit(self: *SdlContext) void {
