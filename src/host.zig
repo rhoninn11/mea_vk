@@ -76,8 +76,9 @@ pub const DualHostWin = union(Hosts) {
     }
 };
 
+const glfw_name = "glfw app name form host function";
+const sld_name = "sld app name form host function";
 pub fn glfwHost(init: std.process.Init, passenger: DeeperClient) !void {
-    const app_name = "glfw app name form host function";
     try glfw.init();
     defer glfw.terminate();
 
@@ -102,28 +103,50 @@ pub fn glfwHost(init: std.process.Init, passenger: DeeperClient) !void {
     const window = try glfw.createWindow(
         @intCast(resolution_extent.width),
         @intCast(resolution_extent.height),
-        app_name,
+        glfw_name,
         null,
         null,
     );
     defer glfw.destroyWindow(window);
     _ = glfw.setKeyCallback(window, input.key_callback);
 
-    const d = DualHostWin{ .Glfw = window };
+    const d = DualHostWin{ .glfw_h = window };
 
-    const vkctx_sdl = try gm.GraphicsContext.init(
+    const ctx_glfw = try gm.GraphicsContext.init(
         init.gpa,
-        app_name,
+        glfw_name,
         window,
     );
-    defer vkctx_sdl.deinit();
+    defer ctx_glfw.deinit();
 
     const access = EasyAcces{
         .host = d,
-        .vkctx = &vkctx_sdl,
+        .vkctx = &ctx_glfw,
         .alloc = init.gpa,
         .io = init.io,
     };
 
-    try passenger(access);
+    return passenger(access);
+}
+
+pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
+    try sdl_wrap.initSDL();
+    defer sdl_wrap.exitSDL();
+
+    if (!sdl_wrap.vulkanSupported()) {
+        std.log.err("!!! SDL could not find libvulkan", .{});
+        return error.NoVulkan;
+    }
+    const sdl_ctx = sdl_wrap.getContext();
+    const vkctx_sdl = try gm.GraphicsContext.initUnderSdl(init.gpa, sld_name, sdl_ctx.window.?);
+    defer vkctx_sdl.deinit();
+
+    std.log.debug("Using device: {s}", .{vkctx_sdl.deviceName()});
+    const access = EasyAcces{
+        .host = .{ .sdl_h = sdl_ctx },
+        .vkctx = &vkctx_sdl,
+        .alloc = init.gpa,
+        .io = init.io,
+    };
+    return passenger(access);
 }

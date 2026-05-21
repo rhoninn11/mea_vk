@@ -53,53 +53,44 @@ pub fn main(init: std.process.Init) !void {
     const use_glfw: bool = false;
     try input.init();
 
-    if (use_glfw) {
-        host.glfwHost(init, deeper) catch {
-            std.debug.print("glfw host reporting error\n", .{});
-        };
-        return;
-    }
+    const err = if (use_glfw) host.glfwHost(init, deeper) //
+        else host.sdlHost(init, deeper);
 
-    try glfw.init();
-    defer glfw.terminate();
-    if (!glfw.vulkanSupported()) {
-        std.log.err("GLFW could not find libvulkan", .{});
-        return error.NoVulkan;
-    }
+    err catch std.debug.print("glfw host reporting error\n", .{});
 
     // czym się różni vk.Rect2D od vk.Extend2D?
-    const resolution_extent = vk.Extent2D{ .width = 800, .height = 600 };
-    glfw.windowHint(glfw.ClientAPI, glfw.NoAPI);
-    const window = try glfw.createWindow(
-        @intCast(resolution_extent.width),
-        @intCast(resolution_extent.height),
-        app_name,
-        null,
-        null,
-    );
-    defer glfw.destroyWindow(window);
-    _ = glfw.setKeyCallback(window, input.key_callback);
+    // const resolution_extent = vk.Extent2D{ .width = 800, .height = 600 };
+    // glfw.windowHint(glfw.ClientAPI, glfw.NoAPI);
+    // const window = try glfw.createWindow(
+    //     @intCast(resolution_extent.width),
+    //     @intCast(resolution_extent.height),
+    //     app_name,
+    //     null,
+    //     null,
+    // );
+    // defer glfw.destroyWindow(window);
+    // _ = glfw.setKeyCallback(window, input.key_callback);
 
-    try sdl_wrap.initSDL();
-    defer sdl_wrap.exitSDL();
+    // try sdl_wrap.initSDL();
+    // defer sdl_wrap.exitSDL();
 
-    if (!sdl_wrap.vulkanSupported()) {
-        std.log.err("!!! SDL could not find libvulkan", .{});
-        return error.NoVulkan;
-    }
-    const sdl_ctx = sdl_wrap.getContext();
-    const vkctx_sdl = try GraphicsContext.initUnderSdl(init.gpa, app_name, sdl_ctx.window.?);
-    defer vkctx_sdl.deinit();
+    // if (!sdl_wrap.vulkanSupported()) {
+    //     std.log.err("!!! SDL could not find libvulkan", .{});
+    //     return error.NoVulkan;
+    // }
+    // const sdl_ctx = sdl_wrap.getContext();
+    // const vkctx_sdl = try GraphicsContext.initUnderSdl(init.gpa, app_name, sdl_ctx.window.?);
+    // defer vkctx_sdl.deinit();
 
-    std.log.debug("Using device: {s}", .{vkctx_sdl.deviceName()});
-    const access = host.EasyAcces{
-        .host = .{ .sdl_h = sdl_ctx },
-        .vkctx = &vkctx_sdl,
-        .alloc = init.gpa,
-        .io = init.io,
-    };
+    // std.log.debug("Using device: {s}", .{vkctx_sdl.deviceName()});
+    // const access = host.EasyAcces{
+    //     .host = .{ .sdl_h = sdl_ctx },
+    //     .vkctx = &vkctx_sdl,
+    //     .alloc = init.gpa,
+    //     .io = init.io,
+    // };
 
-    try deeper(access);
+    // try deeper(access);
 }
 
 const OK_SWEEP: u8 = 128;

@@ -140,7 +140,7 @@ pub const LookingGlass = struct {
         };
     }
 
-    pub fn update(self: *LookingGlass, input: *const motion.HoldsAxis) bool {
+    pub fn update(self: *LookingGlass, input: *const motion.mglfw.HoldsAxis) bool {
         const src_size = self.img.info.?;
 
         const max_x = @as(i32, @intCast(src_size.width)) - @as(i32, @intCast(self.size.w)) - 1;

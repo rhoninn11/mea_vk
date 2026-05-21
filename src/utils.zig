@@ -122,7 +122,7 @@ pub const CappedPlayer = struct {
         return -phi_moved; //why minus
     }
 
-    pub fn control(self: *CappedPlayer, input: *const motion.HoldsAxis, td: f32) void {
+    pub fn control(self: *CappedPlayer, input: *const motion.mglfw.HoldsAxis, td: f32) void {
         const phi_spead: f32 = 1;
         const phi_delt = aroundAxis(input.axes[0]) * td * std.math.tau * phi_spead;
         self.phi_raw += phi_delt;
@@ -141,7 +141,7 @@ pub fn playerPos(p: *t.Player) m.vec3 {
     return m.orbit_r(p.phi, p.r) + m.vec3{ 0, p.h, 0 };
 }
 
-pub fn playerApplyInput(player: *t.Player, input: *const motion.HoldsAxis, td: f32) void {
+pub fn playerApplyInput(player: *t.Player, input: *const motion.mglfw.HoldsAxis, td: f32) void {
     const plr = player;
 
     const r_speed: f32 = 3;
