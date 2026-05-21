@@ -4,18 +4,41 @@ const escChar = @import("escapeChar.zig");
 
 const sdl3 = @import("sdl3");
 const SdlEvTpy = sdl3.events.Type;
-const EvCounter = struct {
-    bins: std.EnumMap(SdlEvTpy, u32),
 
-    fn init() EvCounter {
-        return EvCounter{ .bins = .initFull(0) };
+const EvCapture = struct {
+    const HistorySlots: u8 = 16;
+    bins: std.EnumMap(SdlEvTpy, u32),
+    key_history: [HistorySlots]?[:0]const u8 = .{null} ** HistorySlots,
+    key_len: u8 = 0,
+
+    fn init() EvCapture {
+        return EvCapture{ .bins = .initFull(0) };
     }
 
-    pub fn inc(self: *EvCounter, this_one: SdlEvTpy) void {
+    pub fn inc(self: *EvCapture, this_one: SdlEvTpy) void {
         if (self.bins.getPtr(this_one)) |counter| counter.* += 1;
     }
 
-    pub fn raport(self: *EvCounter, prefix: []const u8, sink: *std.Io.Writer) !u8 {
+    pub fn key_action(self: *EvCapture, kb: sdl3.keycode.Keycode) void {
+        var i = HistorySlots - 1;
+        while (i > 0) {
+            i -= 1;
+            self.key_history[i + 1] = self.key_history[i];
+        }
+
+        self.key_history[0] = @tagName(kb);
+    }
+
+    pub fn raportKbHistory(self: *EvCapture, prefix: []const u8, sink: *std.Io.Writer) !u8 {
+        try sink.print("{s}", .{prefix});
+        for (self.key_history) |kb| if (kb) |txt| {
+            try sink.print(" {s}", .{txt});
+        };
+        try sink.print("\n", .{});
+        return 1;
+    }
+
+    pub fn raport(self: *EvCapture, prefix: []const u8, sink: *std.Io.Writer) !u8 {
         var ev_num: u32 = 0;
         var it = self.bins.iterator();
         while (it.next()) |entry| ev_num += entry.value.*;
@@ -50,6 +73,7 @@ const EvCounter = struct {
             }
             if (!flip) try sink.print("\n", .{});
         }
+        baseline += try self.raportKbHistory(prefix, sink);
         return baseline;
     }
 };
@@ -60,7 +84,8 @@ const system: sdl3.InitFlags = .{
 };
 pub const SdlContext = struct {
     window: ?sdl3.video.Window = null,
-    ev_capture: EvCounter = .init(),
+    ev_capture: EvCapture = .init(),
+    should_close: bool = false,
 
     pub fn getWindow(self: *const SdlContext) sdl3.video.Window {
         return self.window.?;
@@ -83,11 +108,25 @@ pub const SdlContext = struct {
         }
         sdl3.quit(system);
     }
+    pub fn pollEvents(self: *SdlContext) void {
+        while (sdl3.events.poll()) |ev| {
+            self.ev_capture.inc(ev);
+            switch (ev) {
+                .quit => self.should_close = true,
+                .key_up => |kb| {
+                    const key = kb.key.?;
+                    self.ev_capture.key_action(key);
+                    if (key == .escape) self.should_close = true;
+                },
+                else => {},
+            }
+        }
+    }
 };
 
 var sdl_state: SdlContext = .{};
 
-pub fn getEvCounter() *EvCounter {
+pub fn getEvCounter() *EvCapture {
     return &sdl_state.ev_capture;
 }
 pub fn getContext() *SdlContext {
@@ -113,13 +152,6 @@ pub fn createWindow() !void {
 
 pub fn destroyWindow() void {
     if (sdl_state.window) |win| win.deinit();
-}
-
-pub fn pollEvents() void {
-    while (sdl3.events.poll()) |ev| {
-        sdl_state.ev_capture.inc(ev);
-        // std.debug.print("!+!+ sdl event type {s}\n", .{@tagName(ev)});
-    }
 }
 
 pub fn sdlDemoDeeper(io: std.Io) !void {

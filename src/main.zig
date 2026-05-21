@@ -87,13 +87,13 @@ pub fn main(init: std.process.Init) !void {
         std.log.err("!!! SDL could not find libvulkan", .{});
         return error.NoVulkan;
     }
-    const sdl_window: sdl.video.Window = sdl_wrap.getContext().window.?;
-    const vkctx_sdl = try GraphicsContext.initUnderSdl(init.gpa, app_name, sdl_window);
+    const sdl_ctx = sdl_wrap.getContext();
+    const vkctx_sdl = try GraphicsContext.initUnderSdl(init.gpa, app_name, sdl_ctx.window.?);
     defer vkctx_sdl.deinit();
 
     std.log.debug("Using device: {s}", .{vkctx_sdl.deviceName()});
     const access = host.EasyAcces{
-        .window = .{ .glfw_h = window },
+        .host = .{ .sdl_h = sdl_ctx },
         .vkctx = &vkctx_sdl,
         .alloc = init.gpa,
         .io = init.io,
@@ -141,7 +141,7 @@ fn theDeepest(access: EasyAcces) !void {
 
     const gpa = access.alloc;
     const gc = access.vkctx;
-    var window = access.window;
+    var window = access.host;
 
     var resolution_extent = try window.extent();
 
@@ -345,7 +345,6 @@ fn theDeepest(access: EasyAcces) !void {
     var okphi: f32 = 0;
     while (!window.shoudClose()) {
         const img_idx = swapchain.image_index;
-        const win_size = try window.extent();
         // input_continue();
         input.glass_input.update();
         input.plr_input.update();
@@ -391,8 +390,9 @@ fn theDeepest(access: EasyAcces) !void {
         }
 
         //minimalized
+        const win_size = try window.extent();
         if (!addons.visible(win_size)) {
-            glfw.pollEvents();
+            access.host.pollEvents();
             continue;
         }
         try swapchain.currentWaitG();
@@ -451,8 +451,7 @@ fn theDeepest(access: EasyAcces) !void {
             else => |narrow| return narrow,
         };
 
-        glfw.pollEvents();
-        sdl_wrap.pollEvents();
+        access.host.pollEvents();
     }
 
     try swapchain.waitForAllFences();

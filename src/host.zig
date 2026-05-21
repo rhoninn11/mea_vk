@@ -9,7 +9,7 @@ const sdl_wrap = @import("sdl_wrap2.zig");
 pub const EasyAcces = struct {
     io: std.Io,
     alloc: std.mem.Allocator,
-    window: DualHostWin,
+    host: DualHostWin,
     vkctx: *const gm.GraphicsContext,
 };
 
@@ -51,9 +51,8 @@ pub const DualHostWin = union(Hosts) {
             .glfw_h => |win| {
                 return glfw.windowShouldClose(win);
             },
-            .sdl_h => {
-                std.debug.print("shoud close not implemented for sdl\n", .{});
-                return false;
+            .sdl_h => |ctx| {
+                return ctx.should_close;
             },
         }
     }
@@ -64,8 +63,15 @@ pub const DualHostWin = union(Hosts) {
                 glfw.setWindowShouldClose(win, val);
             },
             .sdl_h => {
-                std.debug.print("set shoud close not implemented for sdl\n", .{});
+                // std.debug.print("set shoud close not implemented for sdl\n", .{});
             },
+        }
+    }
+
+    pub fn pollEvents(self: DualHostWin) void {
+        switch (self) {
+            .glfw_h => glfw.pollEvents(),
+            .sdl_h => |ctx| ctx.pollEvents(),
         }
     }
 };
@@ -113,7 +119,7 @@ pub fn glfwHost(init: std.process.Init, passenger: DeeperClient) !void {
     defer vkctx_sdl.deinit();
 
     const access = EasyAcces{
-        .window = d,
+        .host = d,
         .vkctx = &vkctx_sdl,
         .alloc = init.gpa,
         .io = init.io,

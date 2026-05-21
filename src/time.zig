@@ -32,10 +32,8 @@ pub const Timeline = struct {
         const delta = @as(f32, @floatFromInt(now - self._t_last));
 
         self._t_last = now;
-        self.delta_ms = delta / 1000;
-        if (self.time_passage) {
-            self.total_s += self.delta_ms / 1000;
-        }
+        self.delta_ms = if (self.time_passage) delta / 1000 else 0;
+        self.total_s += self.delta_ms / 1000;
     }
 
     pub fn arm(self: *Timeline, us: i32) void {
