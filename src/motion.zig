@@ -1,9 +1,11 @@
 const std = @import("std");
 const glfw = @import("third_party/glfw.zig");
+const sdl = @import("sdl3");
 
 const Allocator = std.mem.Allocator;
 
 pub const mglfw: type = HostMotion(c_int);
+pub const msdl: type = HostMotion(sdl.keycode.Keycode);
 
 pub const Axis = enum(i8) {
     none = 0,

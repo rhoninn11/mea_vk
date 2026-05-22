@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const escChar = @import("escapeChar.zig");
+const input = @import("input.zig");
 
 const sdl3 = @import("sdl3");
 const SdlEvTpy = sdl3.events.Type;
@@ -95,7 +96,7 @@ pub const SdlContext = struct {
         var self: SdlContext = .{};
         try sdl3.init(system);
         errdefer self.deinit();
-        self.window = try sdl3.video.Window.init(name, 800, 600, .{
+        self.window = try sdl3.video.Window.init(name, 1600, 900, .{
             .vulkan = true,
             .resizable = true,
         });
@@ -118,6 +119,7 @@ pub const SdlContext = struct {
                     self.ev_capture.key_action(key);
                     if (key == .escape) self.should_close = true;
                 },
+                .key_down => |kb| input.sdlKeyDown(kb.key.?),
                 else => {},
             }
         }
@@ -140,18 +142,8 @@ pub fn exitSDL() void {
     sdl_state.deinit();
 }
 
-pub fn vulkanSupported() bool {
-    sdl3.vulkan.loadLibrary(null) catch return false;
-    return true;
-}
-
-pub fn createWindow() !void {
-    const flags: sdl3.video.Window.Flags = .{};
-    sdl_state.window = try sdl3.video.Window.init("sdl window", 800, 600, flags);
-}
-
-pub fn destroyWindow() void {
-    if (sdl_state.window) |win| win.deinit();
+pub fn vulkanSupported() !void {
+    return sdl3.vulkan.loadLibrary(null);
 }
 
 pub fn sdlDemoDeeper(io: std.Io) !void {

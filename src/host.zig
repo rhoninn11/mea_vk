@@ -15,6 +15,7 @@ pub const EasyAcces = struct {
 
 pub const OnHostErrors = error{
     passengerError,
+    libVulkanProblem,
 };
 
 const DeeperClient = *const fn (acces: EasyAcces) OnHostErrors!void;
@@ -133,10 +134,10 @@ pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
     try sdl_wrap.initSDL();
     defer sdl_wrap.exitSDL();
 
-    if (!sdl_wrap.vulkanSupported()) {
+    sdl_wrap.vulkanSupported() catch {
         std.log.err("!!! SDL could not find libvulkan", .{});
-        return error.NoVulkan;
-    }
+        return OnHostErrors.libVulkanProblem;
+    };
     const sdl_ctx = sdl_wrap.getContext();
     const vkctx_sdl = try gm.GraphicsContext.initUnderSdl(init.gpa, sld_name, sdl_ctx.window.?);
     defer vkctx_sdl.deinit();

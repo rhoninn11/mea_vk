@@ -57,40 +57,6 @@ pub fn main(init: std.process.Init) !void {
         else host.sdlHost(init, deeper);
 
     err catch std.debug.print("glfw host reporting error\n", .{});
-
-    // czym się różni vk.Rect2D od vk.Extend2D?
-    // const resolution_extent = vk.Extent2D{ .width = 800, .height = 600 };
-    // glfw.windowHint(glfw.ClientAPI, glfw.NoAPI);
-    // const window = try glfw.createWindow(
-    //     @intCast(resolution_extent.width),
-    //     @intCast(resolution_extent.height),
-    //     app_name,
-    //     null,
-    //     null,
-    // );
-    // defer glfw.destroyWindow(window);
-    // _ = glfw.setKeyCallback(window, input.key_callback);
-
-    // try sdl_wrap.initSDL();
-    // defer sdl_wrap.exitSDL();
-
-    // if (!sdl_wrap.vulkanSupported()) {
-    //     std.log.err("!!! SDL could not find libvulkan", .{});
-    //     return error.NoVulkan;
-    // }
-    // const sdl_ctx = sdl_wrap.getContext();
-    // const vkctx_sdl = try GraphicsContext.initUnderSdl(init.gpa, app_name, sdl_ctx.window.?);
-    // defer vkctx_sdl.deinit();
-
-    // std.log.debug("Using device: {s}", .{vkctx_sdl.deviceName()});
-    // const access = host.EasyAcces{
-    //     .host = .{ .sdl_h = sdl_ctx },
-    //     .vkctx = &vkctx_sdl,
-    //     .alloc = init.gpa,
-    //     .io = init.io,
-    // };
-
-    // try deeper(access);
 }
 
 const OK_SWEEP: u8 = 128;
