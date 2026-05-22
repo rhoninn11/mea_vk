@@ -8,6 +8,7 @@ const sht = @import("shaders/types.zig");
 const shu = @import("shaders/utils.zig");
 
 const m = @import("math.zig");
+const input = @import("input.zig");
 
 const Errorset = error{
     constrained,
@@ -139,21 +140,20 @@ pub const LookingGlass = struct {
             .img = from,
         };
     }
-
-    pub fn update(self: *LookingGlass, input: *const motion.mglfw.HoldsAxis) bool {
+    pub fn update(self: *LookingGlass, axes: *const input.DulaHoldsAxis) bool {
         const src_size = self.img.info.?;
 
         const max_x = @as(i32, @intCast(src_size.width)) - @as(i32, @intCast(self.size.w)) - 1;
         const max_y = @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.size.h)) - 1;
 
-        const x_axis = input.axes[1];
+        const x_axis = axes.value()[1];
         self.pos[0] = switch (x_axis) {
             motion.Axis.positive => if (self.pos[0] < max_x) self.pos[0] + 1 else max_x,
             motion.Axis.negative => if (self.pos[0] > 0) self.pos[0] - 1 else 0,
             else => self.pos[0],
         };
 
-        const y_axis = input.axes[0];
+        const y_axis = axes.value()[0];
         self.pos[1] = switch (y_axis) {
             motion.Axis.positive => if (self.pos[1] < max_y) self.pos[1] + 1 else max_y,
             motion.Axis.negative => if (self.pos[1] > 0) self.pos[1] - 1 else 0,

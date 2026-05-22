@@ -50,8 +50,7 @@ const EasyAcces = host.EasyAcces;
 const proto = @import("proto.zig");
 
 pub fn main(init: std.process.Init) !void {
-    const use_glfw: bool = false;
-    try input.init();
+    const use_glfw: bool = true;
 
     const err = if (use_glfw) host.glfwHost(init, deeper) //
         else host.sdlHost(init, deeper);

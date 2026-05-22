@@ -83,6 +83,8 @@ pub fn glfwHost(init: std.process.Init, passenger: DeeperClient) !void {
     try glfw.init();
     defer glfw.terminate();
 
+    try input.initG();
+
     // According to the GLFW docs:
     //
     // > Window systems put limits on window sizes. Very large or very small window dimensions

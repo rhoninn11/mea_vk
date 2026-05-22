@@ -54,6 +54,7 @@ pub fn HostMotion(keytype: type) type {
         };
 
         pub const HoldsAxis = struct {
+            pub const BasedOn = keytype;
             holds: [max_holds]Hold = undefined,
             keys: [max_holds]keytype = undefined,
             axes: [max_holds / 2]Axis = undefined,

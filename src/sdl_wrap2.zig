@@ -100,6 +100,8 @@ pub const SdlContext = struct {
             .vulkan = true,
             .resizable = true,
         });
+
+        try input.initS();
         return self;
     }
     fn deinit(self: *SdlContext) void {
@@ -118,6 +120,7 @@ pub const SdlContext = struct {
                     const key = kb.key.?;
                     self.ev_capture.key_action(key);
                     if (key == .escape) self.should_close = true;
+                    input.sdlKeyUp(key);
                 },
                 .key_down => |kb| input.sdlKeyDown(kb.key.?),
                 else => {},

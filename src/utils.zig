@@ -4,6 +4,8 @@ const m = @import("math.zig");
 const motion = @import("motion.zig");
 const phys = @import("phys.zig");
 
+const in = @import("input.zig");
+
 const sdl = @import("sdl_wrap2.zig");
 
 pub fn Slider(vecTpy: type) type {
@@ -122,9 +124,9 @@ pub const CappedPlayer = struct {
         return -phi_moved; //why minus
     }
 
-    pub fn control(self: *CappedPlayer, input: *const motion.mglfw.HoldsAxis, td: f32) void {
+    pub fn control(self: *CappedPlayer, input: *const in.DulaHoldsAxis, td: f32) void {
         const phi_spead: f32 = 1;
-        const phi_delt = aroundAxis(input.axes[0]) * td * std.math.tau * phi_spead;
+        const phi_delt = aroundAxis(input.value()[0]) * td * std.math.tau * phi_spead;
         self.phi_raw += phi_delt;
 
         self.inertia.in(.{ self.phi_raw, 0, 0 });
@@ -141,11 +143,11 @@ pub fn playerPos(p: *t.Player) m.vec3 {
     return m.orbit_r(p.phi, p.r) + m.vec3{ 0, p.h, 0 };
 }
 
-pub fn playerApplyInput(player: *t.Player, input: *const motion.mglfw.HoldsAxis, td: f32) void {
+pub fn playerApplyInput(player: *t.Player, input: *const in.DulaHoldsAxis, td: f32) void {
     const plr = player;
 
     const r_speed: f32 = 3;
-    const proximity = input.axes[1];
+    const proximity = input.value()[1];
     player.r = switch (proximity) {
         motion.Axis.negative => plr.r + r_speed * td,
         motion.Axis.positive => plr.r - r_speed * td,
@@ -154,7 +156,7 @@ pub fn playerApplyInput(player: *t.Player, input: *const motion.mglfw.HoldsAxis,
     plr.r = CappedPlayer.lim_r.cap(plr.r);
 
     const h_speed: f32 = 3;
-    const height = input.axes[2];
+    const height = input.value()[2];
     plr.h = switch (height) {
         motion.Axis.negative => plr.h - h_speed * td,
         motion.Axis.positive => plr.h + h_speed * td,
