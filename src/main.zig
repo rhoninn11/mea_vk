@@ -1,4 +1,5 @@
 const std = @import("std");
+const stbtt = @import("stbtt");
 
 const glfw = @import("third_party/glfw.zig");
 const vk = @import("third_party/vk.zig");
@@ -50,12 +51,22 @@ const EasyAcces = host.EasyAcces;
 const proto = @import("proto.zig");
 
 pub fn main(init: std.process.Init) !void {
-    const use_glfw: bool = true;
+    const use_glfw: bool = false;
+
+    const example_ttf = "fs/roboto.ttf";
+    const ttf_file = std.Io.Dir.cwd().openFile(init.io, example_ttf, .{ .mode = .read_only });
+    if (ttf_file) |valid| {
+        const font_obj: stbtt.stbtt_fontinfo = undefined;
+        _ = font_obj;
+        _ = valid;
+        // c.stbtt_InitFont(&font_obj, arg_data: [*c]const u8, arg_offset: c_int)
+    } else |_| {}
 
     const err = if (use_glfw) host.glfwHost(init, deeper) //
         else host.sdlHost(init, deeper);
 
-    err catch std.debug.print("glfw host reporting error\n", .{});
+    // err catch std.debug.print("glfw host reporting error\n", .{});
+    try err;
 }
 
 const OK_SWEEP: u8 = 128;
@@ -77,8 +88,8 @@ pub fn gpCommandQueue(gc: *const gm.GraphicsContext) !vk.CommandPool {
 }
 
 fn deeper(access: EasyAcces) host.OnHostErrors!void {
-    theDeepest(access) catch {
-        std.debug.print("passenger error, converting to one of MainErrors\n", .{});
+    theDeepest(access) catch |err| {
+        std.debug.print("passenger error, converting to one of MainErrors src {}\n", .{err});
         return host.OnHostErrors.passengerError;
     };
 }

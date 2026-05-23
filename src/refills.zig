@@ -15,7 +15,7 @@ pub fn perFrameUniformFill(
     size: f32,
     screan: vk.Extent2D,
 ) !void {
-    var stack_mem: [4096]u8 = undefined;
+    var stack_mem: [4096 + 256]u8 = undefined;
     var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
     const local_a = provider.allocator();
 

@@ -54,25 +54,47 @@ pub fn testInit(b: *std.Build, o: *const Options) *std.Build.Step.Compile {
     });
 }
 
-pub fn cRelated(b: *std.Build, o: *const Options) void {
-    // const sdl_c_translate = b.addTranslateC(.{
-    //     .root_source_file = b.path("SDL3/SDL.h"),
-    //     .target = o.target,
-    //     .optimize = o.optimize,
-    // });
+const Extra = struct {
+    module: *std.Build.Module,
+    compile: *std.Build.Step.Compile,
+};
+pub fn stbLib(b: *std.Build, o: *const Options) Extra {
+    const h_file = b.path("src/third_party/stb_truetype.h");
 
-    const stb_tt_c_translate = b.addTranslateC(.{
-        .root_source_file = b.path("src/third_party/stb_truetype.h"),
+    const translate = b.addTranslateC(.{
         .target = o.target,
         .optimize = o.optimize,
+        .root_source_file = h_file,
     });
 
-    const TransC = std.Build.Step.TranslateC;
-    const essa_c = [_]*TransC{stb_tt_c_translate};
-    for (essa_c, 0..) |unit, i| {
-        const hmm = unit.getOutput();
-        std.debug.print("**essa_c***{d} some text {s}\n", .{ i, hmm.getDisplayName() });
-    }
+    // need to be compile as library because there are
+    // some errors in cTranslate for lib implementation
+    const std_truetype_build = b.addLibrary(.{
+        .name = "stb_truetype",
+        .root_module = b.createModule(.{
+            .target = o.target,
+            .optimize = o.optimize,
+            .link_libc = true,
+        }),
+        .linkage = .dynamic,
+        .version = .{
+            .major = 1,
+            .minor = 26,
+            .patch = 0,
+        },
+    });
+
+    std_truetype_build.root_module.addCSourceFile(.{
+        .language = .c,
+        .file = h_file,
+        .flags = &.{
+            "-std=c99", "-Wall", "-Wextra -DSTB_TRUETYPE_IMPLEMENTATION", //
+        },
+    });
+    return .{
+        .module = translate.createModule(),
+        .compile = std_truetype_build,
+    };
 }
 
 pub fn build(b: *std.Build) !void {
@@ -81,7 +103,6 @@ pub fn build(b: *std.Build) !void {
     const use_zig_shaders = b.option(bool, "zig-shader", "Use Zig shaders instead of GLSL") orelse false;
 
     // try cmdsBuild(b, o);
-    cRelated(b, &o);
 
     const zglfw = b.dependency("zglfw", .{
         .target = o.target,
@@ -90,22 +111,27 @@ pub fn build(b: *std.Build) !void {
     });
     const zglfw_lib = zglfw.artifact("glfw");
 
+    const for_stb = stbLib(b, &o);
+
     const triangle_exe = b.addExecutable(.{
-        .name = "vk_exp",
+        .name = "main_app",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = o.target,
             .optimize = o.optimize,
             .link_libc = true,
-            // .imports = &.{.{
-            //     .name = "csdl",
-            //     .module = sdl_c_translate.createModule(),
-            // }},
-
+            .imports = &.{
+                .{ .name = "stbtt", .module = for_stb.module },
+            },
         }),
         // TODO: Remove this once x86_64 is stable
-        .use_llvm = true,
+        // at the moment it gives some errors
+        .use_llvm = false,
     });
+
+    triangle_exe.root_module.addIncludePath(b.path("src/third_party/"));
+    triangle_exe.root_module.linkLibrary(for_stb.compile);
+
     b.installArtifact(triangle_exe);
     const sdl3_lib = b.dependency("sdl", .{
         .target = o.target,

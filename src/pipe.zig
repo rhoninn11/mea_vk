@@ -150,11 +150,12 @@ fn restOfPipeline(
         .depth_write_enable = .true,
         .depth_compare_op = .less,
         .depth_bounds_test_enable = .false,
+
         .min_depth_bounds = 0.0,
         .max_depth_bounds = 1.0,
         .stencil_test_enable = .false,
-        .front = undefined,
-        .back = undefined,
+        .front = std.mem.zeroes(vk.StencilOpState),
+        .back = std.mem.zeroes(vk.StencilOpState),
     };
 
     const gpci = &.{
