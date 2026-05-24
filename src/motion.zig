@@ -47,9 +47,9 @@ pub fn HostMotion(keytype: type) type {
 
             pub fn hold(self: *Hold, ka: *const KeyAction, key: keytype) void {
                 if (ka.action == glfw.Repeat) return;
-                self.active = !self.active and ka.down(key);
-                // self.active = self.active and ka.up(key);
-                // std.debug.print("well {} {} {}\n", .{ self.active, ka.press(key), ka.up(key) });
+
+                if (!self.active and ka.down(key)) self.active = true;
+                if (self.active and ka.up(key)) self.active = false;
             }
         };
 

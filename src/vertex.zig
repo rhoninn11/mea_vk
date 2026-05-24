@@ -74,34 +74,36 @@ pub const RingParams = struct {
     };
 };
 
-pub const Utils = struct {
-    pub const Math = struct {
-        pub fn matApply(tris: []Vertex, mat: m.mat3) void {
-            const len = tris.len;
-            for (0..len) |i| {
-                const vert = m.vec3u{ .arr = tris[i].pos };
-                const newpos = m.vec3u{ .vec = m.matXvec3(mat, vert.vec) };
-                tris[i].pos = newpos.arr;
-            }
+pub const Math = struct {
+    pub fn matApply(tris: []Vertex, mat: m.mat3) void {
+        const len = tris.len;
+        for (0..len) |i| {
+            const vert = m.vec3u{ .arr = tris[i].pos };
+            const newpos = m.vec3u{ .vec = m.matXvec3(mat, vert.vec) };
+            tris[i].pos = newpos.arr;
         }
-        pub fn scaleApply(verts: []Vertex, scale: m.vec3) void {
-            const len = verts.len;
-            for (0..len) |i| {
-                const vert = m.vec3u{ .arr = verts[i].pos };
-                const newpos = m.vec3u{ .vec = vert.vec * scale };
-                verts[i].pos = newpos.arr;
-            }
+    }
+    pub fn scaleApply(verts: []Vertex, scale: m.vec3) void {
+        const len = verts.len;
+        for (0..len) |i| {
+            const vert = m.vec3u{ .arr = verts[i].pos };
+            const newpos = m.vec3u{ .vec = vert.vec * scale };
+            verts[i].pos = newpos.arr;
         }
-        pub fn transApply(verts: []Vertex, offset: m.vec3) void {
-            const len = verts.len;
-            for (0..len) |i| {
-                const vert = m.vec3u{ .arr = verts[i].pos };
-                const newpos = m.vec3u{ .vec = vert.vec + offset };
-                verts[i].pos = newpos.arr;
-            }
+    }
+    pub fn transApply(verts: []Vertex, offset: m.vec3) void {
+        const len = verts.len;
+        for (0..len) |i| {
+            const vert = m.vec3u{ .arr = verts[i].pos };
+            const newpos = m.vec3u{ .vec = vert.vec + offset };
+            verts[i].pos = newpos.arr;
         }
-    };
+    }
+    pub const xrot90 = m.rotMatX(0.25);
+    pub const yrot90 = m.rotMatY(0.25);
+};
 
+pub const Utils = struct {
     pub fn Ring(alloc: Allocator, param: RingParams) !TriangleArray {
         const vert_num: usize = @as(usize, param.len) * 2;
 
@@ -147,14 +149,40 @@ pub const Utils = struct {
         return ring_tris;
     }
 
-    pub fn Pierced2(alloc: Allocator) !TriangleArray {
-        var triangles: TriangleArray = try .initCapacity(alloc, 6);
-        errdefer triangles.deinit(alloc);
+    pub fn Pierced2(gpa: Allocator) !TriangleArray {
+        var triangles_final: TriangleArray = try .initCapacity(gpa, 96);
+        errdefer triangles_final.deinit(gpa);
+        var triangles_out: TriangleArray = try .initCapacity(gpa, 48);
+        defer triangles_out.deinit(gpa);
+        var triangles: TriangleArray = try .initCapacity(gpa, 12);
+        defer triangles.deinit(gpa);
 
-        try blitQuad(alloc, triangles);
-        Math.scaleApply(&triangles, .{ 1, 0.2, 1 });
-        Math.transApply(&triangles, .{ 0, 0.4, 0.4 });
-        return triangles;
+        try blitQuad(gpa, &triangles);
+        Math.matApply(triangles.items, Math.xrot90);
+
+        const frac = 0.125;
+        Math.scaleApply(triangles.items, m.splat3d(0.5));
+        Math.scaleApply(triangles.items, .{ 1 - frac * 2, frac, 1 });
+        try triangles.appendSlice(gpa, triangles.items);
+        const blade = triangles.items[6..];
+        Math.matApply(blade, Math.xrot90);
+        Math.transApply(blade, .{ 0, frac * 0.5, frac * 0.5 });
+
+        Math.transApply(triangles.items, .{ 0, (1 - frac) * 0.5, 0.5 - frac });
+        const side_blits = 4;
+        for (0..side_blits) |_| {
+            try triangles_out.appendSlice(gpa, triangles.items);
+            Math.matApply(triangles.items, Math.yrot90);
+        }
+        const layer_blits = 7;
+        for (0..layer_blits) |i| {
+            const delta: f32 = @as(f32, @floatFromInt(i));
+            try triangles_final.appendSlice(gpa, triangles_out.items);
+            Math.transApply(triangles_final.items, .{ 0, delta * frac, 0 });
+        }
+
+        Math.scaleApply(triangles_final.items, m.splat3d(2));
+        return triangles_final;
     }
 
     fn blitQuad(alloc: Allocator, ta: *TriangleArray) !void {
@@ -170,8 +198,7 @@ pub const Utils = struct {
         errdefer triangles.deinit(alloc);
 
         try blitQuad(alloc, &triangles);
-        const rotmat = m.rotMatX(0.25);
-        Math.matApply(triangles.items, rotmat);
+        Math.matApply(triangles.items, Math.xrot90);
         return triangles;
     }
 
@@ -338,6 +365,10 @@ pub fn populateModels(alloc: std.mem.Allocator, here: *TriangleArray, as: *VertR
 
     param.len = 5;
     param.flat = true;
+    shape = try Utils.Pierced2(alloc);
+    try here.appendSlice(alloc, shape.items);
+    as.register(shape.items);
+    shape.deinit(alloc);
     shape = try Utils.Pierced(alloc);
     try here.appendSlice(alloc, shape.items);
     as.register(shape.items);

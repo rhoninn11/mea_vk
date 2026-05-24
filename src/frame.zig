@@ -125,7 +125,7 @@ pub fn recordFrame(
                     all_sets,
                     dynamic_off,
                 );
-                const bilbo_idx = 3;
+                const bilbo_idx = 4;
                 const full_grid = sht.GridSize.g64;
                 gm.dev.cmdDraw(
                     cbufr,

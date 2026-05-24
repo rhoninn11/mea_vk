@@ -160,10 +160,14 @@ pub fn sdlKeyDown(key: sdl.keycode.Keycode) void {
         if (x.down(bind.key)) bind.trig.activated = true;
     }
 
+    if (x.down(sdl.keycode.Keycode.space)) {
+        time_stop_trig.activated = true;
+    }
+
     for (axesCheck) |hmm| hmm.reciveInput(.{ .layerS = &x });
 }
 
 pub fn sdlKeyUp(key: sdl.keycode.Keycode) void {
-    const x: KeyActionSdl = .{ .key = key, .action = glfw.Press };
+    const x: KeyActionSdl = .{ .key = key, .action = glfw.Release };
     for (axesCheck) |hmm| hmm.reciveInput(.{ .layerS = &x });
 }

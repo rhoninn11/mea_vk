@@ -59,14 +59,6 @@ const Extra = struct {
     compile: *std.Build.Step.Compile,
 };
 pub fn stbLib(b: *std.Build, o: *const Options) Extra {
-    const h_file = b.path("src/third_party/stb_truetype.h");
-
-    const translate = b.addTranslateC(.{
-        .target = o.target,
-        .optimize = o.optimize,
-        .root_source_file = h_file,
-    });
-
     // need to be compile as library because there are
     // some errors in cTranslate for lib implementation
     const std_truetype_build = b.addLibrary(.{
@@ -76,7 +68,7 @@ pub fn stbLib(b: *std.Build, o: *const Options) Extra {
             .optimize = o.optimize,
             .link_libc = true,
         }),
-        .linkage = .dynamic,
+        .linkage = .static,
         .version = .{
             .major = 1,
             .minor = 26,
@@ -84,12 +76,23 @@ pub fn stbLib(b: *std.Build, o: *const Options) Extra {
         },
     });
 
+    const inclued = b.path("src/third_party");
+    const lib_header = b.path("src/third_party/stb_truetype.h");
+    const main = b.path("src/third_party/main.c");
+
+    std_truetype_build.root_module.addIncludePath(inclued);
     std_truetype_build.root_module.addCSourceFile(.{
         .language = .c,
-        .file = h_file,
+        .file = main,
         .flags = &.{
-            "-std=c99", "-Wall", "-Wextra -DSTB_TRUETYPE_IMPLEMENTATION", //
+            "-std=c99", "-Wall", //
         },
+    });
+
+    const translate = b.addTranslateC(.{
+        .target = o.target,
+        .optimize = o.optimize,
+        .root_source_file = lib_header,
     });
     return .{
         .module = translate.createModule(),
@@ -111,7 +114,7 @@ pub fn build(b: *std.Build) !void {
     });
     const zglfw_lib = zglfw.artifact("glfw");
 
-    const for_stb = stbLib(b, &o);
+    const stb_lib_tt = stbLib(b, &o);
 
     const triangle_exe = b.addExecutable(.{
         .name = "main_app",
@@ -121,7 +124,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = o.optimize,
             .link_libc = true,
             .imports = &.{
-                .{ .name = "stbtt", .module = for_stb.module },
+                .{ .name = "stbtt", .module = stb_lib_tt.module },
             },
         }),
         // TODO: Remove this once x86_64 is stable
@@ -130,9 +133,11 @@ pub fn build(b: *std.Build) !void {
     });
 
     triangle_exe.root_module.addIncludePath(b.path("src/third_party/"));
-    triangle_exe.root_module.linkLibrary(for_stb.compile);
+    triangle_exe.root_module.linkLibrary(stb_lib_tt.compile);
 
     b.installArtifact(triangle_exe);
+    b.installArtifact(stb_lib_tt.compile);
+
     const sdl3_lib = b.dependency("sdl", .{
         .target = o.target,
         .optimize = o.optimize,

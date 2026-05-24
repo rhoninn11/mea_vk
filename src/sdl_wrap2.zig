@@ -9,8 +9,9 @@ const SdlEvTpy = sdl3.events.Type;
 const EvCapture = struct {
     const HistorySlots: u8 = 16;
     bins: std.EnumMap(SdlEvTpy, u32),
-    key_history: [HistorySlots]?[:0]const u8 = .{null} ** HistorySlots,
-    key_len: u8 = 0,
+
+    key_u_history: [HistorySlots]?[:0]const u8 = .{null} ** HistorySlots,
+    key_d_history: [HistorySlots]?[:0]const u8 = .{null} ** HistorySlots,
 
     fn init() EvCapture {
         return EvCapture{ .bins = .initFull(0) };
@@ -20,26 +21,41 @@ const EvCapture = struct {
         if (self.bins.getPtr(this_one)) |counter| counter.* += 1;
     }
 
-    pub fn key_action(self: *EvCapture, kb: sdl3.keycode.Keycode) void {
+    pub fn key_u_action(self: *EvCapture, kb: sdl3.keycode.Keycode) void {
         var i = HistorySlots - 1;
         while (i > 0) {
             i -= 1;
-            self.key_history[i + 1] = self.key_history[i];
+            self.key_u_history[i + 1] = self.key_u_history[i];
         }
 
-        self.key_history[0] = @tagName(kb);
+        self.key_u_history[0] = @tagName(kb);
+    }
+
+    pub fn key_d_action(self: *EvCapture, kb: sdl3.keycode.Keycode) void {
+        var i = HistorySlots - 1;
+        while (i > 0) {
+            i -= 1;
+            self.key_d_history[i + 1] = self.key_d_history[i];
+        }
+
+        self.key_d_history[0] = @tagName(kb);
     }
 
     pub fn raportKbHistory(self: *EvCapture, prefix: []const u8, sink: *std.Io.Writer) !u8 {
-        try sink.print("{s}", .{prefix});
-        for (self.key_history) |kb| if (kb) |txt| {
+        try sink.print("{s} KEY_UP   |", .{prefix});
+        for (self.key_u_history) |kb| if (kb) |txt| {
             try sink.print(" {s}", .{txt});
         };
         try sink.print("\n", .{});
-        return 1;
+        try sink.print("{s} KEY_DOWN |", .{prefix});
+        for (self.key_d_history) |kb| if (kb) |txt| {
+            try sink.print(" {s}", .{txt});
+        };
+        try sink.print("\n", .{});
+        return 2;
     }
 
-    pub fn raport(self: *EvCapture, prefix: []const u8, sink: *std.Io.Writer) !u8 {
+    pub fn print(self: *EvCapture, prefix: []const u8, sink: *std.Io.Writer) !u8 {
         var ev_num: u32 = 0;
         var it = self.bins.iterator();
         while (it.next()) |entry| ev_num += entry.value.*;
@@ -66,7 +82,7 @@ const EvCapture = struct {
                     });
                     baseline += 1;
                 } else {
-                    try sink.print(" {d: >8} | {s: >32}\n", .{
+                    try sink.print(" {d: >8} | {s: <32}\n", .{
                         entry.value.*,
                         @tagName(entry.key),
                     });
@@ -114,15 +130,23 @@ pub const SdlContext = struct {
     pub fn pollEvents(self: *SdlContext) void {
         while (sdl3.events.poll()) |ev| {
             self.ev_capture.inc(ev);
+            var key: sdl3.keycode.Keycode = undefined;
+            switch (ev) {
+                .key_up, .key_down => |kb| key = kb.key.?,
+                else => {},
+            }
+
             switch (ev) {
                 .quit => self.should_close = true,
-                .key_up => |kb| {
-                    const key = kb.key.?;
-                    self.ev_capture.key_action(key);
-                    if (key == .escape) self.should_close = true;
+                .key_up => {
+                    self.ev_capture.key_u_action(key);
                     input.sdlKeyUp(key);
                 },
-                .key_down => |kb| input.sdlKeyDown(kb.key.?),
+                .key_down => {
+                    if (key == .escape) self.should_close = true;
+                    self.ev_capture.key_d_action(key);
+                    input.sdlKeyDown(key);
+                },
                 else => {},
             }
         }

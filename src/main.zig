@@ -1,5 +1,5 @@
 const std = @import("std");
-const stbtt = @import("stbtt");
+const tt = @import("stbtt");
 
 const glfw = @import("third_party/glfw.zig");
 const vk = @import("third_party/vk.zig");
@@ -51,22 +51,38 @@ const EasyAcces = host.EasyAcces;
 const proto = @import("proto.zig");
 
 pub fn main(init: std.process.Init) !void {
-    const use_glfw: bool = false;
+    var chunk4k: [4096]u8 = undefined;
+    const cwd = std.Io.Dir.cwd();
 
-    const example_ttf = "fs/roboto.ttf";
-    const ttf_file = std.Io.Dir.cwd().openFile(init.io, example_ttf, .{ .mode = .read_only });
-    if (ttf_file) |valid| {
-        const font_obj: stbtt.stbtt_fontinfo = undefined;
-        _ = font_obj;
-        _ = valid;
-        // c.stbtt_InitFont(&font_obj, arg_data: [*c]const u8, arg_offset: c_int)
-    } else |_| {}
+    const font_ttf = "fs/roboto.ttf";
+    var font_obj: tt.stbtt_fontinfo = undefined;
+    var font_data: ?[]const u8 = null;
+    var font_ok = false;
+    font_read: {
+        const ttf_file = cwd.openFile(init.io, font_ttf, .{}) catch {
+            std.debug.print("!!! failed to open {s}\n", .{font_ttf});
+            break :font_read;
+        };
+        defer ttf_file.close(init.io);
 
-    const err = if (use_glfw) host.glfwHost(init, deeper) //
-        else host.sdlHost(init, deeper);
+        var rFile = ttf_file.reader(init.io, chunk4k[0..]);
+        const fSize = try rFile.getSize();
+        std.debug.print("+++ ttf file size is: {d}\n", .{fSize});
+        const ioreader: *std.Io.Reader = &rFile.interface;
+        font_data = try ioreader.readAlloc(init.gpa, try rFile.getSize());
 
-    // err catch std.debug.print("glfw host reporting error\n", .{});
-    try err;
+        // ioreader.p
+        if (tt.stbtt_InitFont(&font_obj, font_data.?.ptr, 0) == 0) {
+            std.debug.print("!!! font init failed {s}\n", .{font_ttf});
+            break :font_read;
+        }
+        font_ok = true;
+    }
+    defer {
+        if (font_data) |ttf_slice| init.gpa.free(ttf_slice);
+    }
+
+    try host.sdlHost(init, deeper);
 }
 
 const OK_SWEEP: u8 = 128;
@@ -326,10 +342,11 @@ fn theDeepest(access: EasyAcces) !void {
         }
 
         if (input.exit_trig.fired()) window.setShoudClose(true);
-        if (input.time_stop_trig.fired()) if (time_glob) |line| line.passageToggle();
+        if (input.time_stop_trig.fired()) timeline1.passageToggle();
 
         const td = timeline.deltaS();
-        okphi += td * 0.1;
+        const td1 = timeline1.deltaS();
+        okphi += td1 * 0.1;
         pamperek.control(&input.plr_input, td);
 
         try phi_val_monit.update(access.io, pamperek.p.phi);
@@ -375,7 +392,7 @@ fn theDeepest(access: EasyAcces) !void {
         try prefils.perFrameUniformFill(
             uniform_dset,
             @intCast(img_idx),
-            timeline.total_s,
+            timeline1.total_s,
             pamperek.pos(),
             size,
             win_size,

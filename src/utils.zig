@@ -196,7 +196,7 @@ pub const ValMonit = struct {
         const base_linecount = 3;
         try iowriter.print("---------------\n", .{});
         try iowriter.print("--- {s} equals \x1b[31m{d}\x1b[0m \n", .{ self.name, self.val });
-        const raport_linecount = try sdl.getEvCounter().raport("--- ", iowriter);
+        const raport_linecount = try sdl.getEvCounter().print("--- ", iowriter);
         try iowriter.print("---------------\n", .{});
         try iowriter.flush();
         self.linecount = base_linecount + raport_linecount;
