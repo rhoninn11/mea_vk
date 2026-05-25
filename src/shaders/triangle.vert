@@ -62,7 +62,7 @@ void main() {
     
     vec3 pos_im = pos_scaled;
     if (gate > 0.5) {
-        pos_im = vec3(pos_scaled.x, pos_scaled.y*10*h, pos_scaled.z);
+        pos_im = vec3(pos_scaled.x, pos_scaled.y*(10*h+0.5), pos_scaled.z);
     }
     if (gate > 1.5) {
         pos_im = pos_scaled;

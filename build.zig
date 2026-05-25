@@ -136,6 +136,7 @@ pub fn build(b: *std.Build) !void {
     triangle_exe.root_module.linkLibrary(stb_lib_tt.compile);
 
     b.installArtifact(triangle_exe);
+    b.installArtifact(zglfw_lib);
     b.installArtifact(stb_lib_tt.compile);
 
     const sdl3_lib = b.dependency("sdl", .{

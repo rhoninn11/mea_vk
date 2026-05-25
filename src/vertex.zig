@@ -99,9 +99,12 @@ pub const Math = struct {
             verts[i].pos = newpos.arr;
         }
     }
+    pub const xrot45 = m.rotMatX(0.125);
     pub const xrot90 = m.rotMatX(0.25);
-    pub const xrot90neg = m.rotMatX(-0.25);
     pub const xrot180 = m.rotMatX(0.5);
+    pub const xrot90neg = m.rotMatX(-0.25);
+
+    pub const yrot45 = m.rotMatY(0.125);
     pub const yrot90 = m.rotMatY(0.25);
 };
 
@@ -132,7 +135,7 @@ pub const Utils = struct {
         return triangles;
     }
 
-    pub fn Pierced(alloc: Allocator) !TriangleArray {
+    pub fn Pierced(gpa: Allocator) !TriangleArray {
         const unit: f32 = @sqrt(2.0);
 
         const hmm = RingParams{
@@ -142,53 +145,88 @@ pub const Utils = struct {
             .inner_r = unit * 0.5,
         };
 
-        var ring_tris = try Ring(alloc, hmm);
-        for (0..ring_tris.items.len) |i| ring_tris.items[i].color[0] = 1;
-        const rotmat = m.rotMatY(0.125);
+        var ring_tris = try Ring(gpa, hmm);
+        errdefer ring_tris.deinit(gpa);
 
-        Math.matApply(ring_tris.items, rotmat);
-        try addSides(alloc, &ring_tris);
+        for (0..ring_tris.items.len) |i| ring_tris.items[i].color[0] = 1;
+        Math.matApply(ring_tris.items, Math.yrot45);
+        const cover_len = ring_tris.items.len;
+        _ = cover_len;
+
+        // try ring_tris.appendSlice(gpa, ring_tris.items);
+        // std.debug.assert(cover_len * 2 == ring_tris.items.len);
+
+        // Math.matApply(ring_tris.items[0..cover_len], Math.xrot180);
+        // for (0..cover_len) |i| ring_tris.items[i].color[0] = 0;
+
+        try addSides(gpa, &ring_tris);
         return ring_tris;
     }
 
     pub fn Pierced2(gpa: Allocator) !TriangleArray {
-        var triangles_final: TriangleArray = try .initCapacity(gpa, 96);
-        errdefer triangles_final.deinit(gpa);
-        var triangles_out: TriangleArray = try .initCapacity(gpa, 48);
-        defer triangles_out.deinit(gpa);
+        const square_blits = 4;
+        const border = 0.25;
+
         var triangles: TriangleArray = try .initCapacity(gpa, 12);
         defer triangles.deinit(gpa);
+        {
+            // TODO:
+            // add propper uv mapping
+            try blitQuad(gpa, &triangles);
+            Math.matApply(triangles.items, Math.xrot90);
 
-        try blitQuad(gpa, &triangles);
-        Math.matApply(triangles.items, Math.xrot90);
+            Math.scaleApply(triangles.items, m.splat3d(0.5));
+            Math.scaleApply(triangles.items, .{ 1 - border * 2, border, 1 });
+            try triangles.appendSlice(gpa, triangles.items);
+            const blade = triangles.items[6..];
+            Math.matApply(blade, Math.xrot90neg);
+            Math.transApply(blade, .{ 0, border * 0.5, border * 0.5 });
+            // add side "wings"
+            var wing_vert = blade[2];
+            wing_vert.pos[m.X] += border;
+            try triangles.append(gpa, wing_vert);
+            try triangles.append(gpa, blade[0]);
+            try triangles.append(gpa, blade[2]);
+            wing_vert = blade[5];
+            wing_vert.pos[m.X] -= border;
+            try triangles.append(gpa, wing_vert);
+            try triangles.append(gpa, blade[5]);
+            try triangles.append(gpa, blade[4]);
 
-        const frac = 0.125;
-        Math.scaleApply(triangles.items, m.splat3d(0.5));
-        Math.scaleApply(triangles.items, .{ 1 - frac * 2, frac, 1 });
-        try triangles.appendSlice(gpa, triangles.items);
-        const blade = triangles.items[6..];
-        Math.matApply(blade, Math.xrot90neg);
-        Math.transApply(blade, .{ 0, frac * 0.5, frac * 0.5 });
-        // TODO:
-        // add side "wings"
-        // add propper uv mapping
-
-        Math.transApply(triangles.items, .{ 0, (1 - frac) * 0.5, 0.5 - frac });
-        const side_blits = 4;
-        for (0..side_blits) |_| {
-            try triangles_out.appendSlice(gpa, triangles.items);
-            Math.matApply(triangles.items, Math.yrot90);
+            Math.transApply(triangles.items, .{ 0, (1 - border) * 0.5, 0.5 - border });
         }
-        try triangles_final.appendSlice(gpa, triangles_out.items);
-        Math.matApply(triangles_out.items, Math.xrot180);
-        try triangles_final.appendSlice(gpa, triangles_out.items);
-        Math.matApply(triangles_out.items, Math.xrot180);
 
-        // const layer_blits = 7;
-        // for (0..layer_blits) |i| {
-        //     const delta: f32 = @as(f32, @floatFromInt(i));
-        //     Math.transApply(triangles_final.items, .{ 0, delta * frac, 0 });
-        // }
+        var triangles_out: TriangleArray = try .initCapacity(gpa, 48);
+        defer triangles_out.deinit(gpa);
+        {
+            for (0..square_blits) |_| {
+                try triangles_out.appendSlice(gpa, triangles.items);
+                Math.matApply(triangles.items, Math.yrot90);
+            }
+        }
+
+        var triangles_final: TriangleArray = try .initCapacity(gpa, 96);
+        errdefer triangles_final.deinit(gpa);
+        {
+            try triangles_final.appendSlice(gpa, triangles_out.items);
+            Math.matApply(triangles_out.items, Math.xrot180);
+            try triangles_final.appendSlice(gpa, triangles_out.items);
+            Math.matApply(triangles_out.items, Math.xrot90);
+            for (0..square_blits) |_| {
+                try triangles_final.appendSlice(gpa, triangles_out.items);
+                Math.matApply(triangles_out.items, Math.yrot90);
+            }
+        }
+        BBox.fromTriangles(triangles_final).print("hollow");
+        const verts = triangles_final.items;
+        const lower = -0.5 + border;
+        const upper = 0.5 - border;
+        const scale = 1 / (upper - lower);
+
+        for (0..verts.len) |i| {
+            const clamped = std.math.clamp(verts[i].pos[m.Y], lower, upper);
+            verts[i].color[m.X] = (clamped - lower) * scale;
+        }
 
         Math.scaleApply(triangles_final.items, m.splat3d(2));
         return triangles_final;
@@ -220,20 +258,18 @@ pub const Utils = struct {
     }
 
     fn addSides(alloc: Allocator, tris: *TriangleArray) !void {
-        const rotX = m.rotMatX(0.25);
         var face: [6]Vertex = undefined;
         for (0.., tri_loops) |i, ti| {
             face[i] = quad[ti];
             const u: f32 = if (ti < 2) 0 else 1;
             face[i].color = .{ u, 1, 0 };
         }
-        Math.matApply(face[0..], rotX);
+        Math.matApply(face[0..], Math.xrot90);
         Math.transApply(face[0..], .{ 0, -1, -1 });
         try tris.appendSlice(alloc, face[0..]);
 
-        const rotY = m.rotMatY(0.25);
         for (0..3) |_| {
-            Math.matApply(face[0..], rotY);
+            Math.matApply(face[0..], Math.yrot90);
             try tris.appendSlice(alloc, face[0..]);
         }
     }
@@ -264,13 +300,13 @@ pub const Utils = struct {
             pair_points[i * 2 + 1] = stamp_b;
         }
 
-        for (0..segments) |pre_i| {
-            const stage_i = pre_i * 2;
-            const base: [2]f32 = pair_points[stage_i].pos[0..2].*;
+        for (0..segments) |seg_i| {
+            const pnt_i = seg_i * 2;
+            const base: [2]f32 = pair_points[pnt_i].pos[0..2].*;
 
             const height: f32 = if (param.flat) 0.0 else 0.5;
-            pair_points[stage_i].pos = m.stack(m.mul2D(base, param.inner_r), height);
-            pair_points[stage_i + 1].pos = m.stack(m.mul2D(base, param.outer_r), 0);
+            pair_points[pnt_i + 1].pos = m.stack(m.mul2D(base, param.inner_r), height);
+            pair_points[pnt_i].pos = m.stack(m.mul2D(base, param.outer_r), 0);
         }
     }
 
@@ -290,8 +326,7 @@ pub const Utils = struct {
             const tri_pair_i = pre_i * 6;
             const pos_i = pre_i * 2;
 
-            const pos_offs = [_]u8{ 0, 1, 2, 2, 1, 3 };
-            for (pos_offs, 0..) |pos_off, jj| {
+            for (tri_loops, 0..) |pos_off, jj| {
                 const stage = pair_points[pos_i + pos_off];
                 const v = Vertex{
                     .pos = .{

@@ -60,9 +60,9 @@ void main() {
     if (gate > 1.5) {
         level_color = vec3(1,0.9,0.7);
     }
-    if (gl_FrontFacing) {
+    // if (gl_FrontFacing) {
         f_color = vec4(level_color, 1.0);
-    } else {
-        f_color = vec4(0, 1.0, 1.0, 1.0);
-    } 
+    // } else {
+    //     f_color = vec4(0, 1.0, 1.0, 1.0);
+    // } 
 }
