@@ -100,6 +100,8 @@ pub const Math = struct {
         }
     }
     pub const xrot90 = m.rotMatX(0.25);
+    pub const xrot90neg = m.rotMatX(-0.25);
+    pub const xrot180 = m.rotMatX(0.5);
     pub const yrot90 = m.rotMatY(0.25);
 };
 
@@ -165,8 +167,11 @@ pub const Utils = struct {
         Math.scaleApply(triangles.items, .{ 1 - frac * 2, frac, 1 });
         try triangles.appendSlice(gpa, triangles.items);
         const blade = triangles.items[6..];
-        Math.matApply(blade, Math.xrot90);
+        Math.matApply(blade, Math.xrot90neg);
         Math.transApply(blade, .{ 0, frac * 0.5, frac * 0.5 });
+        // TODO:
+        // add side "wings"
+        // add propper uv mapping
 
         Math.transApply(triangles.items, .{ 0, (1 - frac) * 0.5, 0.5 - frac });
         const side_blits = 4;
@@ -174,12 +179,16 @@ pub const Utils = struct {
             try triangles_out.appendSlice(gpa, triangles.items);
             Math.matApply(triangles.items, Math.yrot90);
         }
-        const layer_blits = 7;
-        for (0..layer_blits) |i| {
-            const delta: f32 = @as(f32, @floatFromInt(i));
-            try triangles_final.appendSlice(gpa, triangles_out.items);
-            Math.transApply(triangles_final.items, .{ 0, delta * frac, 0 });
-        }
+        try triangles_final.appendSlice(gpa, triangles_out.items);
+        Math.matApply(triangles_out.items, Math.xrot180);
+        try triangles_final.appendSlice(gpa, triangles_out.items);
+        Math.matApply(triangles_out.items, Math.xrot180);
+
+        // const layer_blits = 7;
+        // for (0..layer_blits) |i| {
+        //     const delta: f32 = @as(f32, @floatFromInt(i));
+        //     Math.transApply(triangles_final.items, .{ 0, delta * frac, 0 });
+        // }
 
         Math.scaleApply(triangles_final.items, m.splat3d(2));
         return triangles_final;

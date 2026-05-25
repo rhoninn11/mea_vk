@@ -61,7 +61,7 @@ const Extra = struct {
 pub fn stbLib(b: *std.Build, o: *const Options) Extra {
     // need to be compile as library because there are
     // some errors in cTranslate for lib implementation
-    const std_truetype_build = b.addLibrary(.{
+    const stb_truetype_build = b.addLibrary(.{
         .name = "stb_truetype",
         .root_module = b.createModule(.{
             .target = o.target,
@@ -80,14 +80,15 @@ pub fn stbLib(b: *std.Build, o: *const Options) Extra {
     const lib_header = b.path("src/third_party/stb_truetype.h");
     const main = b.path("src/third_party/main.c");
 
-    std_truetype_build.root_module.addIncludePath(inclued);
-    std_truetype_build.root_module.addCSourceFile(.{
+    stb_truetype_build.root_module.addIncludePath(inclued);
+    stb_truetype_build.root_module.addCSourceFile(.{
         .language = .c,
         .file = main,
         .flags = &.{
             "-std=c99", "-Wall", //
         },
     });
+    // stb_truetype_build.root_module.link_libc
 
     const translate = b.addTranslateC(.{
         .target = o.target,
@@ -96,7 +97,7 @@ pub fn stbLib(b: *std.Build, o: *const Options) Extra {
     });
     return .{
         .module = translate.createModule(),
-        .compile = std_truetype_build,
+        .compile = stb_truetype_build,
     };
 }
 
@@ -127,9 +128,8 @@ pub fn build(b: *std.Build) !void {
                 .{ .name = "stbtt", .module = stb_lib_tt.module },
             },
         }),
-        // TODO: Remove this once x86_64 is stable
-        // at the moment it gives some errors
-        .use_llvm = false,
+        // .use_llvm = false, //faulty on windows
+        .use_llvm = true,
     });
 
     triangle_exe.root_module.addIncludePath(b.path("src/third_party/"));
