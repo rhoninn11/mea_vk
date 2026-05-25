@@ -82,6 +82,15 @@ pub fn main(init: std.process.Init) !void {
         if (font_data) |ttf_slice| init.gpa.free(ttf_slice);
     }
 
+    if (font_ok) {
+        const scale: f32 = tt.stbtt_ScaleForPixelHeight(&font_obj, 22);
+        var w: c_int, var h: c_int, var xoff: c_int, var yoff: c_int = 0;
+        const bitmap = tt.stbtt_GetGlyphSDF(&font_obj, scale, @intCast('a'), 5, 180, 5.0, &w, &h, &xoff, &yoff);
+        defer tt.stbtt_FreeSDF(bitmap, null);
+
+        std.debug.print("+++ sdf bitmap generated\n", .{});
+    }
+
     try host.sdlHost(init, deeper);
 }
 
