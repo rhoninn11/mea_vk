@@ -54,10 +54,10 @@ pub const TriangleArray = std.ArrayList(Vertex);
 
 const tri_loops = [_]u8{ 0, 1, 2, 2, 1, 3 };
 const quad: []const Vertex = &.{
-    Vertex{ .pos = .{ 1, 0, -1 }, .color = .{ 1, 0, 0 } },
-    Vertex{ .pos = .{ -1, 0, -1 }, .color = .{ 0, 0, 0 } },
-    Vertex{ .pos = .{ 1, 0, 1 }, .color = .{ 1, 1, 0 } },
-    Vertex{ .pos = .{ -1, 0, 1 }, .color = .{ 0, 1, 0 } },
+    Vertex{ .pos = .{ 1, 0, -1 }, .color = .{ 1, 1, 0 } },
+    Vertex{ .pos = .{ -1, 0, -1 }, .color = .{ 0, 1, 0 } },
+    Vertex{ .pos = .{ 1, 0, 1 }, .color = .{ 1, 0, 0 } },
+    Vertex{ .pos = .{ -1, 0, 1 }, .color = .{ 0, 0, 0 } },
 };
 
 pub const RingParams = struct {

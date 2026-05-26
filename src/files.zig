@@ -17,3 +17,9 @@ pub fn fileRead(io: Io, gpa: Allocotor, filepath: []const u8) ![]u8 {
     const ioreader: *std.Io.Reader = &rFile.interface;
     return try ioreader.readAlloc(gpa, size);
 }
+
+pub fn stdoutWriter(io: std.Io, buffer: []u8) *std.Io.Writer {
+    const stderr = std.Io.File.stderr();
+    var writer = stderr.writer(io, buffer);
+    return &writer.interface;
+}

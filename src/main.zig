@@ -52,7 +52,9 @@ const proto = @import("proto.zig");
 const fonts = @import("fonts.zig");
 
 pub fn main(init: std.process.Init) !void {
-    try fonts.fonts_demo(init);
+    fonts.fonts_demo(init) catch |err| {
+        std.debug.print("!!! font demo failed | {s}\n", .{@errorName(err)});
+    };
     try host.sdlHost(init, deeper);
 }
 
@@ -168,18 +170,26 @@ fn theDeepest(access: EasyAcces) !void {
 
     var atlas_idx: u8 = 32;
     const ok_g = sht.GridSize.g128;
-    var testing = true;
-    for (&ok_samples) |*sample| {
+    var mbfont: ?fonts.FontRendering = fonts.FontRendering.init(access.io, access.alloc, "fs/roboto.ttf") catch null;
+    defer if (mbfont) |font| font.deinit(access.alloc);
+
+    for (&ok_samples, 0..) |*sample, i| {
         std.debug.assert(atlas_idx < ATLAS_MAX);
-        var sampled: []const u8 = undefined;
-        if (testing) {
-            testing = false;
-            sampled = try oklab.OkUnderstanding.sampleInfernoAlt(gpa, &ok_g);
-        } else {
-            sampled = try oklab.OkUnderstanding.sampleSpace(gpa, L, &ok_g);
-        }
+        var local_g = ok_g;
+        const sampled = sel: switch (i) {
+            0, 8, 16, 24, 32, 40, 48, 56, 64 => blk: {
+                if (mbfont) |*font| {
+                    const glyph_shift = @as(u8, @intCast(i / 8));
+                    break :blk try font.sampleCodepoint(gpa, 'a' + glyph_shift, &local_g);
+                }
+                continue :sel 255;
+            },
+            1 => try oklab.OkUnderstanding.sampleInfernoAlt(gpa, &ok_g),
+            else => try oklab.OkUnderstanding.sampleSpace(gpa, L, &ok_g),
+        };
+
         defer gpa.free(sampled);
-        const ok_rgba = try imgs.vulkanTexture(&pic, ok_g, sampled);
+        const ok_rgba = try imgs.vulkanTexture(&pic, local_g, sampled);
         dset_atlas.updateTexture(0, &ok_rgba, atlas_idx);
 
         L += L_delt;
