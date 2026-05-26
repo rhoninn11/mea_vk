@@ -86,7 +86,6 @@ pub fn initG() !void {
         glfw.KeyS, glfw.KeyW,
         glfw.KeyF, glfw.KeyR,
     });
-    std.debug.print("******* g init was called\n", .{});
 }
 
 pub fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
@@ -142,7 +141,6 @@ pub fn initS() !void {
         sdl.keycode.Keycode.s, sdl.keycode.Keycode.w,
         sdl.keycode.Keycode.f, sdl.keycode.Keycode.r,
     });
-    std.debug.print("******* s init was called\n", .{});
 }
 
 const sdl_inputs: []const Tied = &.{

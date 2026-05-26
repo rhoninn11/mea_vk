@@ -52,7 +52,7 @@ const proto = @import("proto.zig");
 const fonts = @import("fonts.zig");
 
 pub fn main(init: std.process.Init) !void {
-    try fonts.fonts_exp(init);
+    try fonts.fonts_demo(init);
     try host.sdlHost(init, deeper);
 }
 

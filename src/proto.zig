@@ -86,7 +86,7 @@ pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     };
 }
 
-pub fn checkSedes(io: std.Io, alloc: std.mem.Allocator, here: []const u8) ![]const u8 {
+pub fn findSedes(io: std.Io, here: []const u8) ![]const u8 {
     const serdes_dir = try std.Io.Dir.cwd().openDir(
         io,
         here,
@@ -95,36 +95,36 @@ pub fn checkSedes(io: std.Io, alloc: std.mem.Allocator, here: []const u8) ![]con
     defer serdes_dir.close(io);
 
     var iterator = serdes_dir.iterate();
+
     while (try iterator.next(io)) |entry| {
-        _ = entry;
-        std.debug.print("+++ so there is something here:D", .{});
+        if (std.mem.endsWith(u8, entry.name, ".serdes")) {
+            return entry.name;
+        }
     }
-    _ = alloc;
-    return "essa";
+    return error.NoSerdes;
 }
 
-pub fn serdesLoad(io: std.Io, alloc: std.mem.Allocator) !meagen.Image {
-    const serdes_prefix = "fs/serdes";
-    const available = checkSedes(io, alloc, serdes_prefix) catch {
-        std.debug.print("!+- serdes check failed\n", .{});
-        return try xyTrygHdr(alloc, shu.xyGrid(256, 880));
+pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator) !meagen.Image {
+    const cwd = std.Io.Dir.cwd();
+    const prefix = "./fs/serdes";
+    const foundname = findSedes(io, prefix) catch |err| {
+        std.debug.print("!!! synth data | {s}\n", .{@errorName(err)});
+        return try xyTrygHdr(gpa, shu.xyGrid(256, 880));
     };
-    _ = available;
+    var some_space: [1024]u8 = undefined;
+    const filepath = try std.fmt.bufPrint(some_space[0..], "{s}/{s}", .{ prefix, foundname });
 
-    const filename = "fs/serdes/img_0034.serdes";
-
-    const file = std.Io.Dir.cwd().openFile(io, filename, .{
-        .mode = .read_only,
-    }) catch {
-        std.debug.print("!+- theres no file named {s}\n", .{filename});
-        return try xyTrygHdr(alloc, shu.xyGrid(256, 880));
+    const serdesfile = cwd.openFile(io, filepath, .{}) catch |err| {
+        std.debug.print("!!! synth data | {s} | {s}\n", .{ filepath, @errorName(err) });
+        return try xyTrygHdr(gpa, shu.xyGrid(256, 880));
     };
-    defer file.close(io);
+    defer serdesfile.close(io);
 
     var file_buffer: [8096]u8 = undefined;
-    var rader = file.reader(io, &file_buffer);
+    var rader = serdesfile.reader(io, &file_buffer);
 
-    return meagen.Image.decode(&rader.interface, alloc);
+    std.debug.print("+++ loading serdes data from {s}\n", .{filepath});
+    return meagen.Image.decode(&rader.interface, gpa);
 }
 
 pub const LookingGlass = struct {
