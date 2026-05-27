@@ -95,7 +95,7 @@ fn theDeepest(access: EasyAcces) !void {
 
     var swapchain_len: u8 = undefined;
 
-    const gpa = access.alloc;
+    const gpa = access.gpa;
     const gc = access.vkctx;
     var window = access.host;
 
@@ -161,40 +161,47 @@ fn theDeepest(access: EasyAcces) !void {
     dset_atlas.updateTexture(0, &demo_rgb, 0);
     dset_atlas.updateTexture(0, &demo_r, 1);
 
-    const L_delt: f32 = 1.0 / @as(f32, @floatFromInt(OK_SWEEP - 1));
+    var mbfont: ?fonts.FontRendering = fonts.FontRendering.init(access.io, access.gpa, "fs/roboto.ttf") catch null;
+    defer if (mbfont) |font| font.deinit(access.gpa);
+
+    var all_imgs: imgs.ManyImages = try .init(access.gpa);
+    defer all_imgs.deinit();
+
     var L: f32 = 0.0;
+    var ok_atlas_idx: u8 = 32;
 
-    var ok_samples: [OK_SWEEP]?gm.RGBImage = undefined;
-    for (&ok_samples) |*sample| sample.* = null;
-    defer for (&ok_samples) |*sample| if (sample.*) |*valid| valid.deinit();
-
-    var atlas_idx: u8 = 32;
+    const L_delt: f32 = 1.0 / @as(f32, @floatFromInt(OK_SWEEP - 1));
     const ok_g = sht.GridSize.g128;
-    var mbfont: ?fonts.FontRendering = fonts.FontRendering.init(access.io, access.alloc, "fs/roboto.ttf") catch null;
-    defer if (mbfont) |font| font.deinit(access.alloc);
-
-    for (&ok_samples, 0..) |*sample, i| {
-        std.debug.assert(atlas_idx < ATLAS_MAX);
-        var local_g = ok_g;
-        const sampled = sel: switch (i) {
-            0, 8, 16, 24, 32, 40, 48, 56, 64 => blk: {
-                if (mbfont) |*font| {
-                    const glyph_shift = @as(u8, @intCast(i / 8));
-                    break :blk try font.sampleCodepoint(gpa, 'a' + glyph_shift, &local_g);
-                }
-                continue :sel 255;
-            },
-            1 => try oklab.OkUnderstanding.sampleInfernoAlt(gpa, &ok_g),
+    for (0..OK_SWEEP) |i| {
+        std.debug.assert(ok_atlas_idx < ATLAS_MAX);
+        const pixels = switch (i) {
+            0 => try oklab.OkUnderstanding.sampleInfernoAlt(gpa, &ok_g),
             else => try oklab.OkUnderstanding.sampleSpace(gpa, L, &ok_g),
         };
+        defer gpa.free(pixels);
 
-        defer gpa.free(sampled);
-        const ok_rgba = try imgs.vulkanTexture(&pic, local_g, sampled);
-        dset_atlas.updateTexture(0, &ok_rgba, atlas_idx);
+        const rgba = try imgs.vulkanTexture(&pic, ok_g, pixels);
+        dset_atlas.updateTexture(0, &rgba, ok_atlas_idx);
+        try all_imgs.appen(&rgba);
 
+        ok_atlas_idx += 1;
         L += L_delt;
-        atlas_idx += 1;
-        sample.* = ok_rgba;
+    }
+
+    const glypsh: u8 = 24;
+    var glyph_atlas_idx: u8 = 160;
+    if (mbfont) |*font| {
+        var local_g = ok_g;
+        for (0..glypsh) |i| {
+            const iu8: u8 = @intCast(i);
+            const pixels = try font.sampleCodepoint(gpa, 'a' + iu8, &local_g);
+            defer gpa.free(pixels);
+
+            const rgba = try imgs.vulkanTexture(&pic, local_g, pixels);
+            dset_atlas.updateTexture(0, &rgba, glyph_atlas_idx);
+            try all_imgs.appen(&rgba);
+            glyph_atlas_idx += 1;
+        }
     }
 
     // render pass

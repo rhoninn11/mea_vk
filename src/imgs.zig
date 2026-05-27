@@ -346,3 +346,22 @@ pub fn bfr2ImgCopy(cmd_ctx: *const gm.PoolInCtx, cfg: BfrToImgCpyCfg) !void {
 
     try one_shot.resolve();
 }
+
+pub const ManyImages = struct {
+    array: std.ArrayList(RGBImage),
+    _gpa: std.mem.Allocator,
+    pub fn init(gpa: std.mem.Allocator) !ManyImages {
+        return .{
+            .array = try .initCapacity(gpa, 256),
+            ._gpa = gpa,
+        };
+    }
+    pub fn deinit(self: *ManyImages) void {
+        for (self.array.items) |*img| img.deinit();
+        self.array.deinit(self._gpa);
+    }
+
+    pub fn appen(self: *ManyImages, item: *const RGBImage) !void {
+        return self.array.append(self._gpa, item.*);
+    }
+};

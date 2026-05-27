@@ -8,7 +8,7 @@ const sdl_wrap = @import("sdl_wrap2.zig");
 
 pub const EasyAcces = struct {
     io: std.Io,
-    alloc: std.mem.Allocator,
+    gpa: std.mem.Allocator,
     host: DualHostWin,
     vkctx: *const gm.GraphicsContext,
 };
@@ -125,7 +125,7 @@ pub fn glfwHost(init: std.process.Init, passenger: DeeperClient) !void {
     const access = EasyAcces{
         .host = d,
         .vkctx = &ctx_glfw,
-        .alloc = init.gpa,
+        .gpa = init.gpa,
         .io = init.io,
     };
 
@@ -148,7 +148,7 @@ pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
     const access = EasyAcces{
         .host = .{ .sdl_h = sdl_ctx },
         .vkctx = &vkctx_sdl,
-        .alloc = init.gpa,
+        .gpa = init.gpa,
         .io = init.io,
     };
     return passenger(access);

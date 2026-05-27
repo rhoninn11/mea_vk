@@ -165,7 +165,7 @@ pub const Utils = struct {
 
     pub fn Pierced2(gpa: Allocator) !TriangleArray {
         const square_blits = 4;
-        const border = 0.25;
+        const border = 0.125;
 
         var triangles: TriangleArray = try .initCapacity(gpa, 12);
         defer triangles.deinit(gpa);
@@ -221,7 +221,7 @@ pub const Utils = struct {
         const verts = triangles_final.items;
         const lower = -0.5 + border;
         const upper = 0.5 - border;
-        const scale = 1 / (upper - lower);
+        const scale = 1.0 / (upper - lower);
 
         for (0..verts.len) |i| {
             const clamped = std.math.clamp(verts[i].pos[m.Y], lower, upper);
