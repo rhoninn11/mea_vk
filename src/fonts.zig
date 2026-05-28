@@ -90,8 +90,8 @@ pub const FontRendering = struct {
         defer tt.stbtt_FreeBitmap(bitmap, null);
 
         const g = size.gSize();
+        // std.debug.print("+++ grid size {d}x{d}\n", .{ g.w, g.h });
         const texture = try gpa.alloc(u8, g.total * 4);
-        std.debug.print("+++ bitmap len {d} | texture len {d}\n", .{ g.total, texture.len });
         g_size.* = g;
 
         for (0..g.h) |yy| {
