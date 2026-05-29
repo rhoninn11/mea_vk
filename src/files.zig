@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils.zig");
 
 const Io = std.Io;
 const Allocotor = std.mem.Allocator;
@@ -65,6 +66,7 @@ pub const ZippedFiles = struct {
         gpa.free(self.chars);
     }
 };
+
 pub fn zipSearch(
     io: std.Io,
     gpa: std.mem.Allocator,
@@ -77,29 +79,9 @@ pub fn zipSearch(
     const FileMap = std.StringHashMap(Bins);
 
     const LambdaL = struct {
-        pub fn comptimeMsg() void {
-            std.debug.print("+++ CMPTM | N is: {d} & Bins size is: {d}\n", .{
-                N, @sizeOf(Bins),
-            });
-        }
-        pub fn trimSufix(str: []const u8, sufix: []const u8) []const u8 {
-            const ends = std.mem.endsWith(u8, str, sufix);
-            return if (ends) str[0..(str.len - sufix.len)] else str;
-        }
-        pub fn trimPrefix(str: []const u8, prefix: []const u8) []const u8 {
-            const starts = std.mem.startsWith(u8, str, prefix);
-            return if (starts) str[prefix.len..] else str;
-        }
-
-        pub fn strcompR(_: void, lhs: []const u8, rhs: []const u8) bool {
-            return std.mem.order(u8, lhs, rhs) == .lt;
-        }
-        pub fn strcompL(_: void, lhs: []const u8, rhs: []const u8) bool {
-            return std.mem.order(u8, lhs, rhs) == .gt;
-        }
         pub fn catchNames(opa: std.mem.Allocator, map: *FileMap) !PathList {
             var names_of_sort: PathArrayList = try .initCapacity(opa, PRA_PATH_N);
-            defer std.mem.sort([]const u8, names_of_sort.items, {}, strcompR);
+            defer std.mem.sort([]const u8, names_of_sort.items, {}, utils.strcompR);
 
             var it = map.iterator();
             while (it.next()) |e| {
@@ -134,8 +116,8 @@ pub fn zipSearch(
         const ext = exts_zip[ext_idx];
 
         for (0.., list.items) |list_idx, element| {
-            const almost_key = LambdaL.trimPrefix(element, seach_loc);
-            const key = LambdaL.trimSufix(almost_key, ext);
+            const almost_key = utils.trimPrefix(element, seach_loc);
+            const key = utils.trimSufix(almost_key, ext);
 
             if (found_map.getPtr(key) == null)
                 try found_map.put(key, EMPTY_BINS);

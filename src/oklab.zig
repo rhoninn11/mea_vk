@@ -53,7 +53,8 @@ const U16max: f32 = 1 << 16;
 pub const OkUnderstanding = struct {
     grid: sht.GridSize,
 
-    pub fn labSpliced(storage_dset: dset.DescriptorPrep, slice_num: u8, offset: f32) !void {
+    pub fn labSpliced(storage_dset: dset.DescriptorPrep, slice_num: u8, phi: f32) !void {
+        const INSTANCE_OFFSET = sht.GridSize.g64.total;
         const lim_num = 8096;
         std.debug.assert(slice_num <= lim_num);
 
@@ -73,7 +74,7 @@ pub const OkUnderstanding = struct {
                 const progress = i_f / denominator;
 
                 const amp = 0.2;
-                const phi0 = (progress + offset) * 5;
+                const phi0 = (progress + phi) * 5;
                 const r0 = r + @sin(phi0 * 4) * amp;
                 const p0: m.vec3 = .{ r0 * @cos(phi0), 0, r0 * @sin(phi0) };
                 edit.offset_4d = m.stack4(p0, i_f);
@@ -92,7 +93,7 @@ pub const OkUnderstanding = struct {
             const storage = possible_buffer.?;
             const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
 
-            @memcpy(mapping + sht.GridSize.g64.total, scratchpad);
+            @memcpy(mapping + INSTANCE_OFFSET, scratchpad);
         }
     }
 

@@ -41,7 +41,7 @@ const BasicErrs = error{
     NoCtx,
 };
 
-const sdl_wrap = @import("sdl_wrap2.zig");
+const sdl_wrap = @import("sdl_wrap.zig");
 const sdl = @import("sdl3");
 
 const input = @import("input.zig");
@@ -389,6 +389,13 @@ fn theDeepest(access: EasyAcces) !void {
             storage_dset,
             OK_SWEEP,
             okphi,
+        );
+
+        try fonts.lettersSpliced(
+            storage_dset,
+            g64.total + OK_SWEEP,
+            24,
+            0,
         );
 
         if (state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {

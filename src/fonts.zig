@@ -3,6 +3,8 @@ const tt = @import("stbtt");
 
 const files = @import("files.zig");
 const sht = @import("shaders/types.zig");
+const dset = @import("dset.zig");
+const m = @import("math.zig");
 
 const Sizing = struct {
     w: c_int = 0,
@@ -151,4 +153,52 @@ pub fn fonts_demo(init: std.process.Init) !void {
         return std.debug.print("!!! FD | sdf gen failed\n", .{});
     }
     std.debug.print("+++ FD | sdf bitmap generated {d}x{d}\n", .{ sizing.w, sizing.h });
+}
+
+pub fn lettersSpliced(
+    storage_dset: dset.DescriptorPrep,
+    instance_offset: u16,
+    slice_num: u8,
+    phi: f32,
+) !void {
+    const lim_num = 8096;
+    std.debug.assert(slice_num <= lim_num);
+
+    const stack_size = lim_num * @sizeOf(sht.PerInstance);
+    var stack_mem: [stack_size]u8 = undefined;
+
+    var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
+    const local_a = provider.allocator();
+
+    var scratchpad: []sht.PerInstance = try local_a.alloc(sht.PerInstance, slice_num);
+    for (storage_dset.buff_arr.items) |possible_buffer| {
+        const denominator = @as(f32, @floatFromInt(scratchpad.len - 1));
+        const r = 2.5;
+        for (0..scratchpad.len) |i| {
+            var edit: sht.PerInstance = scratchpad[i];
+            const i_f: f32 = @as(f32, @floatFromInt(i));
+            const progress = i_f / denominator;
+
+            const amp = 0.2;
+            const phi0 = (progress + phi) * 5;
+            const r0 = r + @sin(phi0 * 4) * amp;
+            const p0: m.vec3 = .{ r0 * @cos(phi0), 10, r0 * @sin(phi0) };
+            edit.offset_4d = m.stack4(p0, i_f);
+
+            const phi1 = phi0 + 0.05;
+            const p1: m.vec3 = .{ r0 * @cos(phi1), 0, r0 * @sin(phi1) };
+
+            const front: m.vec3 = m.norm(p1 - p0);
+            const up: m.vec3 = .{ 0, 1, 0 };
+            edit.new_usage = m.stack4(front, 0);
+            edit.depth_ctrl = m.stack4(up, 0);
+
+            scratchpad[i] = edit;
+        }
+
+        const storage = possible_buffer.?;
+        const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
+
+        @memcpy(mapping + instance_offset, scratchpad);
+    }
 }

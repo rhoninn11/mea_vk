@@ -4,7 +4,7 @@ const gm = @import("graphics_context.zig");
 const glfw = @import("third_party/glfw.zig");
 const vk = @import("third_party/vk.zig");
 const input = @import("input.zig");
-const sdl_wrap = @import("sdl_wrap2.zig");
+const sdl_wrap = @import("sdl_wrap.zig");
 
 pub const EasyAcces = struct {
     io: std.Io,

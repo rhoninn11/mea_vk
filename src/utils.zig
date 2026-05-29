@@ -6,7 +6,23 @@ const phys = @import("phys.zig");
 
 const in = @import("input.zig");
 
-const sdl = @import("sdl_wrap2.zig");
+const sdl = @import("sdl_wrap.zig");
+
+pub fn trimSufix(str: []const u8, sufix: []const u8) []const u8 {
+    const ends = std.mem.endsWith(u8, str, sufix);
+    return if (ends) str[0..(str.len - sufix.len)] else str;
+}
+pub fn trimPrefix(str: []const u8, prefix: []const u8) []const u8 {
+    const starts = std.mem.startsWith(u8, str, prefix);
+    return if (starts) str[prefix.len..] else str;
+}
+
+pub fn strcompR(_: void, lhs: []const u8, rhs: []const u8) bool {
+    return std.mem.order(u8, lhs, rhs) == .lt;
+}
+pub fn strcompL(_: void, lhs: []const u8, rhs: []const u8) bool {
+    return std.mem.order(u8, lhs, rhs) == .gt;
+}
 
 pub fn Slider(vecTpy: type) type {
     return struct {

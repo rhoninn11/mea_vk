@@ -34,6 +34,7 @@ pub fn perFrameUniformFill(
     scratchpad[0].matrices = try addons.paramatricVariation(camera, target, true);
     scratchpad[1].matrices = try addons.paramatricVariation(camera, target, false);
 
+    //TODO: we need more flexible aproach for setting object model matrix
     for (0..2) |i| {
         moved = scratchpad[i].matrices;
         moved.model[12 + m.Y] += 3;
