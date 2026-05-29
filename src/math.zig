@@ -166,9 +166,10 @@ test "|mat_mul_mat" {
     const x = vec4{ 0, 0, 0, 1 };
     const y = matXvec(C.mat, x);
 
-    var e = c - trim3d(y);
+    var e: [3]f32 = c - trim3d(y);
     for (0..3) |i| e[i] = abs(e[i]);
-    try std.testing.expect(@reduce(.Add, e) < 0.001);
+
+    try std.testing.expect(@reduce(.Add, @as(vec3, e)) < 0.001);
 }
 
 pub fn norm(v: vec3) vec3 {
@@ -205,11 +206,11 @@ test "|point_moved" {
     const t = matXvec(mat.mat, stack4(b, 1));
 
     std.debug.print("translate \n", .{});
-    std.debug.print("t {}\n", .{t});
+    std.debug.print("t {}\n", .{@as(vec4, t)});
 
-    var e = assumed - trim3d(t);
+    var e: [3]f32 = assumed - trim3d(t);
     for (0..3) |i| e[i] = abs(e[i]);
-    try std.testing.expect(@reduce(.Add, e) < 0.001);
+    try std.testing.expect(@reduce(.Add, @as(vec3, e)) < 0.001);
 }
 
 pub fn lookRotation(pos: vec3, target: vec3, ref_up: vec3) mat4u {

@@ -4,6 +4,27 @@ const utils = @import("utils.zig");
 const Io = std.Io;
 const Allocotor = std.mem.Allocator;
 
+const FileReader = struct {
+    reader: *std.Io.Reader,
+    filesize: u64,
+};
+
+pub inline fn readerInline(io: Io, filepath: []const u8) !FileReader {
+    var chunk4k: [4096]u8 = undefined;
+    const cwd = std.Io.Dir.cwd();
+
+    const anyfile = cwd.openFile(io, filepath, .{}) catch {
+        return error.NoFile;
+    };
+    defer anyfile.close(io);
+    var rFile = anyfile.reader(io, chunk4k[0..]);
+
+    return FileReader{
+        .filesize = try rFile.getSize(),
+        .reader = &rFile.interface,
+    };
+}
+
 pub fn fileRead(io: Io, gpa: Allocotor, filepath: []const u8) ![]u8 {
     var chunk4k: [4096]u8 = undefined;
     const cwd = std.Io.Dir.cwd();
@@ -17,6 +38,15 @@ pub fn fileRead(io: Io, gpa: Allocotor, filepath: []const u8) ![]u8 {
     const size = try rFile.getSize();
     const ioreader: *std.Io.Reader = &rFile.interface;
     return try ioreader.readAlloc(gpa, size);
+}
+
+test "simple file read" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    const data = try fileRead(io, gpa, "src/main.zig");
+    defer gpa.free(data);
+
+    try std.testing.expect(data.len > 10);
 }
 
 pub fn stdoutWriter(io: std.Io, buffer: []u8) *std.Io.Writer {
@@ -51,6 +81,7 @@ pub const ZippedFiles = struct {
     file_sets: [][][]u8,
     file_paths: [][]u8,
     chars: []u8,
+    skip: bool = true,
 
     pub fn init(comptime N: usize, gpa: std.mem.Allocator, set_num: usize, glyph_num: usize) !ZippedFiles {
         return .{
@@ -61,6 +92,7 @@ pub const ZippedFiles = struct {
     }
 
     pub fn deinit(self: *ZippedFiles, gpa: std.mem.Allocator) void {
+        if (self.skip) return;
         gpa.free(self.file_sets);
         gpa.free(self.file_paths);
         gpa.free(self.chars);
@@ -72,7 +104,7 @@ pub fn zipSearch(
     gpa: std.mem.Allocator,
     seach_loc: []const u8,
     comptime exts_zip: []const []const u8,
-) !void {
+) !ZippedFiles {
     const N = exts_zip.len;
     const Bins = [N]?u32;
     const PathArrayList = std.ArrayList([]const u8);
@@ -151,4 +183,5 @@ pub fn zipSearch(
             char_offset += path.len;
         }
     }
+    return zipout;
 }

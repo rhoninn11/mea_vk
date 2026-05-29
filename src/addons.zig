@@ -106,3 +106,20 @@ const EasyAcces = struct {
     window: ?*c_long,
     vkctx: ?*const gftx.GraphicsContext = null,
 };
+
+const PCTransfer = struct {
+    _alignment_guard: m.vec4,
+    tex_idx: u16,
+    _not_used: [7]u16,
+};
+
+fn PCInit() ![]const vk.PushConstantRange {
+    return &.{vk.PushConstantRange{
+        .offset = 0,
+        .size = @sizeOf(PCTransfer),
+        .stage_flags = .{
+            .fragment_bit = true,
+            .vertex_bit = true,
+        },
+    }};
+}

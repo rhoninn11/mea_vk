@@ -104,41 +104,49 @@ pub fn findSedes(io: std.Io, here: []const u8) ![]const u8 {
     }
     return error.NoSerdes;
 }
+pub fn serdesLoadBackup(io: std.Io, gpa: std.mem.Allocator) !meagen.Image {
+    return serdesLoad(io, gpa) catch |err| {
+        std.debug.print("!!! synth data | {s}\n", .{@errorName(err)});
+        return xyTrygHdr(gpa, shu.xyGrid(256, 880));
+    };
+}
+
+pub fn protoImgRead(io: std.Io, gpa: std.mem.Allocator, filepath: []const u8) !meagen.Image {
+    var read_buffer: [8096]u8 = undefined;
+
+    const cwd = std.Io.Dir.cwd();
+    const serdesfile = try cwd.openFile(io, filepath, .{});
+    defer serdesfile.close(io);
+
+    var rader = serdesfile.reader(io, &read_buffer);
+    return meagen.Image.decode(&rader.interface, gpa);
+}
+
+pub fn fakeSeachFailed(io: std.Io, gpa: std.mem.Allocator) !void {
+    const fake_prefix = "./fs/fake_serdes";
+    var pairs = try files.zipSearch(io, gpa, fake_prefix, &.{ ".serdes", ".serdes.mono" });
+    defer pairs.deinit(gpa);
+    // for (0.., pairs.file_sets) |i, _| {
+    //     std.debug.print("+++ we have pair {d}\n", .{i});
+    // }
+}
 
 pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator) !meagen.Image {
-    const cwd = std.Io.Dir.cwd();
     const prefix = "./fs/serdes";
-    const fake_prefix = "./fs/fake_serdes";
+    // const fake_prefix = "./fs/fake_serdes";
 
-    std.debug.print("++++++ are we cooking?\n", .{});
-    files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" }) catch |err| {
-        // we could spawn fake serdes hear as a test, or just manually creat
-        //      serdes_a.serdes & serdes_b.serdes
-        // into prefix dir
-        files.zipSearch(io, gpa, fake_prefix, &.{ ".serdes", ".serdes.mono" }) catch |eerr| {
-            std.debug.print("!!! fake serdes error | {s}\n", .{@errorName(eerr)});
+    _ = files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" }) catch |err| {
+        fakeSeachFailed(io, gpa) catch |err1| {
+            std.debug.print("!!! fake serdes error | {s}\n", .{@errorName(err1)});
         };
+
         std.debug.print("!!! serdes error | {s}\n", .{@errorName(err)});
     };
 
-    const foundname = findSedes(io, prefix) catch |err| {
-        std.debug.print("!!! synth data | {s}\n", .{@errorName(err)});
-        return try xyTrygHdr(gpa, shu.xyGrid(256, 880));
-    };
-    var some_space: [1024]u8 = undefined;
-    const filepath = try std.fmt.bufPrint(some_space[0..], "{s}/{s}", .{ prefix, foundname });
+    var zip = try files.zipSearch(io, gpa, prefix, &.{".serdes"});
+    defer zip.deinit(gpa);
 
-    const serdesfile = cwd.openFile(io, filepath, .{}) catch |err| {
-        std.debug.print("!!! synth data | {s} | {s}\n", .{ filepath, @errorName(err) });
-        return try xyTrygHdr(gpa, shu.xyGrid(256, 880));
-    };
-    defer serdesfile.close(io);
-
-    var file_buffer: [8096]u8 = undefined;
-    var rader = serdesfile.reader(io, &file_buffer);
-
-    std.debug.print("+++ loading serdes data from {s}\n", .{filepath});
-    return meagen.Image.decode(&rader.interface, gpa);
+    return protoImgRead(io, gpa, zip.file_paths[0]);
 }
 
 pub const LookingGlass = struct {

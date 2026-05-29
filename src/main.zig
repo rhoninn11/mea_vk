@@ -87,7 +87,7 @@ fn theDeepest(access: EasyAcces) !void {
     // const grid = sht.GridSize.g64;
     const grid = sht.GridSize.g64;
     const deeper_allocator = std.heap.page_allocator;
-    var img = try proto.serdesLoad(access.io, deeper_allocator);
+    var img = try proto.serdesLoadBackup(access.io, deeper_allocator);
     defer img.deinit(deeper_allocator);
 
     var glass = proto.LookingGlass.init(&img, grid);

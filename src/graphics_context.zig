@@ -444,14 +444,19 @@ pub const GraphicsContext = struct {
 
         self.instance.getPhysicalDeviceProperties2(self.pdev, &phys_pros);
         const lim = phys_pros.properties.limits;
-        std.debug.print("------- essunia -------- \n", .{});
-        std.debug.print("--- multiview props: {d} - (views), {d} - (instances)\n", .{
+        std.debug.print("------------------------ \n", .{});
+        defer std.debug.print("------------------------ \n", .{});
+        std.debug.print("--- LIM | multiview props: {d} - (views), {d} - (instances)\n", .{
             mv_props.max_multiview_view_count,
             mv_props.max_multiview_instance_index,
         });
-        std.debug.print("--- uniform allign: {d}_B\n", .{lim.min_uniform_buffer_offset_alignment});
-        std.debug.print("--- storage allign: {d}_B\n", .{lim.min_storage_buffer_offset_alignment});
-        std.debug.print("------------------------ \n", .{});
+
+        std.debug.print("--- LIM | uniform allign:      {d}B\n", .{lim.min_uniform_buffer_offset_alignment});
+        std.debug.print("--- LIM | storage allign:      {d}B\n", .{lim.min_storage_buffer_offset_alignment});
+        std.debug.print("--- LIM | push constant blob: {d}B\n", .{lim.max_push_constants_size});
+
+        // assuming sizeOf("Push type") ma 128B
+        std.debug.assert(lim.max_push_constants_size > 128);
     }
 
     pub fn deinit(self: GraphicsContext) void {
