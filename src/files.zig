@@ -81,7 +81,6 @@ pub const ZippedFiles = struct {
     file_sets: [][][]u8,
     file_paths: [][]u8,
     chars: []u8,
-    skip: bool = true,
 
     pub fn init(comptime N: usize, gpa: std.mem.Allocator, set_num: usize, glyph_num: usize) !ZippedFiles {
         return .{
@@ -92,7 +91,6 @@ pub const ZippedFiles = struct {
     }
 
     pub fn deinit(self: *ZippedFiles, gpa: std.mem.Allocator) void {
-        if (self.skip) return;
         gpa.free(self.file_sets);
         gpa.free(self.file_paths);
         gpa.free(self.chars);
@@ -171,17 +169,22 @@ pub fn zipSearch(
     }
 
     var zipout: ZippedFiles = try .init(N, gpa, names_count, glyph_count);
-    defer zipout.deinit(gpa);
 
     var char_offset: usize = 0;
+    var file_offset: usize = 0;
+    var set_offset: usize = 0;
     for (names_of_sort.items) |name| {
-        const ok = found_map.get(name).?;
-        for (0.., ok) |ext_idx, str_idx| {
+        const str_locs = found_map.get(name).?;
+        for (0.., str_locs) |ext_idx, str_idx| {
             const path = zip_lists[ext_idx].items[str_idx.?];
-            const sub = zipout.chars[char_offset..][0..path.len];
-            @memcpy(sub, path);
+            const dest = zipout.chars[char_offset..][0..path.len];
+            @memcpy(dest, path);
+            zipout.file_paths[file_offset] = dest;
             char_offset += path.len;
+            file_offset += 1;
         }
+        zipout.file_sets[set_offset] = zipout.file_paths[file_offset - N .. file_offset];
+        set_offset += 1;
     }
     return zipout;
 }

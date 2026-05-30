@@ -126,9 +126,13 @@ pub fn fakeSeachFailed(io: std.Io, gpa: std.mem.Allocator) !void {
     const fake_prefix = "./fs/fake_serdes";
     var pairs = try files.zipSearch(io, gpa, fake_prefix, &.{ ".serdes", ".serdes.mono" });
     defer pairs.deinit(gpa);
-    // for (0.., pairs.file_sets) |i, _| {
-    //     std.debug.print("+++ we have pair {d}\n", .{i});
-    // }
+    for (pairs.file_sets) |set| {
+        std.debug.print("+++ FAKE | ", .{});
+        defer std.debug.print("\n", .{});
+        for (set) |path| {
+            std.debug.print("{s} | ", .{path});
+        }
+    }
 }
 
 pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator) !meagen.Image {
