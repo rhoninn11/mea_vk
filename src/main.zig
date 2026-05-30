@@ -214,12 +214,13 @@ fn theDeepest(access: EasyAcces) !void {
         storage_dset._d_set_layout.?,
         dset_atlas._d_set_layout.?,
     };
+    const push_const_ranges = addons.PCInit();
     const pipeline_layout = try gc.dev.createPipelineLayout(&.{
         .flags = .{},
         .p_set_layouts = &dsets,
         .set_layout_count = dsets.len,
-        .p_push_constant_ranges = undefined,
-        .push_constant_range_count = 0,
+        .p_push_constant_ranges = push_const_ranges.ptr,
+        .push_constant_range_count = @as(u32, @intCast(push_const_ranges.len)),
     }, null);
     defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
 

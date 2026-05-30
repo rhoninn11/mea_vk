@@ -7,12 +7,20 @@
 layout(constant_id = 0) const int MAX_LIGHTS = 16;
 layout(constant_id = 1) const float INTENSITY = 1.0;
 
+struct PushData {
+    mat4 model;
+    uint index;
+    uint _not_used_0;
+    uint _not_used_1;
+    uint _not_used_2;
+};
+
 struct MatPack {
     mat4 model;
     mat4 view;
     mat4 proj;
 };
-struct GroupData{
+struct UboData{
     vec2 osc_scale; 
     vec2 scale;
     vec4 not_used_4d_0;
@@ -20,11 +28,9 @@ struct GroupData{
     vec4 not_used_4d_2;
     MatPack matrices;
 };
+layout(push_constant) uniform PC { PushData data; } _pc;
 
-// whole data has is 16 x f32
-layout(set = 0, binding = 0) uniform GroupDataUbo{
-    GroupData data;
-} _group;
+layout(set = 0, binding = 0) uniform UBO { UboData data; } _group;
 
 struct Instance{
     vec2 offset_2d;
@@ -64,7 +70,7 @@ void main() {
     mat4 per_inst_t = mat4(vec4(right, 0), vec4(up, 0), vec4(front, 0), vec4(inst_pos,1));
     vec4 before_ems = per_inst_t * vec4(a_pos, 1);
 
-    gl_Position = ems.proj * ems.view * ems.model * before_ems;
+    gl_Position = ems.proj * ems.view * _pc.data.model * before_ems;
 
     //to choose right slice per instance
     int slices_at = 32;

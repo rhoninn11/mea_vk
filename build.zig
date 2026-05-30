@@ -154,8 +154,9 @@ pub fn build(b: *std.Build) !void {
     triangle_exe.root_module.addImport("protobuf", pbDep.module("protobuf"));
     triangle_exe.root_module.addImport("sdl3", sdl3_bind.module("sdl3"));
 
-    triangle_exe.root_module.linkLibrary(sdl3_lib.artifact("SDL3"));
-    b.installArtifact(sdl3_lib.artifact("SDL3"));
+    const sdl_artifact = sdl3_lib.artifact("SDL3");
+    triangle_exe.root_module.linkLibrary(sdl_artifact);
+    b.installArtifact(sdl_artifact);
 
     // { // if it can be swaped, zls will be working fully again, and some files will in project can be erased
     //     const glfw_lib_fmt: []const u8 = if (builtin.target.os.tag == .windows) "{s}/bin" else "{s}/lib";

@@ -4,6 +4,7 @@ const sht = @import("shaders/types.zig");
 const vtx = @import("vertex.zig");
 const m = @import("math.zig");
 const v = @import("vertex.zig");
+const addons = @import("addons.zig");
 
 pub const FrameState = struct {
     alt_proj: bool,
@@ -86,7 +87,7 @@ pub fn recordFrame(
                 &.{0},
             );
 
-            var dynamic_off: []const u32 = &.{
+            const dynamic_off: []const u32 = &.{
                 if (state.alt_proj) Udyn.offset(1) else Udyn.offset(0),
             };
             const all_sets: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
@@ -113,9 +114,6 @@ pub fn recordFrame(
             );
 
             if (state.alt_proj) {
-                //flat display
-                dynamic_off = &.{Udyn.offset(3)};
-
                 gm.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[1]);
                 gm.dev.cmdBindDescriptorSets(
                     cbufr,
@@ -127,6 +125,18 @@ pub fn recordFrame(
                 );
                 const bilbo_idx = 4;
                 const full_grid = sht.GridSize.g64;
+                const push = addons.PCTransfer{
+                    .transform = m.mat_translate(.{ 0, 3, 0 }).mat,
+                    .tex_idx = 32,
+                };
+                gm.dev.cmdPushConstants(
+                    cbufr,
+                    draw.pipeline_layout,
+                    .{ .fragment_bit = true, .vertex_bit = true },
+                    0,
+                    @sizeOf(@TypeOf(push)),
+                    &push,
+                );
                 gm.dev.cmdDraw(
                     cbufr,
                     models.sizes[bilbo_idx],

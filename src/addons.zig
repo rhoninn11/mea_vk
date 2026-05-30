@@ -107,13 +107,13 @@ const EasyAcces = struct {
     vkctx: ?*const gftx.GraphicsContext = null,
 };
 
-const PCTransfer = struct {
-    _alignment_guard: m.vec4,
-    tex_idx: u16,
-    _not_used: [7]u16,
+pub const PCTransfer = struct {
+    transform: m.mat4,
+    tex_idx: u32,
+    _not_used: [3]u32 = .{0} ** 3,
 };
 
-fn PCInit() ![]const vk.PushConstantRange {
+pub fn PCInit() []const vk.PushConstantRange {
     return &.{vk.PushConstantRange{
         .offset = 0,
         .size = @sizeOf(PCTransfer),
