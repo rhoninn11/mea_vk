@@ -190,12 +190,12 @@ pub inline fn DefaultRng() !std.Random {
     return prng.random();
 }
 
-pub const ValMonit = struct {
+pub const DbgMonitor = struct {
     linecount: u8 = 0,
     name: []const u8,
     val: f32,
 
-    pub fn update(self: *ValMonit, io: std.Io, new_val: f32) !void {
+    pub fn update(self: *DbgMonitor, io: std.Io, new_val: f32) !void {
         self.val = new_val;
 
         var buffer: [1024]u8 = undefined;

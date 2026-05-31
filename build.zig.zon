@@ -4,11 +4,12 @@
     .version = "0.1.0",
     .dependencies = .{
         .vulkan_zig = .{
-            .path = "..",
+            .url = "git+https://github.com/Snektron/vulkan-zig#b496a6a561ffbbeb530b0f9ed4e059f88c0723a5",
+            .hash = "vulkan-0.0.0-r7Ytx7N9AwD7IZt5_XNHtkJ4G9qY0pCH-cpcOsbL8wzD",
         },
         .vulkan_headers = .{
-            .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/v1.3.283.tar.gz",
-            .hash = "N-V-__8AAAkkoQGn5z1yoNVrwqZfnYmZp8AZ5CJgoHRMQI0c",
+            .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/v1.4.349.tar.gz",
+            .hash = "N-V-__8AAC1ZbAIG2kVq3iPpAWaOlDTQ3MOyOyQQR0o_-9ez",
         },
         .protobuf = .{
             .url = "git+https://github.com/arwalk/zig-protobuf.git?ref=v5.0.0#1f6cb06156b3ff4f52f98bc14f829c0b8393a6fc",

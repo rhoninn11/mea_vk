@@ -53,8 +53,7 @@ const U16max: f32 = 1 << 16;
 pub const OkUnderstanding = struct {
     grid: sht.GridSize,
 
-    pub fn labSpliced(storage_dset: dset.DescriptorPrep, slice_num: u8, phi: f32) !void {
-        const INSTANCE_OFFSET = sht.GridSize.g64.total;
+    pub fn labSpliced(storage_dset: dset.DescriptorPrep, instance_offset: u32, slice_num: u8, phi: f32) !void {
         const lim_num = 8096;
         std.debug.assert(slice_num <= lim_num);
 
@@ -93,7 +92,7 @@ pub const OkUnderstanding = struct {
             const storage = possible_buffer.?;
             const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
 
-            @memcpy(mapping + INSTANCE_OFFSET, scratchpad);
+            @memcpy(mapping + instance_offset, scratchpad);
         }
     }
 

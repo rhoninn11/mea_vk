@@ -1,30 +1,5 @@
 HERE=$PWD
 
-GLFW_VER=3.4
-GLFW_REPO="https://github.com/glfw/glfw.git"
-GLFW_DIR="fs/_glfw"
-GLFW_INSTALL_DIR="fs/glfw"
-CMAKE_ADDON="os/lin/zig.cmake"
-
-# libx11-dev
-
-mkdir fs
-git clone ${GLFW_REPO} -b ${GLFW_VER} ${GLFW_DIR}
-mkdir ${GLFW_DIR}/build
-cmake ${GLFW_DIR} -B ${GLFW_DIR}/build \
-    -C ${CMAKE_ADDON} -GNinja \
-    -DBUILD_SHARED_LIBS=ON \
-    -DGLFW_BUILD_EXAMPLES=OFF \
-    -DGLFW_BUILD_TESTS=OFF \
-    -DGLFW_BUILD_DOCS=OFF \
-    -DGLFW_BUILD_X11=ON \
-    -DGLFW_BUILD_WAYLAND=OFF \
-    -DCMAKE_INSTALL_PREFIX=${GLFW_INSTALL_DIR} \
-    -DX11_X11_LIB=/usr/lib/x86_64-linux-gnu/libX11.so # well... i have to work with broken version of cmake
-cd ${GLFW_DIR}/build
-ninja install
-cd ${HERE}
-
 # Will be needed:
 # https://github.com/skvadrik/re2c/blob/master/BUILD.md
 

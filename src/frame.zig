@@ -1,5 +1,5 @@
-const gftx = @import("graphics_context.zig");
-const vk = @import("third_party/vk.zig");
+const gm = @import("graphics_context.zig");
+const vk = @import("vulkan-zig");
 const sht = @import("shaders/types.zig");
 const vtx = @import("vertex.zig");
 const m = @import("math.zig");
@@ -22,15 +22,15 @@ fn Dynamic(t: type) type {
 }
 
 pub fn recordFrame(
-    rec: *const gftx.FrameRecorder,
+    rec: *const gm.FrameRecorder,
     models: *const v.VertRepo,
     extent: vk.Extent2D,
     render_pass: vk.RenderPass,
     framebuffers: []const vk.Framebuffer,
-    draw: *const gftx.DrawInfo,
+    draw: *const gm.DrawInfo,
     state: *const FrameState,
 ) !void {
-    const gm = rec.gm;
+    const gc = rec.gm;
     const m_clears: []const vk.ClearValue = &.{
         vk.ClearValue{
             .color = .{ .float_32 = .{ 0.05, 0, 0, 1 } },
@@ -40,8 +40,8 @@ pub fn recordFrame(
         },
     };
 
-    try rec.clear(gm);
-    try rec.begin(gm);
+    try rec.clear(gc);
+    try rec.begin(gc);
     const cbufr: vk.CommandBuffer = rec.cmds.*;
 
     const viewport = &.{vk.Viewport{
@@ -61,17 +61,17 @@ pub fn recordFrame(
         .extent = extent,
     };
 
-    const Udyn = Dynamic(sht.GroupData);
+    const UBODyn = Dynamic(sht.GroupData);
     const instace_sz = @sizeOf(sht.PerInstance);
     _ = instace_sz;
     {
-        try gm.dev.beginCommandBuffer(cbufr, &.{});
+        try gc.dev.beginCommandBuffer(cbufr, &.{});
 
-        gm.dev.cmdSetViewport(cbufr, 0, viewport);
-        gm.dev.cmdSetScissor(cbufr, 0, scissor);
+        gc.dev.cmdSetViewport(cbufr, 0, viewport);
+        gc.dev.cmdSetScissor(cbufr, 0, scissor);
 
         // oscilationg ring
-        gm.dev.cmdBeginRenderPass(cbufr, &.{
+        gc.dev.cmdBeginRenderPass(cbufr, &.{
             .render_pass = render_pass,
             .framebuffer = framebuffers[rec.id],
             .render_area = render_area,
@@ -79,16 +79,16 @@ pub fn recordFrame(
             .p_clear_values = m_clears.ptr,
         }, .@"inline");
         {
-            defer gm.dev.cmdEndRenderPass(cbufr);
-            gm.dev.cmdBindVertexBuffers(
+            defer gc.dev.cmdEndRenderPass(cbufr);
+            gc.dev.cmdBindVertexBuffers(
                 cbufr,
                 0,
                 &.{models.vbo.?.dvk_bfr},
                 &.{0},
             );
 
-            const dynamic_off: []const u32 = &.{
-                if (state.alt_proj) Udyn.offset(1) else Udyn.offset(0),
+            const ubo_dynamic_offset: []const u32 = &.{
+                if (state.alt_proj) UBODyn.offset(1) else UBODyn.offset(0),
             };
             const all_sets: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
                 draw.uniform_dsets.items[rec.id],
@@ -96,16 +96,16 @@ pub fn recordFrame(
                 draw.texture_dset,
             };
 
-            gm.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[0]);
-            gm.dev.cmdBindDescriptorSets(
+            gc.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[0]);
+            gc.dev.cmdBindDescriptorSets(
                 cbufr,
                 .graphics,
                 draw.pipeline_layout,
                 0,
                 all_sets,
-                dynamic_off,
+                ubo_dynamic_offset,
             );
-            gm.dev.cmdDraw(
+            gc.dev.cmdDraw(
                 cbufr,
                 models.sizes[state.model_idx],
                 draw.instance_count,
@@ -114,35 +114,57 @@ pub fn recordFrame(
             );
 
             if (state.alt_proj) {
-                gm.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[1]);
-                gm.dev.cmdBindDescriptorSets(
+                gc.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[1]);
+                gc.dev.cmdBindDescriptorSets(
                     cbufr,
                     .graphics,
                     draw.pipeline_layout,
                     0,
                     all_sets,
-                    dynamic_off,
+                    ubo_dynamic_offset,
                 );
                 const bilbo_idx = 4;
-                const full_grid = sht.GridSize.g64;
-                const push = addons.PCTransfer{
-                    .transform = m.mat_translate(.{ 0, 3, 0 }).mat,
-                    .tex_idx = 32,
+                const first_ok_instance = sht.GridSize.g64.total;
+                const okpush = gm.PushConstant.PCBlob{
+                    .model = m.mat_translate(.{ 0, 3, 0 }).mat,
+                    .inst_base = first_ok_instance,
+                    .tex_base = 32,
                 };
-                gm.dev.cmdPushConstants(
+                gc.dev.cmdPushConstants(
                     cbufr,
                     draw.pipeline_layout,
                     .{ .fragment_bit = true, .vertex_bit = true },
                     0,
-                    @sizeOf(@TypeOf(push)),
-                    &push,
+                    @sizeOf(@TypeOf(okpush)),
+                    &okpush,
                 );
-                gm.dev.cmdDraw(
+                gc.dev.cmdDraw(
                     cbufr,
                     models.sizes[bilbo_idx],
                     state.ok_slices_num,
                     models.offsets[bilbo_idx],
-                    full_grid.total,
+                    0,
+                );
+                const first_glyph_instance = first_ok_instance + state.ok_slices_num;
+                const glyphpush = gm.PushConstant.PCBlob{
+                    .model = m.mat_translate(.{ 0, 6, 0 }).mat,
+                    .inst_base = first_glyph_instance,
+                    .tex_base = 32 + state.ok_slices_num,
+                };
+                gc.dev.cmdPushConstants(
+                    cbufr,
+                    draw.pipeline_layout,
+                    .{ .fragment_bit = true, .vertex_bit = true },
+                    0,
+                    @sizeOf(@TypeOf(glyphpush)),
+                    &glyphpush,
+                );
+                gc.dev.cmdDraw(
+                    cbufr,
+                    models.sizes[bilbo_idx],
+                    state.ok_slices_num,
+                    models.offsets[bilbo_idx],
+                    0,
                 );
             }
 
@@ -152,6 +174,6 @@ pub fn recordFrame(
             // maybe https://github.com/nothings/stb/blob/master/stb_truetype.h as a lighter_alternative
 
         }
-        try gm.dev.endCommandBuffer(cbufr);
+        try gc.dev.endCommandBuffer(cbufr);
     }
 }

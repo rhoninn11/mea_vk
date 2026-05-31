@@ -10,28 +10,10 @@ learning vulkan in zig:
 git diff --no-index a/ b/ > delta.patch
 patch --verbose -p2 --directory=b < delta.patch
 
-# gpu memory spaces
-generic
-gs
-fs
-ss
-global
-constant
-param
-shared
-local
-input
-output
-uniform
-push_constant
-storage_buffer
-physical_storage_buffer
-flash
-flash1
-flash2
-flash3
-flash4
-flash5
-cog
-hub
-lut
+# linux devel: mint | ubuntu
+    # wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+    # sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+    # sudo apt update
+    # sudo apt install libyaml-cpp-dev
+    # sudo apt install vulkan-sdk # for validation layers
+    # sudo apt install shaderc # for glslc

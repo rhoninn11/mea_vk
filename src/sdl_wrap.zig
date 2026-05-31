@@ -121,6 +121,7 @@ pub const SdlContext = struct {
         return self;
     }
     fn deinit(self: *SdlContext) void {
+        std.debug.print("+++ sdl deinit\n", .{});
         if (self.window) |win| {
             self.window = null;
             win.deinit();

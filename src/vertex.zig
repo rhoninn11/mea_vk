@@ -1,7 +1,6 @@
 const std = @import("std");
 const gm = @import("graphics_context.zig");
-const vk = @import("third_party/vk.zig");
-const before = @import("before.zig");
+const vk = @import("vulkan-zig");
 const m = @import("math.zig");
 
 const X = 0;
@@ -31,15 +30,9 @@ pub const Vertex = struct {
     };
     const Self = @This();
     pub const GeoRaw = []Self;
-    pub const s_fields_num = before.structDeclNum(Self);
 
     pos: [3]f32,
     color: [3]f32,
-
-    const Multipler = struct {
-        times_one: u32,
-        times_vert: u32,
-    };
 };
 
 //side processing
@@ -130,37 +123,45 @@ pub const Utils = struct {
             lid[i] = quad[ti];
             lid[i].color = .{ 1, 1, 0 };
         }
+        // top
+        Math.transApply(lid[0..], .{ 0, 1, 0 });
         try triangles.appendSlice(alloc, lid[0..]);
+        // middle
         try addSides(alloc, &triangles);
+        // bottom
+        for (0..lid.len) |i| lid[i].color = .{ 0, 1, 0 };
+        Math.matApply(lid[0..], Math.xrot180);
+        try triangles.appendSlice(alloc, lid[0..]);
         return triangles;
     }
 
     pub fn Pierced(gpa: Allocator) !TriangleArray {
-        const unit: f32 = @sqrt(2.0);
+        var out_tris: TriangleArray = try .initCapacity(gpa, 48);
+        errdefer out_tris.deinit(gpa);
 
-        const hmm = RingParams{
+        const unit: f32 = @sqrt(2.0);
+        const ring_param = RingParams{
             .len = 5,
             .flat = true,
             .outer_r = unit,
             .inner_r = unit * 0.5,
         };
+        var lid_ring = try Ring(gpa, ring_param);
+        defer lid_ring.deinit(gpa);
 
-        var ring_tris = try Ring(gpa, hmm);
-        errdefer ring_tris.deinit(gpa);
+        // top
+        for (0..lid_ring.items.len) |i| lid_ring.items[i].color[0] = 1;
+        Math.matApply(lid_ring.items, Math.yrot45);
+        Math.transApply(lid_ring.items, .{ 0, 1, 0 });
+        try out_tris.appendSlice(gpa, lid_ring.items);
+        // middle
+        try addSides(gpa, &out_tris);
+        // bottom
+        for (0..lid_ring.items.len) |i| lid_ring.items[i].color[0] = 0;
+        Math.matApply(lid_ring.items, Math.xrot180);
+        try out_tris.appendSlice(gpa, lid_ring.items);
 
-        for (0..ring_tris.items.len) |i| ring_tris.items[i].color[0] = 1;
-        Math.matApply(ring_tris.items, Math.yrot45);
-        const cover_len = ring_tris.items.len;
-        _ = cover_len;
-
-        // try ring_tris.appendSlice(gpa, ring_tris.items);
-        // std.debug.assert(cover_len * 2 == ring_tris.items.len);
-
-        // Math.matApply(ring_tris.items[0..cover_len], Math.xrot180);
-        // for (0..cover_len) |i| ring_tris.items[i].color[0] = 0;
-
-        try addSides(gpa, &ring_tris);
-        return ring_tris;
+        return out_tris;
     }
 
     pub fn Pierced2(gpa: Allocator) !TriangleArray {
@@ -265,7 +266,7 @@ pub const Utils = struct {
             face[i].color = .{ u, 1, 0 };
         }
         Math.matApply(face[0..], Math.xrot90);
-        Math.transApply(face[0..], .{ 0, -1, -1 });
+        Math.transApply(face[0..], .{ 0, 0, -1 });
         try tris.appendSlice(alloc, face[0..]);
 
         for (0..3) |_| {
@@ -413,6 +414,12 @@ pub fn populateModels(alloc: std.mem.Allocator, here: *TriangleArray, as: *VertR
     try here.appendSlice(alloc, shape.items);
     as.register(shape.items);
     shape.deinit(alloc);
+
+    shape = try Utils.Blocky(alloc);
+    try here.appendSlice(alloc, shape.items);
+    as.register(shape.items);
+    shape.deinit(alloc);
+
     shape = try Utils.Pierced(alloc);
     try here.appendSlice(alloc, shape.items);
     as.register(shape.items);
@@ -421,11 +428,6 @@ pub fn populateModels(alloc: std.mem.Allocator, here: *TriangleArray, as: *VertR
     param.len = 32;
     param.flat = false;
     shape = try Utils.Ring(alloc, param);
-    try here.appendSlice(alloc, shape.items);
-    as.register(shape.items);
-    shape.deinit(alloc);
-
-    shape = try Utils.Blocky(alloc);
     try here.appendSlice(alloc, shape.items);
     as.register(shape.items);
     shape.deinit(alloc);

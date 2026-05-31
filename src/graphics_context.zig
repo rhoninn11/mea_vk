@@ -3,10 +3,10 @@ const std = @import("std");
 const glfw = @import("third_party/glfw.zig");
 const sdl = @import("sdl3");
 
-const vk = @import("third_party/vk.zig");
+const vk = @import("vulkan-zig");
 const t = @import("types.zig");
 
-const c = @import("c.zig");
+const m = @import("math.zig");
 const v = @import("vertex.zig");
 const u = @import("utils.zig");
 
@@ -319,7 +319,7 @@ pub const GraphicsContext = struct {
     pub fn init(allocator: Allocator, app_name: [*:0]const u8, window: *glfw.Window) !GraphicsContext {
         var self: GraphicsContext = undefined;
         self.allocator = allocator;
-        self.vkb = BaseWrapper.load(c.glfwGetInstanceProcAddress);
+        // self.vkb = BaseWrapper.load(c.glfwGetInstanceProcAddress);
 
         std.debug.print("whats the problem?\n", .{});
         if (try checkLayerSupport(&self.vkb, self.allocator) == false) {
@@ -491,6 +491,27 @@ pub const GraphicsContext = struct {
             .memory_type_index = try self.findMemoryTypeIndex(requirements.memory_type_bits, flags),
         }, null);
     }
+};
+
+pub const PushConstant = struct {
+    pub const PCBlob = struct {
+        model: m.mat4,
+        inst_base: u32,
+        tex_base: u32,
+        _not_used: [6]u32 = .{0} ** 6,
+    };
+
+    pub fn Ranges() []const vk.PushConstantRange {
+        return &.{vk.PushConstantRange{
+            .offset = 0,
+            .size = @sizeOf(PCBlob),
+            .stage_flags = .{
+                .fragment_bit = true,
+                .vertex_bit = true,
+            },
+        }};
+    }
+    pub fn PushConstantCmd() void {}
 };
 
 fn checkLayerSupport(vkb: *const BaseWrapper, alloc: Allocator) !bool {

@@ -182,7 +182,7 @@ pub fn lettersSpliced(
             const amp = 0.2;
             const phi0 = (progress + phi) * 5;
             const r0 = r + @sin(phi0 * 4) * amp;
-            const p0: m.vec3 = .{ r0 * @cos(phi0), 10, r0 * @sin(phi0) };
+            const p0: m.vec3 = .{ r0 * @cos(phi0), 0, r0 * @sin(phi0) };
             edit.offset_4d = m.stack4(p0, i_f);
 
             const phi1 = phi0 + 0.05;

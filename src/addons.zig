@@ -1,5 +1,5 @@
 const std = @import("std");
-const vk = @import("third_party/vk.zig");
+const vk = @import("vulkan-zig");
 const glfw = @import("third_party/glfw.zig");
 const gftx = @import("graphics_context.zig");
 
@@ -106,20 +106,3 @@ const EasyAcces = struct {
     window: ?*c_long,
     vkctx: ?*const gftx.GraphicsContext = null,
 };
-
-pub const PCTransfer = struct {
-    transform: m.mat4,
-    tex_idx: u32,
-    _not_used: [3]u32 = .{0} ** 3,
-};
-
-pub fn PCInit() []const vk.PushConstantRange {
-    return &.{vk.PushConstantRange{
-        .offset = 0,
-        .size = @sizeOf(PCTransfer),
-        .stage_flags = .{
-            .fragment_bit = true,
-            .vertex_bit = true,
-        },
-    }};
-}

@@ -2,7 +2,7 @@ const std = @import("std");
 const tt = @import("stbtt");
 
 const glfw = @import("third_party/glfw.zig");
-const vk = @import("third_party/vk.zig");
+const vk = @import("vulkan-zig");
 
 const sht = @import("shaders/types.zig");
 const shu = @import("shaders/utils.zig");
@@ -188,11 +188,11 @@ fn theDeepest(access: EasyAcces) !void {
         L += L_delt;
     }
 
-    const glypsh: u8 = 24;
+    const glyph_count: u8 = 24;
     var glyph_atlas_idx: u8 = 160;
     if (mbfont) |*font| {
         var local_g = ok_g;
-        for (0..glypsh) |i| {
+        for (0..glyph_count) |i| {
             const iu8: u8 = @intCast(i);
             const pixels = try font.sampleCodepoint(gpa, 'a' + iu8, &local_g);
             defer gpa.free(pixels);
@@ -214,7 +214,7 @@ fn theDeepest(access: EasyAcces) !void {
         storage_dset._d_set_layout.?,
         dset_atlas._d_set_layout.?,
     };
-    const push_const_ranges = addons.PCInit();
+    const push_const_ranges = gm.PushConstant.Ranges();
     const pipeline_layout = try gc.dev.createPipelineLayout(&.{
         .flags = .{},
         .p_set_layouts = &dsets,
@@ -309,12 +309,13 @@ fn theDeepest(access: EasyAcces) !void {
     var inertia = IVec3.Inertia.init(.{ pamperek.phi_raw, 0, 0 });
     inertia.phx = .default;
 
-    var phi_val_monit = u.ValMonit{
+    var dbgmonit = u.DbgMonitor{
         .name = "phi val",
         .val = 0,
     };
 
     var okphi: f32 = 0;
+    var glyphphi: f32 = 0;
     while (!window.shoudClose()) {
         const img_idx = swapchain.image_index;
         // input_continue();
@@ -336,9 +337,11 @@ fn theDeepest(access: EasyAcces) !void {
         const td = timeline.deltaS();
         const td1 = timeline1.deltaS();
         okphi += td1 * 0.1;
+        glyphphi += td1 * 0.13;
         pamperek.control(&input.plr_input, td);
 
-        try phi_val_monit.update(access.io, pamperek.p.phi);
+        try dbgmonit.update(access.io, pamperek.p.phi);
+
         if (glass.update(&input.glass_input)) {
             try glass.updateStorage(storage_dset, true);
         }
@@ -386,17 +389,20 @@ fn theDeepest(access: EasyAcces) !void {
             size,
             win_size,
         );
+        const first_ok_instance = g64.total;
         try oklab.OkUnderstanding.labSpliced(
             storage_dset,
+            first_ok_instance,
             OK_SWEEP,
             okphi,
         );
 
+        const first_glyph_insatnce = first_ok_instance + OK_SWEEP;
         try fonts.lettersSpliced(
             storage_dset,
-            g64.total + OK_SWEEP,
-            24,
-            0,
+            first_glyph_insatnce,
+            glyph_count,
+            glyphphi,
         );
 
         if (state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {

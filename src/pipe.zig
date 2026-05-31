@@ -1,6 +1,6 @@
 const std = @import("std");
 const gm = @import("graphics_context.zig");
-const vk = @import("third_party/vk.zig");
+const vk = @import("vulkan-zig");
 const v = @import("vertex.zig");
 
 const vert_triangle align(@alignOf(u32)) = @embedFile("triangle_vert").*;

@@ -103,8 +103,12 @@ pub fn stbLib(b: *std.Build, o: *const Options) Extra {
 
 pub fn build(b: *std.Build) !void {
     const o = Options.read(b);
-    const maybe_override_registry = b.option([]const u8, "override-registry", "Override the path to the Vulkan registry used for the examples");
-    const use_zig_shaders = b.option(bool, "zig-shader", "Use Zig shaders instead of GLSL") orelse false;
+    //zig to spirv is not finished IMO -> TODO: remove this option
+    const use_zig_shaders = b.option(
+        bool,
+        "zig-shader",
+        "Use Zig shaders instead of GLSL",
+    ) orelse false;
 
     // try cmdsBuild(b, o);
 
@@ -116,6 +120,9 @@ pub fn build(b: *std.Build) !void {
     const zglfw_lib = zglfw.artifact("glfw");
 
     const stb_lib_tt = stbLib(b, &o);
+    const vk_registry_path = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
+    const vulkan_bind = b.dependency("vulkan_zig", .{ .registry = vk_registry_path }) //
+        .module("vulkan-zig");
 
     const triangle_exe = b.addExecutable(.{
         .name = "main_app",
@@ -126,13 +133,14 @@ pub fn build(b: *std.Build) !void {
             .link_libc = true,
             .imports = &.{
                 .{ .name = "stbtt", .module = stb_lib_tt.module },
+                .{ .name = "vulkan-zig", .module = vulkan_bind },
             },
         }),
-        // .use_llvm = false, //faulty on windows
-        .use_llvm = true,
+        .use_llvm = if (builtin.os.tag == .windows) false else true,
     });
 
-    triangle_exe.root_module.addIncludePath(b.path("src/third_party/"));
+    std.os
+        .triangle_exe.root_module.addIncludePath(b.path("src/third_party/"));
     triangle_exe.root_module.linkLibrary(stb_lib_tt.compile);
 
     b.installArtifact(triangle_exe);
@@ -175,19 +183,6 @@ pub fn build(b: *std.Build) !void {
     //     triangle_exe.root_module.linkSystemLibrary(glfw_name, .{ .needed = true });
     // }
     triangle_exe.root_module.linkLibrary(zglfw_lib);
-
-    _ = maybe_override_registry;
-    // const registry = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
-    // const registry_path: std.Build.LazyPath = if (maybe_override_registry) |override_registry|
-    //     .{ .cwd_relative = override_registry }
-    // else
-    //     registry;
-
-    // const vulkan = b.dependency("vulkan_zig", .{
-    //     .registry = registry_path,
-    // }).module("vulkan-zig");
-
-    // triangle_exe.root_module.addImport("vulkan", vulkan);
 
     if (use_zig_shaders) {
         zig2spirv(b, triangle_exe);

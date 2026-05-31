@@ -1,5 +1,5 @@
 const std = @import("std");
-const vk = @import("third_party/vk.zig");
+const vk = @import("vulkan-zig");
 
 const m = @import("math.zig");
 const sht = @import("shaders/types.zig");

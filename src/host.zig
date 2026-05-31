@@ -2,7 +2,7 @@ const std = @import("std");
 const gm = @import("graphics_context.zig");
 
 const glfw = @import("third_party/glfw.zig");
-const vk = @import("third_party/vk.zig");
+const vk = @import("vulkan-zig");
 const input = @import("input.zig");
 const sdl_wrap = @import("sdl_wrap.zig");
 
@@ -78,7 +78,7 @@ pub const DualHostWin = union(Hosts) {
 };
 
 const glfw_name = "glfw app name form host function";
-const sld_name = "sld app name form host function";
+const sdl_name = "sld app name form host function";
 pub fn glfwHost(init: std.process.Init, passenger: DeeperClient) !void {
     try glfw.init();
     defer glfw.terminate();
@@ -141,7 +141,7 @@ pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
         return OnHostErrors.libVulkanProblem;
     };
     const sdl_ctx = sdl_wrap.getContext();
-    const vkctx_sdl = try gm.GraphicsContext.initUnderSdl(init.gpa, sld_name, sdl_ctx.window.?);
+    const vkctx_sdl = try gm.GraphicsContext.initUnderSdl(init.gpa, sdl_name, sdl_ctx.window.?);
     defer vkctx_sdl.deinit();
 
     std.log.debug("Using device: {s}", .{vkctx_sdl.deviceName()});

@@ -9,10 +9,14 @@ layout(constant_id = 1) const float INTENSITY = 1.0;
 
 struct PushData {
     mat4 model;
-    uint index;
+    uint inst_base;
+    uint tex_base;
     uint _not_used_0;
     uint _not_used_1;
     uint _not_used_2;
+    uint _not_used_3;
+    uint _not_used_4;
+    uint _not_used_5;
 };
 
 struct MatPack {
@@ -30,7 +34,7 @@ struct UboData{
 };
 layout(push_constant) uniform PC { PushData data; } _pc;
 
-layout(set = 0, binding = 0) uniform UBO { UboData data; } _group;
+layout(set = 0, binding = 0) uniform UBO { UboData data; } _ubo;
 
 struct Instance{
     vec2 offset_2d;
@@ -49,7 +53,7 @@ layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_color;
 
 layout(location = 0) out vec2 v_uv;
-layout(location = 1) flat out int v_tex_idx;
+layout(location = 1) out uint v_tex_idx;
 
 float signDecoded(float val);
 vec3 unzip(vec2 zipped);
@@ -58,8 +62,9 @@ vec3 unzip(vec2 zipped);
 // group gives info to precalculate surface
 void main() {
     bool indepentednt = false;
-    Instance m_inst = _storage.per_instance[gl_InstanceIndex];
-    MatPack ems = _group.data.matrices;
+    uint inst_idx = _pc.data.inst_base + gl_InstanceIndex;
+    Instance m_inst = _storage.per_instance[inst_idx];
+    MatPack mvp = _ubo.data.matrices;
     
     // per instance transform matrix
     vec3 front = m_inst.new_usage.xyz;
@@ -70,13 +75,14 @@ void main() {
     mat4 per_inst_t = mat4(vec4(right, 0), vec4(up, 0), vec4(front, 0), vec4(inst_pos,1));
     vec4 before_ems = per_inst_t * vec4(a_pos, 1);
 
-    gl_Position = ems.proj * ems.view * _pc.data.model * before_ems;
+    gl_Position = mvp.proj * mvp.view * _pc.data.model * before_ems;
 
+    v_tex_idx = _pc.data.tex_base + gl_InstanceIndex;
     //to choose right slice per instance
-    int slices_at = 32;
-    float inst_tex_idx_f = m_inst.offset_4d.a;
-    int inst_tex = int(inst_tex_idx_f);
-    v_tex_idx = slices_at + inst_tex;
+    // int slices_at = 32;
+    // float inst_tex_idx_f = m_inst.offset_4d.a;
+    // int inst_tex = int(inst_tex_idx_f);
+    // v_tex_idx = slices_at + inst_tex;
     
     v_uv = a_color.xy;
 }
