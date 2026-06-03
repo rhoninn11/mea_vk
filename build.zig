@@ -43,22 +43,26 @@ const BuildPaths = enum(u8) {
     path_vulkan,
 };
 
-pub fn testInit(b: *std.Build, o: *const Options) *std.Build.Step.Compile {
+pub fn testInit(b: *std.Build, o: *const Options, libs_from_c: *const LibsFromC) *std.Build.Step.Compile {
     return b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/test.zig"),
             .target = o.target,
             .optimize = o.optimize,
+            .imports = &.{
+                .{ .name = "rmath", .module = libs_from_c.raymath_module },
+            },
         }),
         .use_llvm = true,
     });
 }
 
-const Extra = struct {
-    module: *std.Build.Module,
+const LibsFromC = struct {
+    stb_tt_module: *std.Build.Module,
+    raymath_module: *std.Build.Module,
     compile: *std.Build.Step.Compile,
 };
-pub fn stbLib(b: *std.Build, o: *const Options) Extra {
+pub fn libsFromC(b: *std.Build, o: *const Options) LibsFromC {
     // need to be compile as library because there are
     // some errors in cTranslate for lib implementation
     const stb_truetype_build = b.addLibrary(.{
@@ -77,10 +81,12 @@ pub fn stbLib(b: *std.Build, o: *const Options) Extra {
     });
 
     const inclued = b.path("src/third_party");
-    const lib_header = b.path("src/third_party/stb_truetype.h");
+
+    const tt_header = b.path("src/third_party/stb_truetype.h");
+    const raymath_header = b.path("src/third_party/raymath.h");
+
     const main = b.path("src/third_party/main.c");
 
-    stb_truetype_build.root_module.addIncludePath(inclued);
     stb_truetype_build.root_module.addCSourceFile(.{
         .language = .c,
         .file = main,
@@ -88,15 +94,22 @@ pub fn stbLib(b: *std.Build, o: *const Options) Extra {
             "-std=c99", "-Wall", //
         },
     });
+    stb_truetype_build.root_module.addIncludePath(inclued);
     // stb_truetype_build.root_module.link_libc
 
-    const translate = b.addTranslateC(.{
+    const tt_translate = b.addTranslateC(.{
         .target = o.target,
         .optimize = o.optimize,
-        .root_source_file = lib_header,
+        .root_source_file = tt_header,
+    });
+    const rm_translate = b.addTranslateC(.{
+        .target = o.target,
+        .optimize = o.optimize,
+        .root_source_file = raymath_header,
     });
     return .{
-        .module = translate.createModule(),
+        .stb_tt_module = tt_translate.createModule(),
+        .raymath_module = rm_translate.createModule(),
         .compile = stb_truetype_build,
     };
 }
@@ -119,7 +132,8 @@ pub fn build(b: *std.Build) !void {
     });
     const zglfw_lib = zglfw.artifact("glfw");
 
-    const stb_lib_tt = stbLib(b, &o);
+    const libs_from_c = libsFromC(b, &o);
+
     const vk_registry_path = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
     const vulkan_bind = b.dependency("vulkan_zig", .{ .registry = vk_registry_path }) //
         .module("vulkan-zig");
@@ -132,7 +146,8 @@ pub fn build(b: *std.Build) !void {
             .optimize = o.optimize,
             .link_libc = true,
             .imports = &.{
-                .{ .name = "stbtt", .module = stb_lib_tt.module },
+                .{ .name = "stbtt", .module = libs_from_c.stb_tt_module },
+                .{ .name = "rmath", .module = libs_from_c.raymath_module },
                 .{ .name = "vulkan-zig", .module = vulkan_bind },
             },
         }),
@@ -140,11 +155,11 @@ pub fn build(b: *std.Build) !void {
     });
 
     triangle_exe.root_module.addIncludePath(b.path("src/third_party/"));
-    triangle_exe.root_module.linkLibrary(stb_lib_tt.compile);
+    triangle_exe.root_module.linkLibrary(libs_from_c.compile);
 
     b.installArtifact(triangle_exe);
     b.installArtifact(zglfw_lib);
-    b.installArtifact(stb_lib_tt.compile);
+    b.installArtifact(libs_from_c.compile);
 
     const sdl3_lib = b.dependency("sdl", .{
         .target = o.target,
@@ -233,7 +248,7 @@ pub fn build(b: *std.Build) !void {
     const triangle_run_step = b.step("main", "Run the triangle example");
     triangle_run_step.dependOn(&triangle_run_cmd.step);
 
-    const tests = testInit(b, &o);
+    const tests = testInit(b, &o, &libs_from_c);
     const test_run_cmd = b.addRunArtifact(tests);
     test_run_cmd.has_side_effects = true;
     const test_step = b.step("test", "Run unit tests");

@@ -53,7 +53,7 @@ test "simple zip search" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
 
-    const test_loc: []const u8 = "fs/test/zipped";
+    const test_loc0: []const u8 = "fs/test/zipped";
     // TODO: spawn test dir
     const exts: []const []const u8 = &.{ ".png", ".xd", ".i", ".serdes" };
     const names: []const []const u8 = &.{ "serdelek", "sandalsy", "i", "lasy", "albionu" };
@@ -62,14 +62,25 @@ test "simple zip search" {
         for (exts) |ext| {
             //TODO: creating sets in test loc
             const str = try std.fmt.bufPrint(stack[0..], "{s}/{s}{s}", .{
-                test_loc, name, ext, //
+                test_loc0, name, ext, //
             });
-            std.debug.print("creating {s}\n", .{str});
+            std.debug.print("{s: <32} <- to create \n", .{str});
         }
     }
 
-    var well = try zipSearch(io, gpa, test_loc, exts);
-    defer well.deinit(gpa);
+    // var well = try zipSearch(io, gpa, test_loc0, exts);
+    // defer well.deinit(gpa);
+
+    var zig_src_files = try zipSearch(io, gpa, "src", &.{".zig"});
+    defer zig_src_files.deinit(gpa);
+    try std.testing.expect(zig_src_files.file_sets.len > 7);
+
+    const test_loc1: []const u8 = "src/shaders";
+    const exts1: []const []const u8 = &.{ ".vert", ".frag" };
+
+    var shader_files = try zipSearch(io, gpa, test_loc1, exts1);
+    defer shader_files.deinit(gpa);
+    try std.testing.expect(zig_src_files.file_sets.len > 1);
 }
 
 pub fn stdoutWriter(io: std.Io, buffer: []u8) *std.Io.Writer {

@@ -388,7 +388,7 @@ fn theDeepest(access: EasyAcces) !void {
             &draw_instanced_attempt,
             &frame_state,
         );
-        try prefils.perFrameUniformFill(
+        try prefils.unifomRefil(
             uniform_dset,
             @intCast(img_idx),
             timeline1.total_s,

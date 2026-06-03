@@ -199,7 +199,7 @@ pub const DbgMonitor = struct {
         self: *DbgMonitor,
         io: std.Io,
         new_val: f32,
-        layer_num: u16,
+        cell_num: u16,
     ) !void {
         self.val = new_val;
 
@@ -214,9 +214,10 @@ pub const DbgMonitor = struct {
             try iowriter.print("\x1b[2K", .{}); // wyczyść linię
             try iowriter.print("\x1b[1A", .{}); // w górę
         };
-        const base_linecount = 3;
+        const base_linecount = 4;
         try iowriter.print("---------------\n", .{});
-        try iowriter.print("--- {s} equals \x1b[31m{d}\x1b[0m \x1b[32m{d}\x1b[0m\n", .{ self.name, self.val, layer_num });
+        try iowriter.print("--- {s: <12}: \x1b[31m{d}\x1b[0m\n", .{ self.name, self.val });
+        try iowriter.print("--- {s: <12}: \x1b[32m{d}\x1b[0m\n", .{ "cell_num", cell_num });
         const raport_linecount = try sdl.getEvCounter().print("--- ", iowriter);
         try iowriter.print("---------------\n", .{});
         try iowriter.flush();

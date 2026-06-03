@@ -1,11 +1,12 @@
 const std = @import("std");
+const rmath = @import("rmath");
 
 pub const vec2 = @Vector(2, f32);
 pub const vec3 = @Vector(3, f32);
 pub const vec4 = @Vector(4, f32);
 
 // glsl mat4 alignment is 16B
-test "allignment hurtles" {
+test "allignment explorer" {
     const v4a = @alignOf(vec4);
     const v3a = @alignOf(vec3);
 
@@ -15,6 +16,9 @@ test "allignment hurtles" {
 
     const v4b = @alignOf([7]f32);
     try std.testing.expect(v4b == 4);
+
+    const raymat_align = @alignOf(rmath.struct_Matrix);
+    try std.testing.expectEqual(glsl_alignment, raymat_align);
 }
 
 pub const mat4 = [4]vec4;
@@ -110,11 +114,17 @@ pub const vec3u = extern union {
 const mat4u = extern union {
     mat: mat4,
     arr: [16]f32,
+    rmat: rmath.struct_Matrix,
 };
 const mat3u = extern union {
     mat: mat3,
-    arr: [9]f32,
+    arr: [12]f32,
 };
+
+test "do mat3 take 12b of space?" {
+    try std.testing.expectEqual(12 * 4, @sizeOf(mat3u));
+}
+
 pub fn matXvec3(m: mat3, v: [3]f32) [3]f32 {
     var out: vec3 = m[0] * splat3d(v[0]);
     for (1..3) |i| out += m[i] * splat3d(v[i]);

@@ -7,7 +7,7 @@ const addons = @import("addons.zig");
 const dset = @import("dset.zig");
 const proto = @import("proto.zig");
 
-pub fn perFrameUniformFill(
+pub fn unifomRefil(
     uniform_dset: dset.DescriptorPrep,
     frame_idx: u8,
     total_s: f32,
