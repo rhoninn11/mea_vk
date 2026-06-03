@@ -11,13 +11,14 @@ struct PushData {
     mat4 model;
     uint inst_base;
     uint tex_base;
-    uint _not_used_0;
+    uint mode;
     uint _not_used_1;
     uint _not_used_2;
     uint _not_used_3;
     uint _not_used_4;
     uint _not_used_5;
 };
+layout(push_constant) uniform PC { PushData data; } _pc;
 
 struct MatPack {
     mat4 model;
@@ -32,9 +33,8 @@ struct UboData{
     vec4 not_used_4d_2;
     MatPack matrices;
 };
-layout(push_constant) uniform PC { PushData data; } _pc;
-
 layout(set = 0, binding = 0) uniform UBO { UboData data; } _ubo;
+
 
 struct Instance{
     vec2 offset_2d;

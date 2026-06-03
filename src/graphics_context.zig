@@ -493,15 +493,20 @@ pub const GraphicsContext = struct {
     }
 };
 
+// up to 128 bytes of cheep control data
 pub const PushConstant = struct {
     pub const PCBlob = struct {
         model: m.mat4,
         inst_base: u32 = 0,
         tex_base: u32 = 0,
-        _not_used: [6]u32 = .{0} ** 6,
+        mode: u32 = 0,
+        _not_used: [13]u32 = .{0} ** 13,
     };
 
     pub fn Ranges() []const vk.PushConstantRange {
+        std.debug.print("blob size is {}\n", .{@sizeOf(PCBlob)});
+        std.debug.assert(@sizeOf(PCBlob) == 128);
+
         return &.{vk.PushConstantRange{
             .offset = 0,
             .size = @sizeOf(PCBlob),

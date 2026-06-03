@@ -144,6 +144,7 @@ pub fn recordFrame(
                 const layerpush = gm.PushConstant.PCBlob{
                     .model = m.mat_translate(.{ 0, 1, 0 }).mat,
                     .inst_base = state.layer_instance_offset,
+                    .mode = 1,
                 };
                 cmd_helper.push(draw.pipeline_layout, &layerpush);
                 gc.dev.cmdDraw(

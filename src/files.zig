@@ -48,6 +48,29 @@ test "simple file read" {
 
     try std.testing.expect(data.len > 10);
 }
+test "simple zip search" {
+    var stack: [1024]u8 = undefined;
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+
+    const test_loc: []const u8 = "fs/test/zipped";
+    // TODO: spawn test dir
+    const exts: []const []const u8 = &.{ ".png", ".xd", ".i", ".serdes" };
+    const names: []const []const u8 = &.{ "serdelek", "sandalsy", "i", "lasy", "albionu" };
+
+    for (names) |name| {
+        for (exts) |ext| {
+            //TODO: creating sets in test loc
+            const str = try std.fmt.bufPrint(stack[0..], "{s}/{s}{s}", .{
+                test_loc, name, ext, //
+            });
+            std.debug.print("creating {s}\n", .{str});
+        }
+    }
+
+    var well = try zipSearch(io, gpa, test_loc, exts);
+    defer well.deinit(gpa);
+}
 
 pub fn stdoutWriter(io: std.Io, buffer: []u8) *std.Io.Writer {
     const stderr = std.Io.File.stderr();

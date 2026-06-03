@@ -1,4 +1,5 @@
 #version 450
+#extension GL_EXT_nonuniform_qualifier : require
 
 #define TAU 6.2831853071
 #define PI 3.1415926538
@@ -11,13 +12,14 @@ struct PushData {
     mat4 model;
     uint inst_base;
     uint tex_base;
-    uint _not_used_0;
+    uint mode;
     uint _not_used_1;
     uint _not_used_2;
     uint _not_used_3;
     uint _not_used_4;
     uint _not_used_5;
 };
+layout(push_constant) uniform PC { PushData data; } _pc;
 
 struct MatPack {
     mat4 model;
@@ -32,7 +34,6 @@ struct GroupData{
     vec4 not_used_4d_2;
     MatPack matrices;
 };
-layout(push_constant) uniform PC { PushData data; } _pc;
 
 // whole data has is 16 x f32
 layout(set = 0, binding = 0) uniform GroupDataUbo{
@@ -57,7 +58,6 @@ layout(location = 1) in vec3 a_color;
 layout(location = 0) out vec2 v_uv;
 layout(location = 1) out float v_progress;
 layout(location = 2) out vec2 v_depth_shading;
-layout(location = 3) flat out int v_tex_idx;
 layout(location = 4) out vec2 v_color_rest;
 
 
@@ -106,5 +106,4 @@ void main() {
     v_progress = a_color.r + m_inst.new_usage.x;
 
     v_depth_shading = m_inst.depth_ctrl.xy;
-    v_tex_idx = 0;
 }

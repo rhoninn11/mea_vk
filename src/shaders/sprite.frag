@@ -3,15 +3,20 @@
 
 #define TAU 6.2831853071
 
+struct PushData {
+    mat4 model;
+    uint inst_base;
+    uint tex_base;
+    uint mode;
+    uint _not_used_1;
+    uint _not_used_2;
+    uint _not_used_3;
+    uint _not_used_4;
+    uint _not_used_5;
+};
+layout(push_constant) uniform PC { PushData data; } _pc;
 
 // whole data has is 16 x f32
-layout(set = 0, binding = 0) uniform UniformData{
-    vec2 offset_2d; 
-    vec2 scale_2d;
-    vec4 frag_data;
-    vec4 not_used_4d_1;
-    vec4 not_used_4d_2;
-} b_ubo;
 
 layout(set = 2, binding = 0) uniform sampler2D tex_bindless[];
 
