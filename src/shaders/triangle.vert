@@ -7,6 +7,18 @@
 layout(constant_id = 0) const int MAX_LIGHTS = 16;
 layout(constant_id = 1) const float INTENSITY = 1.0;
 
+struct PushData {
+    mat4 model;
+    uint inst_base;
+    uint tex_base;
+    uint _not_used_0;
+    uint _not_used_1;
+    uint _not_used_2;
+    uint _not_used_3;
+    uint _not_used_4;
+    uint _not_used_5;
+};
+
 struct MatPack {
     mat4 model;
     mat4 view;
@@ -20,7 +32,7 @@ struct GroupData{
     vec4 not_used_4d_2;
     MatPack matrices;
 };
-
+layout(push_constant) uniform PC { PushData data; } _pc;
 
 // whole data has is 16 x f32
 layout(set = 0, binding = 0) uniform GroupDataUbo{
@@ -86,7 +98,7 @@ void main() {
     vec3 base = pos_im + pose_on_surface + vec3(0, y_anim, 0);
 
     vec4 before_transform = vec4(base, 1.0);
-    gl_Position = ems.proj * ems.view * ems.model * before_transform;
+    gl_Position = ems.proj * ems.view * _pc.data.model * before_transform;
     // gl_Position = before_transform; 
     v_uv.rg = a_color.rg;
     v_color_rest = vec2(spread_offset, y_anim);

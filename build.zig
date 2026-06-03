@@ -136,11 +136,10 @@ pub fn build(b: *std.Build) !void {
                 .{ .name = "vulkan-zig", .module = vulkan_bind },
             },
         }),
-        .use_llvm = if (builtin.os.tag == .windows) false else true,
+        .use_llvm = true,
     });
 
-    std.os
-        .triangle_exe.root_module.addIncludePath(b.path("src/third_party/"));
+    triangle_exe.root_module.addIncludePath(b.path("src/third_party/"));
     triangle_exe.root_module.linkLibrary(stb_lib_tt.compile);
 
     b.installArtifact(triangle_exe);

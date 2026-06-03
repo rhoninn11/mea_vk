@@ -78,16 +78,10 @@ pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spac
         for (0..instance_num) |i| {
             const i_f: f32 = @floatFromInt(i);
 
-            // const y_d = (middle_alt[m.Z] - y_f) / middle_alt[m.Z];
             const g_idx = addons.GridOps.gridIdx(&grid, i);
-            // if (g_idx[m.Z] > 0) {
-            //     to_show = false;
-            // }
 
             const delt = ((middle - g_idx) / m.splat3d(min_dim)) * m.splat3d(6 * wave_scale);
-            // if (to_show) {
-            //     std.debug.print("{} {} {} {}\n", .{ i_f, g_idx, middle, delt });
-            // }
+
             const dist = std.math.sqrt(delt[m.X] * delt[m.X] + delt[m.Z] * delt[m.Z]);
 
             var fresh_one: sht.PerInstance = undefined;

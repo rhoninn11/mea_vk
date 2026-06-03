@@ -63,6 +63,8 @@ var frame_state: frame.FrameState = .{
     .alt_proj = false,
     .model_idx = 0,
     .ok_slices_num = OK_SWEEP,
+    .layer_instance_offset = @intCast(sht.GridSize.g64.total + sht.GridSize.g64.total / 2),
+    .layer_instance_num = 0,
 };
 
 pub fn gpCommandQueue(gc: *const gm.GraphicsContext) !vk.CommandPool {
@@ -87,10 +89,10 @@ fn theDeepest(access: EasyAcces) !void {
     // const grid = sht.GridSize.g64;
     const grid = sht.GridSize.g64;
     const deeper_allocator = std.heap.page_allocator;
-    var img = try proto.serdesLoadBackup(access.io, deeper_allocator);
-    defer img.deinit(deeper_allocator);
+    var duald_img = try proto.serdesLoadBackup(access.io, deeper_allocator);
+    defer duald_img.deinit(deeper_allocator);
 
-    var glass = proto.LookingGlass.init(&img, grid);
+    var glass = proto.LookingGlass.init(&duald_img, grid);
     const ok_understanding = oklab.OkUnderstanding{ .grid = grid };
 
     var swapchain_len: u8 = undefined;
@@ -340,10 +342,15 @@ fn theDeepest(access: EasyAcces) !void {
         glyphphi += td1 * 0.13;
         pamperek.control(&input.plr_input, td);
 
-        try dbgmonit.update(access.io, pamperek.p.phi);
+        try dbgmonit.update(access.io, pamperek.p.phi, frame_state.layer_instance_num);
 
         if (glass.update(&input.glass_input)) {
             try glass.updateStorage(storage_dset, true);
+            const lnum = try glass.updateLayerStorage(
+                storage_dset,
+                frame_state.layer_instance_offset,
+            );
+            frame_state.layer_instance_num = lnum;
         }
         if (input.shader_reset_trigger.fired()) {
             try glass.updateStorage(storage_dset, false);

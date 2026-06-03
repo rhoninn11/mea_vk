@@ -496,8 +496,8 @@ pub const GraphicsContext = struct {
 pub const PushConstant = struct {
     pub const PCBlob = struct {
         model: m.mat4,
-        inst_base: u32,
-        tex_base: u32,
+        inst_base: u32 = 0,
+        tex_base: u32 = 0,
         _not_used: [6]u32 = .{0} ** 6,
     };
 

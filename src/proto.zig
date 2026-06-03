@@ -104,11 +104,61 @@ pub fn findSedes(io: std.Io, here: []const u8) ![]const u8 {
     }
     return error.NoSerdes;
 }
-pub fn serdesLoadBackup(io: std.Io, gpa: std.mem.Allocator) !meagen.Image {
-    return serdesLoad(io, gpa) catch |err| {
+
+pub const DualImageData = struct {
+    raw_data: meagen.Image,
+    layer_data: meagen.Image,
+
+    pub fn initDummy(
+        gpa: std.mem.Allocator,
+        raw: meagen.Image,
+    ) !DualImageData {
+        const raw_info = raw.info.?;
+        var layer_img = meagen.Image{
+            .info = raw_info,
+        };
+
+        layer_img.info.?.img_type = .MONO;
+        const fresh_data = try gpa.alloc(u8, raw_info.width * raw_info.height);
+        @memset(fresh_data, 0);
+        const y_dim = raw_info.height;
+        const x_dim = raw_info.width;
+
+        var up: u32 = 0;
+        if (y_dim % x_dim != 0) up = 1;
+        const slope: u32 = y_dim / x_dim + up;
+
+        std.debug.print("+++++ w {d}, h {d}, slope is {d}\n", .{ raw_info.width, raw_info.height, slope });
+        for (0..y_dim) |yy| {
+            // std.debug.print("+++ debug {d}\n", .{yy});
+            const idx = yy * x_dim + (yy / slope);
+            fresh_data[idx] = 1;
+        }
+        layer_img.pixels = fresh_data;
+
+        return .{
+            .raw_data = raw,
+            .layer_data = layer_img,
+        };
+    }
+
+    pub fn deinit(self: *DualImageData, gpa: std.mem.Allocator) void {
+        self.raw_data.deinit(gpa);
+        self.layer_data.deinit(gpa);
+    }
+};
+
+pub fn serdesLoadBackup(io: std.Io, gpa: std.mem.Allocator) !DualImageData {
+    var raw_img = serdesLoad(io, gpa) catch |err| {
         std.debug.print("!!! synth data | {s}\n", .{@errorName(err)});
-        return xyTrygHdr(gpa, shu.xyGrid(256, 880));
+        var raw_synth = try xyTrygHdr(gpa, shu.xyGrid(256, 880));
+        errdefer raw_synth.deinit(gpa);
+
+        return DualImageData.initDummy(gpa, raw_synth);
     };
+    errdefer raw_img.deinit(gpa);
+
+    return DualImageData.initDummy(gpa, raw_img);
 }
 
 pub fn protoImgRead(io: std.Io, gpa: std.mem.Allocator, filepath: []const u8) !meagen.Image {
@@ -157,13 +207,16 @@ pub const LookingGlass = struct {
     pos: @Vector(2, i32),
     size: sht.GridSize,
     img: *meagen.Image,
+    layer: *meagen.Image,
 
-    pub fn init(from: *meagen.Image, gsz: sht.GridSize) LookingGlass {
-        std.debug.assert(from.info.?.img_type == meagen.ImgType.DUO);
+    pub fn init(from: *DualImageData, gsz: sht.GridSize) LookingGlass {
+        std.debug.assert(from.raw_data.info.?.img_type == meagen.ImgType.DUO);
+        std.debug.assert(from.layer_data.info.?.img_type == meagen.ImgType.MONO);
         return LookingGlass{
             .pos = .{ 0, 0 },
             .size = gsz,
-            .img = from,
+            .img = &from.raw_data,
+            .layer = &from.layer_data,
         };
     }
     pub fn update(self: *LookingGlass, axes: *const input.DulaHoldsAxis) bool {
@@ -200,6 +253,13 @@ pub const LookingGlass = struct {
 
         return pixvalXY(self, x, y);
     }
+    pub fn pixvalLayer(self: *LookingGlass, i: usize) u8 {
+        const x = @mod(i, @as(usize, @intCast(self.size.w)));
+        const y = i / @as(usize, @intCast(self.size.w));
+        std.debug.assert(y < self.size.h);
+
+        return pixvalXYLayer(self, x, y);
+    }
 
     pub fn pixvalXY(self: *LookingGlass, x: usize, y: usize) u16 {
         const img_x = @as(usize, @intCast(self.pos[0])) + x;
@@ -216,21 +276,31 @@ pub const LookingGlass = struct {
         return hdr_val.hdr;
     }
 
+    pub fn pixvalXYLayer(self: *LookingGlass, x: usize, y: usize) u8 {
+        const img_x = @as(usize, @intCast(self.pos[0])) + x;
+        const img_y = @as(usize, @intCast(self.pos[1])) + y;
+
+        const _info = self.layer.info.?;
+
+        const idx = _info.width * img_y + img_x;
+
+        return self.layer.pixels[idx];
+    }
+
     const U16max: f32 = 1 << 16;
+    const TRIM_FACTOR = 0.4;
+    const INST_LIM = 8096;
     pub fn updateStorage(self: *LookingGlass, storage_dset: dset.DescriptorPrep, enabled: bool) !void {
         const total = self.size.total;
-        const lim_num = 8096;
-        std.debug.assert(total <= lim_num);
-        const stack_size = lim_num * @sizeOf(sht.PerInstance);
+
+        std.debug.assert(total <= INST_LIM);
+        const stack_size = INST_LIM * @sizeOf(sht.PerInstance);
         var stack_mem: [stack_size]u8 = undefined;
 
         var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
         const local_a = provider.allocator();
 
         var scratchpad = try local_a.alloc(sht.PerInstance, total);
-        var max_val: f32 = 1000000;
-        var min_val: f32 = -1000000;
-        const trim_factor = 0.4;
         for (storage_dset.buff_arr.items) |possible_buffer| {
             const storage = possible_buffer.?;
             const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
@@ -240,18 +310,60 @@ pub const LookingGlass = struct {
                 const h = @as(f32, @floatFromInt(self.pixval(i)));
 
                 const level = h / U16max;
-                const tresholded = @max(0, ((level - trim_factor) / (1 - trim_factor)));
-                if (h > max_val) max_val = h;
-                if (h < min_val) min_val = h;
+                const tresholded_h = @max(0, ((level - TRIM_FACTOR) / (1 - TRIM_FACTOR)));
                 prev_one.depth_ctrl[0] = if (enabled) 1 else 0;
-                prev_one.depth_ctrl[1] = tresholded;
-
-                // prev_one.depth_ctrl[1] = 0;
+                prev_one.depth_ctrl[1] = tresholded_h;
 
                 scratchpad[i] = prev_one;
             }
             @memcpy(mapping, scratchpad);
         }
-        // std.debug.print("+++ min: {} max: {}\n", .{ min_val, max_val });
+    }
+
+    pub fn updateLayerStorage(
+        self: *LookingGlass,
+        storage_dset: dset.DescriptorPrep,
+        first_layer_instance: u32,
+    ) !u16 {
+        const total_cells = self.size.total;
+        const layer_inst_total = self.size.total / 2;
+
+        const stack_size = INST_LIM * @sizeOf(sht.PerInstance);
+        var stack_mem: [stack_size]u8 = undefined;
+
+        var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
+        const local_a = provider.allocator();
+
+        const source_cells = try local_a.alloc(sht.PerInstance, total_cells);
+        const scratchpad = try local_a.alloc(sht.PerInstance, layer_inst_total);
+        var active_layer_instances: u16 = 0;
+        for (storage_dset.buff_arr.items) |possible_buffer| {
+            const storage = possible_buffer.?;
+            const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
+            @memcpy(source_cells, mapping);
+            var presence_count: u16 = 0;
+
+            for (0..total_cells) |i| {
+                var prev_one: sht.PerInstance = source_cells[i];
+                const h = @as(f32, @floatFromInt(self.pixval(i)));
+
+                const level = h / U16max;
+                const tresholded_h = @max(0, ((level - TRIM_FACTOR) / (1 - TRIM_FACTOR)));
+
+                const layer_val = self.pixvalLayer(i);
+                if (layer_val == 0) continue;
+
+                // prev_one.depth_ctrl[0] = if (enabled) 1 else 0;
+                prev_one.depth_ctrl[1] = tresholded_h;
+
+                scratchpad[presence_count] = prev_one;
+                presence_count += 1;
+            }
+            if (presence_count > 0) {
+                @memcpy(mapping + first_layer_instance, scratchpad[0..presence_count]);
+                active_layer_instances = presence_count;
+            }
+        }
+        return active_layer_instances;
     }
 };
