@@ -33,10 +33,10 @@ pub const DulaHoldsAxis = union(SysLayer) {
     //     }
     // }
 
-    pub fn initG(hmm: []const GAxis.BasedOn) !DulaHoldsAxis {
+    pub fn initG(hmm: []const []const GAxis.BasedOn) !DulaHoldsAxis {
         return .{ .layerG = try GAxis.init(hmm) };
     }
-    pub fn initS(hmm: []const SAxis.BasedOn) !DulaHoldsAxis {
+    pub fn initS(hmm: []const []const SAxis.BasedOn) !DulaHoldsAxis {
         return .{ .layerS = try SAxis.init(hmm) };
     }
     pub fn reciveInput(self: *DulaHoldsAxis, duka: DulaKeyAction) void {
@@ -78,13 +78,17 @@ pub var slide_r: KeyAction = .{ .key = glfw.KeyB, .action = glfw.KeyDown };
 
 pub fn initG() !void {
     glass_input = try DulaHoldsAxis.initG(&.{
-        glfw.KeyJ, glfw.KeyK, //
-        glfw.KeyH, glfw.KeyL,
+        &.{
+            glfw.KeyJ, glfw.KeyK, //
+            glfw.KeyH, glfw.KeyL,
+        },
     });
     plr_input = try DulaHoldsAxis.initG(&.{
-        glfw.KeyA, glfw.KeyD, //
-        glfw.KeyS, glfw.KeyW,
-        glfw.KeyF, glfw.KeyR,
+        &.{
+            glfw.KeyA, glfw.KeyD, //
+            glfw.KeyS, glfw.KeyW,
+            glfw.KeyF, glfw.KeyR,
+        },
     });
 }
 
@@ -133,13 +137,22 @@ const Tied = struct {
 
 pub fn initS() !void {
     glass_input = try DulaHoldsAxis.initS(&.{
-        sdl.keycode.Keycode.j, sdl.keycode.Keycode.k, //
-        sdl.keycode.Keycode.h, sdl.keycode.Keycode.l,
+        &.{
+            sdl.keycode.Keycode.j, sdl.keycode.Keycode.k, //
+            sdl.keycode.Keycode.h, sdl.keycode.Keycode.l,
+        },
     });
     plr_input = try DulaHoldsAxis.initS(&.{
-        sdl.keycode.Keycode.a, sdl.keycode.Keycode.d, //
-        sdl.keycode.Keycode.s, sdl.keycode.Keycode.w,
-        sdl.keycode.Keycode.f, sdl.keycode.Keycode.r,
+        &.{
+            sdl.keycode.Keycode.a, sdl.keycode.Keycode.d, //
+            sdl.keycode.Keycode.s, sdl.keycode.Keycode.w,
+            sdl.keycode.Keycode.f, sdl.keycode.Keycode.r,
+        },
+        &.{
+            sdl.keycode.Keycode.left, sdl.keycode.Keycode.right, //
+            sdl.keycode.Keycode.down, sdl.keycode.Keycode.up,
+            sdl.keycode.Keycode.f,    sdl.keycode.Keycode.r,
+        },
     });
 }
 

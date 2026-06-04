@@ -58,38 +58,56 @@ pub fn HostMotion(keytype: type) type {
             holds: [max_holds]Hold = undefined,
             keys: [max_holds]keytype = undefined,
             axes: [max_holds / 2]Axis = undefined,
-            len: u8,
+            keyn: u8,
+            setn: u8,
 
-            pub fn init(keys: []const keytype) !HoldsAxis {
-                const len = keys.len;
-                std.debug.assert(@mod(len, 2) == 0);
-                if (len > max_holds) {
+            pub fn init(sets: []const []const keytype) !HoldsAxis {
+                const set_num = sets.len;
+                std.debug.assert(set_num > 0);
+
+                const key_num = sets[0].len;
+                std.debug.assert(@mod(key_num, 2) == 0);
+                for (sets) |set| std.debug.assert(set.len == key_num);
+
+                if (set_num * key_num > max_holds) {
                     return MoveErrs.HoldSizeExceded;
                 }
 
-                var act = HoldsAxis{ .len = @intCast(len) };
-                for (keys, 0..) |k, i| {
-                    act.holds[i] = Hold{};
-                    act.keys[i] = k;
+                var self = HoldsAxis{
+                    .keyn = @intCast(key_num),
+                    .setn = @intCast(set_num),
+                };
+                for (0.., sets) |ss, keys| {
+                    for (0.., keys) |i, key| {
+                        self.holds[i] = Hold{};
+                        const j = ss * self.keyn + i;
+                        self.keys[j] = key;
+
+                        std.debug.print("hold({d}) binded with key({d})\n", .{ i, j });
+                    }
                 }
 
-                for (0..len / 2) |i| {
-                    act.axes[i] = .none;
+                for (0..(key_num / 2)) |i| {
+                    self.axes[i] = .none;
                 }
 
-                return act;
+                return self;
             }
 
             pub fn reciveInput(self: *HoldsAxis, ka: *const KeyAction) void {
-                for (0..self.len) |i| {
-                    if (self.keys[i] == ka.key) {
-                        self.holds[i].hold(ka, self.keys[i]);
+                axis: for (0..self.keyn) |ii| {
+                    for (0..self.setn) |s| {
+                        const j = s * self.keyn + ii;
+                        if (self.keys[j] == ka.key) {
+                            self.holds[ii].hold(ka, self.keys[j]);
+                            continue :axis; //hold updated by one set so go to next
+                        }
                     }
                 }
             }
 
             pub fn update(self: *HoldsAxis) void {
-                for (0..(self.len / 2)) |i| {
+                for (0..(self.keyn / 2)) |i| {
                     const neq = self.holds[i * 2].active;
                     const pos = self.holds[i * 2 + 1].active;
                     if (neq) self.axes[i] = .negative;

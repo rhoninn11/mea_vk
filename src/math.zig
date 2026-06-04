@@ -17,8 +17,11 @@ test "allignment explorer" {
     const v4b = @alignOf([7]f32);
     try std.testing.expect(v4b == 4);
 
-    const raymat_align = @alignOf(rmath.struct_Matrix);
-    try std.testing.expectEqual(glsl_alignment, raymat_align);
+    const raymat: rmath.struct_Matrix = rmath.MatrixIdentity();
+    try std.testing.expectEqual(glsl_alignment / 4, @alignOf(@TypeOf(raymat)));
+
+    const uni: mat4u = .{ .rmat = raymat };
+    try std.testing.expectEqual(glsl_alignment, @alignOf(@TypeOf(uni)));
 }
 
 pub const mat4 = [4]vec4;

@@ -205,25 +205,25 @@ pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator) !meagen.Image {
 
 pub const LookingGlass = struct {
     pos: @Vector(2, i32),
-    size: sht.GridSize,
-    img: *meagen.Image,
-    layer: *meagen.Image,
+    g_sz: sht.GridSize,
+    scan_raw: *meagen.Image,
+    scan_lyr: *meagen.Image,
 
-    pub fn init(from: *DualImageData, gsz: sht.GridSize) LookingGlass {
+    pub fn init(from: *DualImageData, g_sz: sht.GridSize) LookingGlass {
         std.debug.assert(from.raw_data.info.?.img_type == meagen.ImgType.DUO);
         std.debug.assert(from.layer_data.info.?.img_type == meagen.ImgType.MONO);
         return LookingGlass{
             .pos = .{ 0, 0 },
-            .size = gsz,
-            .img = &from.raw_data,
-            .layer = &from.layer_data,
+            .g_sz = g_sz,
+            .scan_raw = &from.raw_data,
+            .scan_lyr = &from.layer_data,
         };
     }
     pub fn update(self: *LookingGlass, axes: *const input.DulaHoldsAxis) bool {
-        const src_size = self.img.info.?;
+        const src_size = self.scan_raw.info.?;
 
-        const max_x = @as(i32, @intCast(src_size.width)) - @as(i32, @intCast(self.size.w)) - 1;
-        const max_y = @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.size.h)) - 1;
+        const max_x = @as(i32, @intCast(src_size.width)) - @as(i32, @intCast(self.g_sz.w)) - 1;
+        const max_y = @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.g_sz.h)) - 1;
 
         const x_axis = axes.value()[1];
         self.pos[0] = switch (x_axis) {
@@ -247,51 +247,53 @@ pub const LookingGlass = struct {
     }
 
     pub fn pixval(self: *LookingGlass, i: usize) u16 {
-        const x = @mod(i, @as(usize, @intCast(self.size.w)));
-        const y = i / @as(usize, @intCast(self.size.w));
-        std.debug.assert(y < self.size.h);
+        const x = @mod(i, @as(usize, @intCast(self.g_sz.w)));
+        const y = i / @as(usize, @intCast(self.g_sz.w));
+        std.debug.assert(y < self.g_sz.h);
 
         return pixvalXY(self, x, y);
-    }
-    pub fn pixvalLayer(self: *LookingGlass, i: usize) u8 {
-        const x = @mod(i, @as(usize, @intCast(self.size.w)));
-        const y = i / @as(usize, @intCast(self.size.w));
-        std.debug.assert(y < self.size.h);
-
-        return pixvalXYLayer(self, x, y);
     }
 
     pub fn pixvalXY(self: *LookingGlass, x: usize, y: usize) u16 {
         const img_x = @as(usize, @intCast(self.pos[0])) + x;
         const img_y = @as(usize, @intCast(self.pos[1])) + y;
 
-        const _info = self.img.info.?;
+        const _info = self.scan_raw.info.?;
+        const w = _info.width;
 
-        const idx = _info.width * img_y + img_x;
+        const idx = w * img_y + img_x;
 
         var hdr_val: uHdr = undefined;
-        hdr_val.byte[0] = self.img.pixels[idx * 2];
-        hdr_val.byte[1] = self.img.pixels[idx * 2 + 1];
+        hdr_val.byte[0] = self.scan_raw.pixels[idx * 2];
+        hdr_val.byte[1] = self.scan_raw.pixels[idx * 2 + 1];
 
         return hdr_val.hdr;
+    }
+
+    pub fn pixvalLayer(self: *LookingGlass, i: usize) u8 {
+        const x = @mod(i, @as(usize, @intCast(self.g_sz.w)));
+        const y = i / @as(usize, @intCast(self.g_sz.w));
+        std.debug.assert(y < self.g_sz.h);
+
+        return pixvalXYLayer(self, x, y);
     }
 
     pub fn pixvalXYLayer(self: *LookingGlass, x: usize, y: usize) u8 {
         const img_x = @as(usize, @intCast(self.pos[0])) + x;
         const img_y = @as(usize, @intCast(self.pos[1])) + y;
 
-        const _info = self.layer.info.?;
+        const _info = self.scan_lyr.info.?;
 
         const idx = _info.width * img_y + img_x;
 
-        return self.layer.pixels[idx];
+        return self.scan_lyr.pixels[idx];
     }
 
     const U16max: f32 = 1 << 16;
     const TRIM_FACTOR = 0.4;
     const INST_LIM = 8096;
     pub fn updateStorage(self: *LookingGlass, storage_dset: dset.DescriptorPrep, enabled: bool) !void {
-        const total = self.size.total;
+        const total = self.g_sz.total;
 
         std.debug.assert(total <= INST_LIM);
         const stack_size = INST_LIM * @sizeOf(sht.PerInstance);
@@ -311,6 +313,7 @@ pub const LookingGlass = struct {
 
                 const level = h / U16max;
                 const tresholded_h = @max(0, ((level - TRIM_FACTOR) / (1 - TRIM_FACTOR)));
+                // TODO: depth can be controlled by push constant mode i guess
                 prev_one.depth_ctrl[0] = if (enabled) 1 else 0;
                 prev_one.depth_ctrl[1] = tresholded_h;
 
@@ -325,8 +328,8 @@ pub const LookingGlass = struct {
         storage_dset: dset.DescriptorPrep,
         first_layer_instance: u32,
     ) !u16 {
-        const total_cells = self.size.total;
-        const layer_inst_total = self.size.total / 2;
+        const total_cells = self.g_sz.total;
+        const layer_inst_total = self.g_sz.total / 2;
 
         const stack_size = INST_LIM * @sizeOf(sht.PerInstance);
         var stack_mem: [stack_size]u8 = undefined;
@@ -353,7 +356,6 @@ pub const LookingGlass = struct {
                 const layer_val = self.pixvalLayer(i);
                 if (layer_val == 0) continue;
 
-                // prev_one.depth_ctrl[0] = if (enabled) 1 else 0;
                 prev_one.depth_ctrl[1] = tresholded_h;
 
                 scratchpad[presence_count] = prev_one;

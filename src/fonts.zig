@@ -6,13 +6,15 @@ const sht = @import("shaders/types.zig");
 const dset = @import("dset.zig");
 const m = @import("math.zig");
 
-const Sizing = struct {
+// TODO: ok, now i know what is this sizing for, so i can name it better
+// tylko jaką nazwę tutaj dać?
+pub const GlyphSz = struct {
     w: c_int = 0,
     h: c_int = 0,
     x_off: c_int = 0,
     y_off: c_int = 0,
 
-    pub fn gSize(self: *const Sizing) sht.GridSize {
+    pub fn gSize(self: *const GlyphSz) sht.GridSize {
         return sht.GridSize{
             .h = @intCast(self.h),
             .w = @intCast(self.w),
@@ -22,12 +24,12 @@ const Sizing = struct {
 };
 
 pub fn getGlyphSDF(
-    font_info: [*c]tt.stbtt_fontinfo,
+    font_info: [*c]const tt.stbtt_fontinfo,
     glyph: c_int,
     padding: c_int,
     on_edge_val: u8,
     dict_scale: f32,
-    s: *Sizing,
+    s: *GlyphSz,
 ) [*c]u8 {
     //TODO: more understancing of scale for fonts are needed
     const scale: f32 = tt.stbtt_ScaleForPixelHeight(font_info, 22);
@@ -45,10 +47,10 @@ pub fn getGlyphSDF(
     );
 }
 pub fn getCodepointBitmap(
-    font_info: [*c]tt.stbtt_fontinfo,
+    font_info: [*c]const tt.stbtt_fontinfo,
     codepoint: c_int,
     pixels: f32,
-    s: *Sizing,
+    s: *GlyphSz,
 ) [*c]u8 {
     //TODO: more understancing of scale for fonts are needed
     const scale: f32 = tt.stbtt_ScaleForPixelHeight(font_info, pixels);
@@ -86,15 +88,13 @@ pub const FontRendering = struct {
         gpa.free(self.content);
     }
 
-    pub fn sampleCodepoint(self: *FontRendering, gpa: std.mem.Allocator, codepnt: u8, g_size: *sht.GridSize) ![]u8 {
-        var size: Sizing = .{};
-        const bitmap = getCodepointBitmap(&self.info, @intCast(codepnt), 128, &size);
+    pub fn sampleCodepoint(self: *const FontRendering, gpa: std.mem.Allocator, codepnt: u8, glp_sz: *GlyphSz) ![]u8 {
+        const bitmap = getCodepointBitmap(&self.info, @intCast(codepnt), 128, glp_sz);
         defer tt.stbtt_FreeBitmap(bitmap, null);
 
-        const g = size.gSize();
         // std.debug.print("+++ grid size {d}x{d}\n", .{ g.w, g.h });
+        const g = glp_sz.gSize();
         const texture = try gpa.alloc(u8, g.total * 4);
-        g_size.* = g;
 
         for (0..g.h) |yy| {
             for (0..g.w) |x| {
@@ -117,7 +117,7 @@ pub const FontRendering = struct {
 };
 
 pub fn bitmapTest(io: std.Io, font_info: [*c]tt.stbtt_fontinfo) !void {
-    var size: Sizing = .{};
+    var size: GlyphSz = .{};
     const bitmap1 = getCodepointBitmap(&font_info, @intCast('a'), &size);
     defer tt.stbtt_FreeBitmap(bitmap1, null);
 
@@ -139,20 +139,6 @@ pub fn bitmapTest(io: std.Io, font_info: [*c]tt.stbtt_fontinfo) !void {
         try iowriter.print("\n", .{});
     }
     try iowriter.flush();
-}
-
-pub fn fonts_demo(init: std.process.Init) !void {
-    const fontfile = "fs/roboto.ttf";
-    var font = try FontRendering.init(init.io, init.gpa, fontfile);
-    defer font.deinit(init.gpa);
-
-    var sizing: Sizing = .{};
-    const bitmap = getGlyphSDF(&font.info, @intCast('a'), 5, 128, 5.0, &sizing);
-    defer tt.stbtt_FreeSDF(bitmap, null);
-    if (bitmap == null) {
-        return std.debug.print("!!! FD | sdf gen failed\n", .{});
-    }
-    std.debug.print("+++ FD | sdf bitmap generated {d}x{d}\n", .{ sizing.w, sizing.h });
 }
 
 pub fn lettersSpliced(
@@ -202,3 +188,33 @@ pub fn lettersSpliced(
         @memcpy(mapping + instance_offset, scratchpad);
     }
 }
+
+pub const Alphabet = struct {
+    pub fn whole(gpa: std.mem.Allocator, src: *const FontRendering) !void {
+        const a: u8 = @intCast('a');
+        const z: u8 = @intCast('z');
+
+        var arena = std.heap.ArenaAllocator.init(gpa);
+        defer arena.deinit();
+
+        const aa = arena.allocator();
+
+        const len = z - a;
+        var hmm = try aa.alloc(GlyphSz, len);
+        var hmm2 = try aa.alloc([]u8, len);
+
+        for (0..len) |i| {
+            const codepoint: u8 = a + @as(u8, @intCast(i));
+            var gly_sz: GlyphSz = undefined;
+            hmm2[i] = try src.sampleCodepoint(aa, codepoint, &gly_sz);
+            hmm[i] = gly_sz;
+            std.debug.print("+++ {c} size {d}x{d} + {d}x{d}\n", .{
+                codepoint,
+                gly_sz.w,
+                gly_sz.h,
+                gly_sz.x_off,
+                gly_sz.y_off,
+            });
+        }
+    }
+};

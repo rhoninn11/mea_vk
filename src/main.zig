@@ -52,9 +52,6 @@ const proto = @import("proto.zig");
 const fonts = @import("fonts.zig");
 
 pub fn main(init: std.process.Init) !void {
-    fonts.fonts_demo(init) catch |err| {
-        std.debug.print("!!! font demo failed | {s}\n", .{@errorName(err)});
-    };
     try host.sdlHost(init, deeper);
 }
 
@@ -91,6 +88,13 @@ fn theDeepest(access: EasyAcces) !void {
     const deeper_allocator = std.heap.page_allocator;
     var duald_img = try proto.serdesLoadBackup(access.io, deeper_allocator);
     defer duald_img.deinit(deeper_allocator);
+
+    var mbfont: ?fonts.FontRendering = fonts.FontRendering.init(access.io, access.gpa, "fs/roboto.ttf") catch null;
+    defer if (mbfont) |font| font.deinit(access.gpa);
+
+    if (mbfont) |*font| {
+        try fonts.Alphabet.whole(access.gpa, font);
+    }
 
     var glass = proto.LookingGlass.init(&duald_img, grid);
     const ok_understanding = oklab.OkUnderstanding{ .grid = grid };
@@ -163,9 +167,6 @@ fn theDeepest(access: EasyAcces) !void {
     dset_atlas.updateTexture(0, &demo_rgb, 0);
     dset_atlas.updateTexture(0, &demo_r, 1);
 
-    var mbfont: ?fonts.FontRendering = fonts.FontRendering.init(access.io, access.gpa, "fs/roboto.ttf") catch null;
-    defer if (mbfont) |font| font.deinit(access.gpa);
-
     var all_imgs: imgs.ManyImages = try .init(access.gpa);
     defer all_imgs.deinit();
 
@@ -193,13 +194,13 @@ fn theDeepest(access: EasyAcces) !void {
     const glyph_count: u8 = 24;
     var glyph_atlas_idx: u8 = 160;
     if (mbfont) |*font| {
-        var local_g = ok_g;
+        var gly_sz: fonts.GlyphSz = undefined;
         for (0..glyph_count) |i| {
             const iu8: u8 = @intCast(i);
-            const pixels = try font.sampleCodepoint(gpa, 'a' + iu8, &local_g);
+            const pixels = try font.sampleCodepoint(gpa, 'a' + iu8, &gly_sz);
             defer gpa.free(pixels);
 
-            const rgba = try imgs.vulkanTexture(&pic, local_g, pixels);
+            const rgba = try imgs.vulkanTexture(&pic, gly_sz.gSize(), pixels);
             dset_atlas.updateTexture(0, &rgba, glyph_atlas_idx);
             try all_imgs.appen(&rgba);
             glyph_atlas_idx += 1;
