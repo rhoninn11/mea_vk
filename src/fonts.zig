@@ -233,13 +233,13 @@ pub const Alphabet = struct {
             tex_data_arr[next_pos] = try src.sampleCodepoint(gpa, char, &gly_sz);
             how_big[next_pos] = gly_sz;
             pos = next_pos;
-            std.debug.print("+++ {c} size {d}x{d} + {d}x{d}\n", .{
-                char,
-                gly_sz.w,
-                gly_sz.h,
-                gly_sz.x_off,
-                gly_sz.y_off,
-            });
+            // std.debug.print("+++ {c} size {d}x{d} + {d}x{d}\n", .{
+            //     char,
+            //     gly_sz.w,
+            //     gly_sz.h,
+            //     gly_sz.x_off,
+            //     gly_sz.y_off,
+            // });
         }
 
         return .{

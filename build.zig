@@ -2,6 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const bt = @import("src/build/t.zig");
 
+const files = @import("src/files.zig");
+
 const vkgen = @import("vulkan_zig");
 const protobuf = @import("protobuf");
 const Dependency = std.Build.Dependency;
@@ -254,6 +256,7 @@ pub fn build(b: *std.Build) !void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&test_run_cmd.step);
 }
+
 fn zig2spirv(b: *std.Build, user_exe: *std.Build.Step.Compile) void {
     // https://claude.ai/chat/77a20a99-779d-4ab5-9b05-55416f09f559
     const spirv_target = b.resolveTargetQuery(.{
@@ -292,29 +295,14 @@ fn zig2spirv(b: *std.Build, user_exe: *std.Build.Step.Compile) void {
 }
 
 fn find_glsl_files(b: *std.Build, prefix: []const u8) !bt.DersMap {
-    // std.fs.cwd().openDir(prefix, .{ .iterate = true });
-    var some_mem: [1024]u8 = undefined;
+    const io = b.graph.io;
+    const arena = b.graph.arena;
 
-    const cwd = std.Io.Dir.cwd();
-    var cwd2 = try cwd.openDir(b.graph.io, ".", .{ .iterate = true });
-    defer cwd2.close(b.graph.io);
-    const size = try cwd2.realPath(b.graph.io, &some_mem);
-    std.debug.print("+++ somehnting {s}\n", .{some_mem[0..size]});
-    _ = prefix;
+    const glsl_shaders = try files.zipSearch(io, arena, prefix, &.{ ".vert", ".frag" });
+    for (glsl_shaders.file_paths) |path| {
+        std.debug.print("+++ found: {s}\n", .{path});
+    }
 
-    // const shader_dir = try cwd2.openDir(b.graph.io, prefix, .{ .iterate = true });
-    // defer shader_dir.close(b.graph.io);
-
-    // var iter = shader_dir.iterate();
-    // while (try iter.next()) |entry| {
-    //     std.debug.print("+++ entry name is {s}\n", .{entry.name});
-    //     if (std.mem.endsWith(u8, entry.name, ".vert")) {
-    //         // std.debug.print("+++ found {s}\n", .{entry.name});
-    //     }
-    //     if (std.mem.endsWith(u8, entry.name, ".vert")) {
-    //         // std.debug.print("+++ found {s}\n", .{entry.name});
-    //     }
-    // }
     return bt.DersMap{
         .names = &.{ "triangle", "sprite" },
         .files = &.{

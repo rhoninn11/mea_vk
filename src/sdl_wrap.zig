@@ -55,7 +55,7 @@ const EvCapture = struct {
         return 2;
     }
 
-    pub fn peekCounter(self: *EvCapture, prefix: []const u8, sink: *std.Io.Writer) !u8 {
+    pub fn info(self: *EvCapture, prefix: []const u8, sink: *std.Io.Writer) !u8 {
         var ev_num: u32 = 0;
         var it = self.bins.iterator();
         while (it.next()) |entry| ev_num += entry.value.*;

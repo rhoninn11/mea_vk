@@ -113,7 +113,7 @@ pub const Utils = struct {
         return try triangulateSegments(alloc, pair_arr.items);
     }
 
-    pub fn Blocky(alloc: Allocator) !TriangleArray {
+    pub fn Cube(alloc: Allocator) !TriangleArray {
         var triangles: TriangleArray = try .initCapacity(alloc, 30);
         errdefer triangles.deinit(alloc);
 
@@ -164,7 +164,7 @@ pub const Utils = struct {
         return out_tris;
     }
 
-    pub fn Pierced2(gpa: Allocator) !TriangleArray {
+    pub fn Hollow(gpa: Allocator) !TriangleArray {
         const square_blits = 4;
         const border = 0.125;
 
@@ -433,35 +433,43 @@ pub fn populateModels(gpa: std.mem.Allocator, here: *TriangleArray, as: *VertRep
     var param = RingParams.default;
     var shape: TriangleArray = undefined;
 
+    // const HOLLOW_CUBE = 0;
     param.len = 5;
     param.flat = true;
-    shape = try Utils.Pierced2(gpa);
+    shape = try Utils.Hollow(gpa);
     try here.appendSlice(gpa, shape.items);
     as.register(shape.items);
     shape.deinit(gpa);
 
-    shape = try Utils.Blocky(gpa);
+    // const CUBE = 1;
+    shape = try Utils.Cube(gpa);
     try here.appendSlice(gpa, shape.items);
     as.register(shape.items);
     shape.deinit(gpa);
 
+    // const PIERCERD = 2;
     shape = try Utils.Pierced(gpa);
     try here.appendSlice(gpa, shape.items);
     as.register(shape.items);
     shape.deinit(gpa);
 
+    // const RING = 3;
+    //--- First
     param.len = 32;
     param.flat = false;
     shape = try Utils.Ring(gpa, param);
     try here.appendSlice(gpa, shape.items);
     as.register(shape.items);
     shape.deinit(gpa);
+    //----
 
+    // const BILBO = 4;
     shape = try Utils.Bilboard(gpa);
     try here.appendSlice(gpa, shape.items);
     as.register(shape.items);
     shape.deinit(gpa);
 
+    // const BILBO_HEX = 5;
     shape = try Utils.Hexy(gpa);
     try here.appendSlice(gpa, shape.items);
     as.register(shape.items);

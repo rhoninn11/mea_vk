@@ -3,6 +3,8 @@ const gm = @import("graphics_context.zig");
 const vk = @import("vulkan-zig");
 const v = @import("vertex.zig");
 
+const EmbedSpirv = [:0]align(4) const u8;
+
 const vert_triangle align(@alignOf(u32)) = @embedFile("triangle_vert").*;
 const frag_triangle align(@alignOf(u32)) = @embedFile("triangle_frag").*;
 
@@ -10,71 +12,77 @@ const vert_sprite align(@alignOf(u32)) = @embedFile("sprite_vert").*;
 const frag_sprite align(@alignOf(u32)) = @embedFile("sprite_frag").*;
 const Vertex = v.Vertex;
 
-pub fn createPipeline(
+//
+const slots: []const vk.ShaderStageFlags = &.{
+    vk.ShaderStageFlags{ .vertex_bit = true },
+    vk.ShaderStageFlags{ .fragment_bit = true },
+};
+const stlen: u8 = slots.len;
+const PipeType = enum(u8) {
+    Triangle,
+    Sprite,
+}; //
+
+const PSSCI = vk.PipelineShaderStageCreateInfo;
+fn shaderStages(modules: [stlen]vk.ShaderModule) [stlen]PSSCI {
+    var out: [stlen]PSSCI = undefined;
+
+    inline for (0..stlen) |i| {
+        out[i] = PSSCI{
+            .stage = slots[i],
+            .module = modules[i],
+            .p_name = "main",
+        };
+    }
+    return out;
+}
+
+pub const Moduler = struct {
     gc: *const gm.GraphicsContext,
     layout: vk.PipelineLayout,
-    render_pass: vk.RenderPass,
-) !vk.Pipeline {
-    const vert = try gc.dev.createShaderModule(&.{
-        .code_size = vert_triangle.len,
-        .p_code = @ptrCast(&vert_triangle),
-    }, null);
-    defer gc.dev.destroyShaderModule(vert, null);
+    pub fn initModuls(self: *const Moduler, lol: [stlen]EmbedSpirv) ![stlen]vk.ShaderModule {
+        var out: [stlen]vk.ShaderModule = undefined;
 
-    const frag = try gc.dev.createShaderModule(&.{
-        .code_size = frag_triangle.len,
-        .p_code = @ptrCast(&frag_triangle),
-    }, null);
-    defer gc.dev.destroyShaderModule(frag, null);
+        inline for (0..stlen) |i| {
+            const mod = try self.gc.dev.createShaderModule(&.{
+                .code_size = lol[i].len,
+                .p_code = @ptrCast(lol[i].ptr),
+            }, null);
+            errdefer self.gc.dev.destroyShaderModule(mod, null);
+            out[i] = mod;
+        }
+        return out;
+    }
 
-    const pssci = [_]vk.PipelineShaderStageCreateInfo{
-        .{
-            .stage = .{ .vertex_bit = true },
-            .module = vert,
-            .p_name = "main",
-        },
-        .{
-            .stage = .{ .fragment_bit = true },
-            .module = frag,
-            .p_name = "main",
-        },
-    };
-    return restOfPipeline(&pssci, gc, layout, render_pass);
-}
-pub fn createPipelineAlt(
-    gc: *const gm.GraphicsContext,
-    layout: vk.PipelineLayout,
-    render_pass: vk.RenderPass,
-) !vk.Pipeline {
-    const vert = try gc.dev.createShaderModule(&.{
-        .code_size = vert_sprite.len,
-        .p_code = @ptrCast(&vert_sprite),
-    }, null);
-    defer gc.dev.destroyShaderModule(vert, null);
+    pub fn destroyModules(self: *const Moduler, mods: [stlen]vk.ShaderModule) void {
+        for (mods[0..]) |mod|
+            self.gc.dev.destroyShaderModule(mod, null);
+    }
 
-    const frag = try gc.dev.createShaderModule(&.{
-        .code_size = frag_sprite.len,
-        .p_code = @ptrCast(&frag_sprite),
-    }, null);
-    defer gc.dev.destroyShaderModule(frag, null);
+    pub fn createPipeline(
+        self: *const Moduler,
+        render_pass: vk.RenderPass,
+        pt: PipeType,
+    ) !vk.Pipeline {
+        const src: [stlen]EmbedSpirv = switch (pt) {
+            .Triangle => .{ vert_triangle[0..], frag_triangle[0..] },
+            .Sprite => .{ vert_sprite[0..], frag_sprite[0..] },
+        };
 
-    const pssci = [_]vk.PipelineShaderStageCreateInfo{
-        .{
-            .stage = .{ .vertex_bit = true },
-            .module = vert,
-            .p_name = "main",
-        },
-        .{
-            .stage = .{ .fragment_bit = true },
-            .module = frag,
-            .p_name = "main",
-        },
-    };
-    return restOfPipeline(&pssci, gc, layout, render_pass);
-}
+        const mods = try self.initModuls(src);
+        defer self.destroyModules(mods);
+
+        const pssci = shaderStages(mods);
+        return restOfPipeline(pssci[0..], self.gc, self.layout, render_pass);
+    }
+
+    pub fn destroyPipelin(self: *const Moduler, pipe: vk.Pipeline) void {
+        self.gc.dev.destroyPipeline(pipe, null);
+    }
+};
 
 fn restOfPipeline(
-    pssci: *const [2]vk.PipelineShaderStageCreateInfo,
+    pssci: []const vk.PipelineShaderStageCreateInfo,
     gc: *const gm.GraphicsContext,
     layout: vk.PipelineLayout,
     render_pass: vk.RenderPass,
@@ -161,8 +169,8 @@ fn restOfPipeline(
     const gpci = &.{
         vk.GraphicsPipelineCreateInfo{
             .flags = .{},
-            .stage_count = 2,
-            .p_stages = pssci,
+            .stage_count = @intCast(pssci.len),
+            .p_stages = pssci.ptr,
             .p_vertex_input_state = &pvisci,
             .p_input_assembly_state = &piasci,
             .p_tessellation_state = null,

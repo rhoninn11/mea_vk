@@ -239,10 +239,14 @@ fn theDeepest(access: EasyAcces) !void {
     }, null);
     defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
 
-    const pipeline = try pipe.createPipeline(gc, pipeline_layout, render_pass);
-    const pipeline_2nd = try pipe.createPipelineAlt(gc, pipeline_layout, render_pass);
-    defer gc.dev.destroyPipeline(pipeline, null);
-    defer gc.dev.destroyPipeline(pipeline_2nd, null);
+    const pipe_mod: pipe.Moduler = .{
+        .gc = gc,
+        .layout = pipeline_layout,
+    };
+    const pipeline = try pipe_mod.createPipeline(render_pass, .Triangle);
+    defer pipe_mod.destroyPipelin(pipeline);
+    const pipeline_2nd = try pipe_mod.createPipeline(render_pass, .Sprite);
+    defer pipe_mod.destroyPipelin(pipeline_2nd);
 
     // framebuffers
     var framebuffers = try createFramebuffers(

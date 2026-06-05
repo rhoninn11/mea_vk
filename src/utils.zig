@@ -221,9 +221,11 @@ pub const DbgMonitor = struct {
         try iowriter.print("---------------\n", .{});
         lines += try sdl.peekPointer().info("---", iowriter);
         try iowriter.print("---------------\n", .{});
-        lines += try sdl.getEvCounter().peekCounter("--- ", iowriter);
+        lines += try sdl.getEvCounter().info("--- ", iowriter);
         try iowriter.print("---------------\n", .{});
         try iowriter.flush();
+
+        self.linecount = lines;
     }
 };
 
