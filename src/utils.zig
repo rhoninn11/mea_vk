@@ -214,14 +214,16 @@ pub const DbgMonitor = struct {
             try iowriter.print("\x1b[2K", .{}); // wyczyść linię
             try iowriter.print("\x1b[1A", .{}); // w górę
         };
-        const base_linecount = 4;
+        var lines: u8 = 6;
         try iowriter.print("---------------\n", .{});
         try iowriter.print("--- {s: <12}: \x1b[31m{d}\x1b[0m\n", .{ self.name, self.val });
         try iowriter.print("--- {s: <12}: \x1b[32m{d}\x1b[0m\n", .{ "cell_num", cell_num });
-        const raport_linecount = try sdl.getEvCounter().print("--- ", iowriter);
+        try iowriter.print("---------------\n", .{});
+        lines += try sdl.peekPointer().info("---", iowriter);
+        try iowriter.print("---------------\n", .{});
+        lines += try sdl.getEvCounter().peekCounter("--- ", iowriter);
         try iowriter.print("---------------\n", .{});
         try iowriter.flush();
-        self.linecount = base_linecount + raport_linecount;
     }
 };
 

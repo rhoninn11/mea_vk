@@ -82,9 +82,12 @@ void main() {
     // if (gl_FrontFacing) {
         f_color = vec4(level_color, 1.0);
     
-    if (_pc.data.mode > 0) {
+    if (_pc.data.mode == 1) {
         f_color = vec4(0.1, 0.3, 0.7, 1.0);
+    } else if (_pc.data.mode == 2) {
+        f_color = vec4(0.5, 0.1, 0.6, 1.0);
     }
+    
     // } else {
     //     f_color = vec4(0, 1.0, 1.0, 1.0);
     // } 

@@ -92,8 +92,11 @@ fn theDeepest(access: EasyAcces) !void {
     var mbfont: ?fonts.FontRendering = fonts.FontRendering.init(access.io, access.gpa, "fs/roboto.ttf") catch null;
     defer if (mbfont) |font| font.deinit(access.gpa);
 
+    var mbalphabet: ?fonts.Alphabet = null;
+    defer if (mbalphabet) |*alphabet| alphabet.deinit(access.gpa);
+
     if (mbfont) |*font| {
-        try fonts.Alphabet.whole(access.gpa, font);
+        mbalphabet = try fonts.Alphabet.init(access.gpa, font);
     }
 
     var glass = proto.LookingGlass.init(&duald_img, grid);
@@ -117,47 +120,60 @@ fn theDeepest(access: EasyAcces) !void {
     defer gc.dev.destroyCommandPool(general_cpool, null);
     const pic = gm.PoolInCtx{ .gc = gc, .pool = general_cpool };
 
-    var uniform_dset = try dset.DescriptorPrep.init(
-        gpa,
-        gc,
+    const _64kb = 1 << 16;
+    var stack_dset: [_64kb]u8 = undefined;
+    var stalloc: std.heap.FixedBufferAllocator = .init(stack_dset[0..]);
+    const dsa = stalloc.allocator();
+    var arean: std.heap.ArenaAllocator = .init(gpa);
+    defer arean.deinit();
+    const aa = arean.allocator();
+    _ = dsa;
+
+    const hl_dset = dset.HLDSetPrep{
+        .gc = gc,
+        .gpa = aa,
+    };
+
+    const _8k = 1 << 13;
+    std.debug.assert(grid.total * 2 == _8k);
+
+    const ubo_sz = @sizeOf(sht.GroupData);
+    const ibox_sz = @sizeOf(sht.PerInstance);
+    const storage_sz = ibox_sz * grid.total * 2;
+    std.debug.print(
+        "+++ instance_size {d: >12}B\n+++ storage size {d: >12}B",
+        .{ ibox_sz, storage_sz },
+    );
+
+    var dset_uniform = try hl_dset.init(
         swapchain_len,
         gm.baked.uniform_frag_vert_dyn,
-        .{
-            .binding = 0,
-            .element_size = @sizeOf(sht.GroupData),
-            .num = 16,
-        },
+        .{ .binding = 0, .element_size = ubo_sz, .num = 16 },
         null,
     );
-    defer uniform_dset.deinit(gpa);
+    defer hl_dset.deinit(&dset_uniform);
 
-    var storage_dset = try dset.DescriptorPrep.init(
-        gpa,
-        gc,
+    var dset_storage = try hl_dset.init(
         swapchain_len,
         gm.baked.storage_frag_vert,
-        .{
-            .binding = 0,
-            .element_size = @sizeOf(sht.PerInstance) * @as(u32, grid.total) * 2,
-        },
+        .{ .binding = 0, .element_size = storage_sz, .num = 1 },
         null,
     );
-    defer storage_dset.deinit(gpa);
-
-    const spacing = 0.1;
-    const size = 0.04;
-    try prefils.storagePrefil(storage_dset, grid, spacing);
+    defer hl_dset.deinit(&dset_storage);
 
     const ATLAS_MAX = 256;
-    var dset_atlas = try dset.DescriptorPrep.init(
-        gpa,
-        gc,
+    var dset_atlas = try hl_dset.init(
         1,
         gm.baked.texture_frag,
         .{ .binding = 0 },
         ATLAS_MAX,
     );
-    defer dset_atlas.deinit(gpa);
+    defer hl_dset.deinit(&dset_atlas);
+
+    const spacing = 0.1;
+    const size = 0.04;
+    try prefils.storagePrefil(dset_storage, grid, spacing);
+
     const g64 = sht.GridSize.g64;
 
     var demo_rgb = try imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb);
@@ -193,19 +209,15 @@ fn theDeepest(access: EasyAcces) !void {
 
     const glyph_count: u8 = 24;
     var glyph_atlas_idx: u8 = 160;
-    if (mbfont) |*font| {
-        var gly_sz: fonts.GlyphSz = undefined;
-        for (0..glyph_count) |i| {
-            const iu8: u8 = @intCast(i);
-            const pixels = try font.sampleCodepoint(gpa, 'a' + iu8, &gly_sz);
-            defer gpa.free(pixels);
+    if (mbalphabet) |*abc| for (0..glyph_count) |i| {
+        const pixels = abc.char_texd_arr[i];
+        const g_sz = abc.char_sz_arr[i].gSize();
 
-            const rgba = try imgs.vulkanTexture(&pic, gly_sz.gSize(), pixels);
-            dset_atlas.updateTexture(0, &rgba, glyph_atlas_idx);
-            try all_imgs.appen(&rgba);
-            glyph_atlas_idx += 1;
-        }
-    }
+        const rgba = try imgs.vulkanTexture(&pic, g_sz, pixels);
+        dset_atlas.updateTexture(0, &rgba, glyph_atlas_idx);
+        try all_imgs.appen(&rgba);
+        glyph_atlas_idx += 1;
+    };
 
     // render pass
     const render_pass = try createRenderPass(gc, swapchain);
@@ -213,8 +225,8 @@ fn theDeepest(access: EasyAcces) !void {
 
     // pipeline
     const dsets = [_]vk.DescriptorSetLayout{
-        uniform_dset._d_set_layout.?,
-        storage_dset._d_set_layout.?,
+        dset_uniform._d_set_layout.?,
+        dset_storage._d_set_layout.?,
         dset_atlas._d_set_layout.?,
     };
     const push_const_ranges = gm.PushConstant.Ranges();
@@ -249,8 +261,8 @@ fn theDeepest(access: EasyAcces) !void {
         .instance_count = grid.total,
         .pipeline = [4]vk.Pipeline{ pipeline, pipeline_2nd, undefined, undefined },
         .pipeline_layout = pipeline_layout,
-        .uniform_dsets = uniform_dset.d_set_arr,
-        .storage_dsets = storage_dset.d_set_arr,
+        .uniform_dsets = dset_uniform.d_set_arr,
+        .storage_dsets = dset_storage.d_set_arr,
         .texture_dset = dset_atlas.d_set_arr.items[0],
     };
 
@@ -346,21 +358,21 @@ fn theDeepest(access: EasyAcces) !void {
         try dbgmonit.update(access.io, pamperek.p.phi, frame_state.layer_instance_num);
 
         if (glass.update(&input.glass_input)) {
-            try glass.updateStorage(storage_dset, true);
+            try glass.updateStorage(dset_storage, true);
             const lnum = try glass.updateLayerStorage(
-                storage_dset,
+                dset_storage,
                 frame_state.layer_instance_offset,
             );
             frame_state.layer_instance_num = lnum;
         }
         if (input.shader_reset_trigger.fired()) {
-            try glass.updateStorage(storage_dset, false);
+            try glass.updateStorage(dset_storage, false);
         }
-        if (input.uniform_shift_trigger.fired()) {
+        if (input.alt_projection_trigger.fired()) {
             frame_state.alt_proj = !frame_state.alt_proj;
         }
         if (input.ok_vis_trigger.fired()) {
-            try ok_understanding.labAtInfinitum(storage_dset);
+            try ok_understanding.labAtInfinitum(dset_storage);
         }
 
         if (input.slide_r_trig.fired()) {
@@ -390,7 +402,7 @@ fn theDeepest(access: EasyAcces) !void {
             &frame_state,
         );
         try prefils.unifomRefil(
-            uniform_dset,
+            dset_uniform,
             @intCast(img_idx),
             timeline1.total_s,
             pamperek.pos(),
@@ -399,7 +411,7 @@ fn theDeepest(access: EasyAcces) !void {
         );
         const first_ok_instance = g64.total;
         try oklab.OkUnderstanding.labSpliced(
-            storage_dset,
+            dset_storage,
             first_ok_instance,
             OK_SWEEP,
             okphi,
@@ -407,7 +419,7 @@ fn theDeepest(access: EasyAcces) !void {
 
         const first_glyph_insatnce = first_ok_instance + OK_SWEEP;
         try fonts.lettersSpliced(
-            storage_dset,
+            dset_storage,
             first_glyph_insatnce,
             glyph_count,
             glyphphi,

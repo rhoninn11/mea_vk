@@ -66,13 +66,13 @@ pub var plr_input: DulaHoldsAxis = undefined;
 
 pub var ok_vis_trigger: Trigger = .{};
 pub var shader_reset_trigger: Trigger = .{};
-pub var uniform_shift_trigger: Trigger = .{};
+pub var alt_projection_trigger: Trigger = .{};
 pub var slide_l_trig: Trigger = .{};
 pub var slide_r_trig: Trigger = .{};
 
 pub var ok_vis: KeyAction = .{ .key = glfw.KeyY, .action = glfw.KeyDown };
 pub var shader_reset: KeyAction = .{ .key = glfw.KeyQ, .action = glfw.KeyDown };
-pub var uniform_shift: KeyAction = .{ .key = glfw.KeyE, .action = glfw.KeyDown };
+pub var alt_proj: KeyAction = .{ .key = glfw.KeyE, .action = glfw.KeyDown };
 pub var slide_l: KeyAction = .{ .key = glfw.KeyV, .action = glfw.KeyDown };
 pub var slide_r: KeyAction = .{ .key = glfw.KeyB, .action = glfw.KeyDown };
 
@@ -112,8 +112,8 @@ pub fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_i
         shader_reset_trigger.activated = true;
     }
 
-    if (x.down(uniform_shift.key)) {
-        uniform_shift_trigger.activated = true;
+    if (x.down(alt_proj.key)) {
+        alt_projection_trigger.activated = true;
     }
     if (x.down(slide_l.key)) {
         slide_l_trig.activated = true;
@@ -159,7 +159,7 @@ pub fn initS() !void {
 const sdl_inputs: []const Tied = &.{
     .{ .key = sdl.keycode.Keycode.y, .trig = &ok_vis_trigger },
     .{ .key = sdl.keycode.Keycode.q, .trig = &shader_reset_trigger },
-    .{ .key = sdl.keycode.Keycode.e, .trig = &uniform_shift_trigger },
+    .{ .key = sdl.keycode.Keycode.left_alt, .trig = &alt_projection_trigger },
     .{ .key = sdl.keycode.Keycode.v, .trig = &slide_l_trig },
     .{ .key = sdl.keycode.Keycode.b, .trig = &slide_r_trig },
 };

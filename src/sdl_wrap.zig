@@ -55,7 +55,7 @@ const EvCapture = struct {
         return 2;
     }
 
-    pub fn print(self: *EvCapture, prefix: []const u8, sink: *std.Io.Writer) !u8 {
+    pub fn peekCounter(self: *EvCapture, prefix: []const u8, sink: *std.Io.Writer) !u8 {
         var ev_num: u32 = 0;
         var it = self.bins.iterator();
         while (it.next()) |entry| ev_num += entry.value.*;
@@ -99,6 +99,33 @@ const system: sdl3.InitFlags = .{
     .video = true,
     .gamepad = true,
 };
+
+const Pointer = struct {
+    x: f32,
+    y: f32,
+    xr: f32,
+    yr: f32,
+
+    const default: Pointer = .{ .x = 0, .y = 0, .xr = 0, .yr = 0 };
+
+    pub fn fetch(mm: *const sdl3.events.MouseMotion) Pointer {
+        return .{ .x = mm.x, .y = mm.y, .xr = mm.x_rel, .yr = mm.y_rel };
+    }
+
+    pub fn info(self: *const Pointer, prefix: []const u8, iowriter: *std.Io.Writer) !u8 {
+        try iowriter.print(
+            "{s} x:{d:>8.2} y:{d:>8.2} | xr:{d:>8.2} yr:{d:>8.2}\n",
+            .{ prefix, self.x, self.y, self.xr, self.yr },
+        );
+        return 1;
+    }
+};
+
+var pointer: Pointer = .default;
+pub fn peekPointer() *const Pointer {
+    return &pointer;
+}
+
 pub const SdlContext = struct {
     window: ?sdl3.video.Window = null,
     ev_capture: EvCapture = .init(),
@@ -132,8 +159,10 @@ pub const SdlContext = struct {
         while (sdl3.events.poll()) |ev| {
             self.ev_capture.inc(ev);
             var key: sdl3.keycode.Keycode = undefined;
+
             switch (ev) {
                 .key_up, .key_down => |kb| key = kb.key.?,
+                .mouse_motion => |*mm| pointer = Pointer.fetch(mm),
                 else => {},
             }
 

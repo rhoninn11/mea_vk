@@ -2,7 +2,19 @@ const std = @import("std");
 const vk = @import("vulkan-zig");
 const gm = @import("graphics_context.zig");
 const m = @import("math.zig");
+pub const HLDSetPrep = struct {
+    gc: *const gm.GraphicsContext,
+    gpa: std.mem.Allocator,
 
+    pub fn init(self: *const HLDSetPrep, frame_copies_num: usize, using: gm.baked.DSetInit, data_info: gm.baked.DSetDataInfo, bindless_size: ?u32) !DescriptorPrep {
+        return DescriptorPrep.init(self.gpa, self.gc, //
+            frame_copies_num, using, data_info, bindless_size);
+    }
+
+    pub fn deinit(self: *const HLDSetPrep, dsetPrep: *DescriptorPrep) void {
+        dsetPrep.deinit(self.gpa);
+    }
+};
 pub const DescriptorPrep = struct {
     const Self = @This();
     d_set_layout_arr: std.ArrayList(vk.DescriptorSetLayout) = .empty,
@@ -61,7 +73,7 @@ pub const DescriptorPrep = struct {
         return devk.createDescriptorSetLayout(&dslci, null);
     }
     pub fn init(
-        alloc: std.mem.Allocator,
+        gpa: std.mem.Allocator,
         gc: *const gm.GraphicsContext,
         frame_copies_num: usize,
         using: gm.baked.DSetInit,
@@ -80,10 +92,10 @@ pub const DescriptorPrep = struct {
 
         //dynamic arrays alloc
         const devk = self.gc.dev;
-        errdefer self.deinit(alloc);
-        try self.d_set_layout_arr.resize(alloc, frame_copies_num);
-        try self.buff_arr.resize(alloc, frame_copies_num);
-        try self.d_set_arr.resize(alloc, frame_copies_num);
+        errdefer self.deinit(gpa);
+        try self.d_set_layout_arr.resize(gpa, frame_copies_num);
+        try self.buff_arr.resize(gpa, frame_copies_num);
+        try self.d_set_arr.resize(gpa, frame_copies_num);
 
         //binding layout
         self._d_set_layout = try Self.dsetLayout(devk, //

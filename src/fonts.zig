@@ -190,31 +190,63 @@ pub fn lettersSpliced(
 }
 
 pub const Alphabet = struct {
-    pub fn whole(gpa: std.mem.Allocator, src: *const FontRendering) !void {
-        const a: u8 = @intCast('a');
-        const z: u8 = @intCast('z');
+    const CharLocMap = std.AutoHashMap(u8, u16);
+    num: u16,
+    char_map: CharLocMap,
+    char_sz_arr: []GlyphSz,
+    char_texd_arr: [][]u8,
 
-        var arena = std.heap.ArenaAllocator.init(gpa);
-        defer arena.deinit();
+    pub fn deinit(self: *Alphabet, gpa: std.mem.Allocator) void {
+        for (0..self.num + 1) |i| {
+            gpa.free(self.char_texd_arr[i]);
+        }
+        gpa.free(self.char_texd_arr);
+        gpa.free(self.char_sz_arr);
+        self.char_map.deinit();
+    }
 
-        const aa = arena.allocator();
+    pub fn init(gpa: std.mem.Allocator, src: *const FontRendering) !Alphabet {
+        const ascii_chars: []const u8 = //
+            "abcdefghijklmnoprstuvwxyz" ++ //
+            "ABCDEFGHIJKLMNOPRSTUVWXYZ" ++ //
+            " _.,;:0123456789()<>{}[]+-?!";
+        const ascii_len = ascii_chars.len;
 
-        const len = z - a;
-        var hmm = try aa.alloc(GlyphSz, len);
-        var hmm2 = try aa.alloc([]u8, len);
+        var char_map: CharLocMap = .init(gpa);
+        try char_map.ensureTotalCapacity(ascii_chars.len);
+        errdefer char_map.deinit();
 
-        for (0..len) |i| {
-            const codepoint: u8 = a + @as(u8, @intCast(i));
-            var gly_sz: GlyphSz = undefined;
-            hmm2[i] = try src.sampleCodepoint(aa, codepoint, &gly_sz);
-            hmm[i] = gly_sz;
+        var how_big = try gpa.alloc(GlyphSz, ascii_len);
+        errdefer gpa.free(how_big);
+
+        var pos: u16 = 0;
+        var tex_data_arr = try gpa.alloc([]u8, ascii_len);
+        errdefer {
+            for (0..pos) |i| gpa.free(tex_data_arr[i]);
+            gpa.free(tex_data_arr);
+        }
+
+        var gly_sz: GlyphSz = undefined;
+        for (0.., ascii_chars) |i, char| {
+            const next_pos: u8 = @as(u8, @intCast(i));
+            try char_map.put(char, next_pos);
+            tex_data_arr[next_pos] = try src.sampleCodepoint(gpa, char, &gly_sz);
+            how_big[next_pos] = gly_sz;
+            pos = next_pos;
             std.debug.print("+++ {c} size {d}x{d} + {d}x{d}\n", .{
-                codepoint,
+                char,
                 gly_sz.w,
                 gly_sz.h,
                 gly_sz.x_off,
                 gly_sz.y_off,
             });
         }
+
+        return .{
+            .char_map = char_map,
+            .char_sz_arr = how_big,
+            .char_texd_arr = tex_data_arr,
+            .num = pos,
+        };
     }
 };

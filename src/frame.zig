@@ -25,17 +25,37 @@ fn Dynamic(t: type) type {
 
 const CmdHelper = struct {
     gc: *const gm.GraphicsContext,
-    command_bfr: vk.CommandBuffer,
+    draw: *const gm.DrawInfo,
+    command: vk.CommandBuffer,
 
-    pub fn push(self: *const CmdHelper, layout: vk.PipelineLayout, push_blob: *const gm.PushConstant.PCBlob) void {
+    pub fn push(self: *const CmdHelper, push_blob: *const gm.PushConstant.PCBlob) void {
         self.gc.dev.cmdPushConstants(
-            self.command_bfr,
-            layout,
+            self.command,
+            self.draw.pipeline_layout,
             .{ .fragment_bit = true, .vertex_bit = true },
             0,
             @sizeOf(@TypeOf(push_blob.*)),
             push_blob,
         );
+    }
+    pub fn dSetsBind(self: *const CmdHelper, sets: []const vk.DescriptorSet, ubo_slot: u8) void {
+        const UBODyn = Dynamic(sht.GroupData);
+        const ubo_dynamic_offset: []const u32 = &.{UBODyn.offset(ubo_slot)};
+        self.gc.dev.cmdBindDescriptorSets(
+            self.command,
+            .graphics,
+            self.draw.pipeline_layout,
+            0,
+            sets,
+            ubo_dynamic_offset,
+        );
+    }
+
+    pub fn useTriangles(self: *const CmdHelper) void {
+        self.gc.dev.cmdBindPipeline(self.command, .graphics, self.draw.pipeline[0]);
+    }
+    pub fn useSprite(self: *const CmdHelper) void {
+        self.gc.dev.cmdBindPipeline(self.command, .graphics, self.draw.pipeline[1]);
     }
 };
 
@@ -78,21 +98,27 @@ pub fn recordFrame(
         .offset = .{ .x = 0, .y = 0 },
         .extent = extent,
     };
+    const hl_cmds = CmdHelper{
+        .gc = gc,
+        .draw = draw,
+        .command = cbufr,
+    };
+    const all_sets: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
+        draw.uniform_dsets.items[rec.id],
+        draw.storage_dsets.items[rec.id],
+        draw.texture_dset,
+    };
 
-    const UBODyn = Dynamic(sht.GroupData);
-    const instace_sz = @sizeOf(sht.PerInstance);
-    _ = instace_sz;
+    // const instace_sz = @sizeOf(sht.PerInstance);
+    // _ = instace_sz;
     {
-        const cmd_helper = CmdHelper{
-            .gc = gc,
-            .command_bfr = cbufr,
-        };
+        const BILBORD_IDX = 4;
+        const HEX_IDX = 5;
         try gc.dev.beginCommandBuffer(cbufr, &.{});
 
         gc.dev.cmdSetViewport(cbufr, 0, viewport);
         gc.dev.cmdSetScissor(cbufr, 0, scissor);
 
-        // oscilationg ring
         gc.dev.cmdBeginRenderPass(cbufr, &.{
             .render_pass = render_pass,
             .framebuffer = framebuffers[rec.id],
@@ -109,28 +135,15 @@ pub fn recordFrame(
                 &.{0},
             );
 
-            const ubo_dynamic_offset: []const u32 = &.{
-                if (state.alt_proj) UBODyn.offset(1) else UBODyn.offset(0),
-            };
-            const all_sets: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
-                draw.uniform_dsets.items[rec.id],
-                draw.storage_dsets.items[rec.id],
-                draw.texture_dset,
-            };
-
-            gc.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[0]);
-            gc.dev.cmdBindDescriptorSets(
-                cbufr,
-                .graphics,
-                draw.pipeline_layout,
-                0,
-                all_sets,
-                ubo_dynamic_offset,
-            );
+            const ubo_slot: u8 = if (state.alt_proj) 1 else 0;
             const geopush = gm.PushConstant.PCBlob{
                 .model = m.mat_translate(.{ 0, 0, 0 }).mat,
             };
-            cmd_helper.push(draw.pipeline_layout, &geopush);
+
+            //triangle
+            hl_cmds.useTriangles();
+            hl_cmds.dSetsBind(all_sets, ubo_slot);
+            hl_cmds.push(&geopush);
             gc.dev.cmdDraw(
                 cbufr,
                 models.sizes[state.model_idx],
@@ -146,7 +159,7 @@ pub fn recordFrame(
                     .inst_base = state.layer_instance_offset,
                     .mode = 1,
                 };
-                cmd_helper.push(draw.pipeline_layout, &layerpush);
+                hl_cmds.push(&layerpush);
                 gc.dev.cmdDraw(
                     cbufr,
                     models.sizes[cube_index],
@@ -157,45 +170,56 @@ pub fn recordFrame(
             }
 
             if (state.alt_proj) {
-                gc.dev.cmdBindPipeline(cbufr, .graphics, draw.pipeline[1]);
-                gc.dev.cmdBindDescriptorSets(
-                    cbufr,
-                    .graphics,
-                    draw.pipeline_layout,
-                    0,
-                    all_sets,
-                    ubo_dynamic_offset,
-                );
-                const bilbo_idx = 4;
-                const first_ok_instance = sht.GridSize.g64.total;
+                const inst_ok_begin = sht.GridSize.g64.total;
+                const inst_glyph_begin = sht.GridSize.g64.total + state.ok_slices_num;
+                const tex_ok_begin = 32;
+                const tex_glyph_begin = 32 + state.ok_slices_num;
+
                 const okpush = gm.PushConstant.PCBlob{
                     .model = m.mat_translate(.{ 0, 3, 0 }).mat,
-                    .inst_base = first_ok_instance,
-                    .tex_base = 32,
+                    .inst_base = inst_ok_begin,
+                    .tex_base = tex_ok_begin,
                 };
-                cmd_helper.push(draw.pipeline_layout, &okpush);
+                hl_cmds.useSprite();
+                hl_cmds.push(&okpush);
                 gc.dev.cmdDraw(
                     cbufr,
-                    models.sizes[bilbo_idx],
+                    models.sizes[BILBORD_IDX],
                     state.ok_slices_num,
-                    models.offsets[bilbo_idx],
+                    models.offsets[BILBORD_IDX],
                     0,
                 );
-                const first_glyph_instance = first_ok_instance + state.ok_slices_num;
                 const glyphpush = gm.PushConstant.PCBlob{
                     .model = m.mat_translate(.{ 0, 6, 0 }).mat,
-                    .inst_base = first_glyph_instance,
-                    .tex_base = 32 + state.ok_slices_num,
+                    .inst_base = inst_glyph_begin,
+                    .tex_base = tex_glyph_begin,
                 };
-                cmd_helper.push(draw.pipeline_layout, &glyphpush);
+                hl_cmds.push(&glyphpush);
                 gc.dev.cmdDraw(
                     cbufr,
-                    models.sizes[bilbo_idx],
+                    models.sizes[BILBORD_IDX],
                     state.ok_slices_num,
-                    models.offsets[bilbo_idx],
+                    models.offsets[BILBORD_IDX],
                     0,
                 );
             }
+
+            //gui
+            const guipush = gm.PushConstant.PCBlob{
+                .model = m.mat_translate(.{ 0, 0, 0 }).mat,
+                .inst_base = 0,
+                .mode = 2,
+            };
+            hl_cmds.useTriangles();
+            hl_cmds.dSetsBind(all_sets, 2);
+            hl_cmds.push(&guipush);
+            gc.dev.cmdDraw(
+                cbufr,
+                models.sizes[HEX_IDX],
+                256,
+                models.offsets[HEX_IDX],
+                0,
+            );
 
             // TODO: render text here xD
             // but how?! meaby use https://github.com/Chlumsky/msdf-atlas-gen as offline step?

@@ -4,6 +4,7 @@ const rmath = @import("rmath");
 pub const vec2 = @Vector(2, f32);
 pub const vec3 = @Vector(3, f32);
 pub const vec4 = @Vector(4, f32);
+pub const uvec4 = @Vector(4, u8);
 
 // glsl mat4 alignment is 16B
 test "allignment explorer" {
@@ -63,6 +64,16 @@ pub fn zero4() vec4 {
 
 pub fn stack4(a: vec3, b: f32) vec4 {
     return .{ a[0], a[1], a[2], b };
+}
+
+pub fn asPix(srgb: vec3) uvec4 {
+    const srgb_ar: [3]f32 = srgb;
+    return .{
+        @intFromFloat(srgb_ar[0] * 255),
+        @intFromFloat(srgb_ar[1] * 255),
+        @intFromFloat(srgb_ar[2] * 255),
+        255,
+    };
 }
 
 pub inline fn splat4d(a: f32) vec4 {

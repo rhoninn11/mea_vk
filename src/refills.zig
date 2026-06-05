@@ -35,7 +35,7 @@ pub fn unifomRefil(
 
     const x: f32 = @as(f32, @floatFromInt(screan.width));
     const y: f32 = @as(f32, @floatFromInt(screan.height));
-    scratchpad[3].matrices = addons.guiVisor(x, y);
+    scratchpad[2].matrices = addons.guiVisor(x, y);
 }
 
 pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {

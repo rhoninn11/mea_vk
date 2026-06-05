@@ -166,21 +166,11 @@ pub const OkUnderstanding = struct {
                 var valid = true;
                 for (0..3) |i| valid = valid and (s_rgb[i] > 0) and (s_rgb[i] <= 1);
 
-                const mem_idx = (yy * g.w + x) * 4;
-                if (valid) {
-                    const pix = m.stack4(s_rgb * m.splat3d(255), 255);
-                    _ = pix;
-                    texture_mem[mem_idx] = @intFromFloat(s_rgb[0] * 255);
-                    texture_mem[mem_idx + 1] = @intFromFloat(s_rgb[1] * 255);
-                    texture_mem[mem_idx + 2] = @intFromFloat(s_rgb[2] * 255);
-                    texture_mem[mem_idx + 3] = 255;
-                } else {
-                    invalid_pixels += 1;
-                    texture_mem[mem_idx] = 0;
-                    texture_mem[mem_idx + 1] = 0;
-                    texture_mem[mem_idx + 2] = 0;
-                    texture_mem[mem_idx + 3] = 0;
-                }
+                const pix_beg = (yy * g.w + x) * 4;
+                const tex_slot = texture_mem[pix_beg..(pix_beg + 4)];
+                const pix: [4]u8 = if (valid) m.asPix(s_rgb) else .{ 0, 0, 0, 0 };
+                @memmove(tex_slot, pix[0..]);
+                if (!valid) invalid_pixels += 1;
             }
         }
         //alpha-to-coverage: https://www.youtube.com/watch?v=ltvI_gatbic
@@ -229,11 +219,9 @@ pub const OkUnderstanding = struct {
                     inline for (0..3) |i| {
                         texture_mem[mem_idx + i] = @as(u8, @intFromFloat(s_rgb[i] * 255));
                     }
-                    texture_mem[mem_idx] = @as(u8, @intFromFloat(0.1 * 255));
                     texture_mem[mem_idx + 3] = 255;
                 } else {
                     inline for (0..3) |i| texture_mem[mem_idx + i] = 0;
-                    texture_mem[mem_idx] = 255;
                     texture_mem[mem_idx + 3] = 255;
                 }
             }

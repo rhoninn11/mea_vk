@@ -250,6 +250,31 @@ pub const Utils = struct {
         return triangles;
     }
 
+    pub fn Hexy(gpa: Allocator) !TriangleArray {
+        var triangles: TriangleArray = try .initCapacity(gpa, 6);
+        errdefer triangles.deinit(gpa);
+
+        try blitQuad(gpa, &triangles);
+        const tis = triangles.items;
+        Math.matApply(triangles.items, Math.xrot90);
+        Math.scaleApply(triangles.items, .{ @sqrt(3.0) / 3.0, 1, 1 });
+        for (0..6) |i| {
+            const val = &triangles.items[i].color[0];
+            val.* = 0.5 * val.* + 0.5;
+        }
+
+        try triangles.appendSlice(gpa, &.{ tis[0], tis[2], Vertex{
+            .pos = .{ 1, 0, 0 },
+            .color = .{ 1, 1, 0 },
+        } });
+        try triangles.appendSlice(gpa, &.{ tis[5], tis[4], Vertex{
+            .pos = .{ -1, 0, 0 },
+            .color = .{ 0, 0, 0 },
+        } });
+
+        return triangles;
+    }
+
     fn blitting(alloc: Allocator, stencil: *TriangleArray) !TriangleArray {
         const rotX = m.rotMatX(0.25);
 
@@ -404,38 +429,43 @@ pub fn probing(show: bool) void {
     tinkering(VertexAlt1, show);
     tinkering(VertexAlt2, show);
 }
-pub fn populateModels(alloc: std.mem.Allocator, here: *TriangleArray, as: *VertRepo) !void {
+pub fn populateModels(gpa: std.mem.Allocator, here: *TriangleArray, as: *VertRepo) !void {
     var param = RingParams.default;
     var shape: TriangleArray = undefined;
 
     param.len = 5;
     param.flat = true;
-    shape = try Utils.Pierced2(alloc);
-    try here.appendSlice(alloc, shape.items);
+    shape = try Utils.Pierced2(gpa);
+    try here.appendSlice(gpa, shape.items);
     as.register(shape.items);
-    shape.deinit(alloc);
+    shape.deinit(gpa);
 
-    shape = try Utils.Blocky(alloc);
-    try here.appendSlice(alloc, shape.items);
+    shape = try Utils.Blocky(gpa);
+    try here.appendSlice(gpa, shape.items);
     as.register(shape.items);
-    shape.deinit(alloc);
+    shape.deinit(gpa);
 
-    shape = try Utils.Pierced(alloc);
-    try here.appendSlice(alloc, shape.items);
+    shape = try Utils.Pierced(gpa);
+    try here.appendSlice(gpa, shape.items);
     as.register(shape.items);
-    shape.deinit(alloc);
+    shape.deinit(gpa);
 
     param.len = 32;
     param.flat = false;
-    shape = try Utils.Ring(alloc, param);
-    try here.appendSlice(alloc, shape.items);
+    shape = try Utils.Ring(gpa, param);
+    try here.appendSlice(gpa, shape.items);
     as.register(shape.items);
-    shape.deinit(alloc);
+    shape.deinit(gpa);
 
-    shape = try Utils.Bilboard(alloc);
-    try here.appendSlice(alloc, shape.items);
+    shape = try Utils.Bilboard(gpa);
+    try here.appendSlice(gpa, shape.items);
     as.register(shape.items);
-    shape.deinit(alloc);
+    shape.deinit(gpa);
+
+    shape = try Utils.Hexy(gpa);
+    try here.appendSlice(gpa, shape.items);
+    as.register(shape.items);
+    shape.deinit(gpa);
 }
 
 const BBox = struct {
