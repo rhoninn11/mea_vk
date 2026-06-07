@@ -225,18 +225,19 @@ pub fn recordFrame(
                 0,
             );
 
-            std.debug.print("+++ elo {d}\n", .{state.letters_inst_num});
+            // std.debug.print("+++ elo {d}\n", .{state.letters_inst_num});
             const letter_push = gm.PushConstant.PCBlob{
                 .model = m.mat_translate(.{ 0, 0, 0 }).mat,
                 .inst_base = state.letters_inst_offset,
-                .mode = 0,
+                .tex_base = 160,
+                .mode = 1,
             };
-            hl_cmds.useTriangles();
+            hl_cmds.useSprite();
             hl_cmds.push(&letter_push);
             gc.dev.cmdDraw(
                 cbufr,
                 models.sizes[BILBORD_IDX],
-                2,
+                state.letters_inst_num,
                 models.offsets[BILBORD_IDX],
                 0,
             );

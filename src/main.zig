@@ -163,19 +163,19 @@ fn theDeepest(access: EasyAcces) !void {
         gm.baked.storage_frag_vert,
         &.{
             .{ .binding = 0, .element_size = storage_a_sz, .num = 1 },
-            .{ .binding = 0, .element_size = storage_a_sz, .num = 1 },
+            // .{ .binding = 1, .element_size = storage_b_sz, .num = 1 },
         },
         null,
     );
     defer hl_dset.deinit(&dset_storage_a);
 
-    var dset_storage_b = try hl_dset.init(
-        swapchain_len,
-        gm.baked.storage_frag_vert,
-        &.{.{ .binding = 1, .element_size = storage_b_sz, .num = 1 }},
-        null,
-    );
-    defer hl_dset.deinit(&dset_storage_b);
+    // var dset_storage_b = try hl_dset.init(
+    //     swapchain_len,
+    //     gm.baked.storage_frag_vert,
+    //     &.{.{ .binding = 1, .element_size = storage_b_sz, .num = 1 }},
+    //     null,
+    // );
+    // defer hl_dset.deinit(&dset_storage_b);
 
     const ATLAS_MAX = 256;
     var dset_atlas = try hl_dset.init(
@@ -267,7 +267,7 @@ fn theDeepest(access: EasyAcces) !void {
 
     const glyph_count: u8 = 24;
     var glyph_atlas_idx: u8 = 160;
-    if (mbalphabet) |*abc| for (0..glyph_count) |i| {
+    if (mbalphabet) |*abc| for (0..abc.num) |i| {
         const pixels = abc.char_texd_arr[i];
         const g_sz = abc.char_sz_arr[i].gSize();
 
@@ -324,7 +324,7 @@ fn theDeepest(access: EasyAcces) !void {
     var inertia = IVec3.Inertia.init(.{ pamperek.phi_raw, 0, 0 });
     inertia.phx = .default;
 
-    const dbgmonit = u.DbgMonitor{
+    var dbgmonit = u.DbgMonitor{
         .name = "phi val",
         .val = 0,
     };
@@ -387,8 +387,7 @@ fn theDeepest(access: EasyAcces) !void {
         glyphphi += td1 * 0.13;
         pamperek.control(&input.plr_input, td);
 
-        // try dbgmonit.update(access.io, pamperek.p.phi, frame_state.layer_instance_num);
-        _ = dbgmonit;
+        try dbgmonit.update(access.io, pamperek.p.phi, frame_state.layer_instance_num);
 
         if (glass.update(&input.glass_input)) {
             try glass.updateStorage(dset_storage_a, true);
@@ -455,10 +454,10 @@ fn theDeepest(access: EasyAcces) !void {
                 frame_state.letters_inst_num = try alphabet.BlitText(
                     dset_storage_a,
                     frame_state.letters_inst_offset,
-                    "hello world",
+                    "Sample text",
                 );
 
-                std.debug.print("+++ well {d}\n", .{frame_state.letters_inst_num});
+                // std.debug.print("+++ well {d}\n", .{frame_state.letters_inst_num});
             }
 
             try frame.recordFrame(

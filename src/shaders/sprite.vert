@@ -55,9 +55,9 @@ layout(set = 1, binding = 0) buffer readonly InstanceData{
     Instance per_instance[]; 
 } _storage;
 
-layout(set = 1, binding = 1) buffer readonly InstanceSmall{ 
-    SmolInst per_instance[]; 
-} _storage_b;
+// layout(set = 1, binding = 1) buffer readonly InstanceSmall{ 
+//     SmolInst per_instance[]; 
+// } _storage_b;
 
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_color;
@@ -76,9 +76,12 @@ void main() {
     Instance m_inst = _storage.per_instance[inst_idx];
 
     if (_pc.data.mode == 1) {
+        
+        float scale = m_inst.other_offsets.y;
         vec4 delta = vec4(m_inst.offset_2d.x, m_inst.offset_2d.y, 0, 0);
-        vec4 base = vec4(a_pos, 0);
+        vec4 base = vec4(a_pos*scale, 1);
         gl_Position = mvp.proj * mvp.view * _pc.data.model * (base + delta);
+        v_tex_idx = _pc.data.tex_base + floatBitsToUint(m_inst.other_offsets.x);
     }else {
         
         // per instance transform matrix
@@ -91,14 +94,7 @@ void main() {
         vec4 before_ems = per_inst_t * vec4(a_pos, 1);
 
         gl_Position = mvp.proj * mvp.view * _pc.data.model * before_ems;
-
         v_tex_idx = _pc.data.tex_base + gl_InstanceIndex;
-        //to choose right slice per instance
-        // int slices_at = 32;
-        // float inst_tex_idx_f = m_inst.offset_4d.a;
-        // int inst_tex = int(inst_tex_idx_f);
-        // v_tex_idx = slices_at + inst_tex;
-        
-        v_uv = a_color.xy;
     }
+    v_uv = a_color.xy;
 }

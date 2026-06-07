@@ -269,12 +269,11 @@ pub const Alphabet = struct {
         var inst_idx: u16 = 0;
         for (text) |letter| {
             if (letter == '\n') continue;
-
             const tex_idx = self.char_map.get(letter) orelse continue;
             const idxf: f32 = @as(f32, @floatFromInt(inst_idx));
             const val = sht.PerInstance{
-                .offset_2d = .{ idxf * 0.1, idxf * 0.1 },
-                .other_offsets = .{ @bitCast(@as(u32, tex_idx)), 0 },
+                .offset_2d = .{ idxf * 0.3, 0 },
+                .other_offsets = .{ @bitCast(@as(u32, tex_idx)), 0.1 },
             };
             scratchpad[inst_idx] = val;
             inst_idx += 1;
