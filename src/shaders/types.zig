@@ -17,7 +17,7 @@ pub const GroupData = extern struct {
     matrices: MatPack = undefined,
 };
 
-//alignment 16 cuz gpu
+// 80B align(16)
 pub const PerInstance = struct {
     offset_2d: [2]f32 = undefined,
     other_offsets: [2]f32 = undefined,
@@ -25,6 +25,11 @@ pub const PerInstance = struct {
     offset_4d: [4]f32 = undefined,
     depth_ctrl: [4]f32 = undefined,
     srgb: [4]f32 = undefined,
+};
+
+// 16B
+pub const SmolInst = struct {
+    sizeing: [4]f32 = undefined,
 };
 
 const DepthControl = extern struct {

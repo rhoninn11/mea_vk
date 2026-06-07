@@ -36,6 +36,7 @@ struct UboData{
 layout(set = 0, binding = 0) uniform UBO { UboData data; } _ubo;
 
 
+// 80B
 struct Instance{
     vec2 offset_2d;
     vec2 other_offsets;
@@ -45,9 +46,18 @@ struct Instance{
     vec4 depth_ctrl;
     vec4 srgb;
 };
-layout(set = 1, binding = 0) buffer readonly InstanceData{
-    Instance per_instance[];
+
+// 16B
+struct SmolInst{
+    vec4 sizing;
+};
+layout(set = 1, binding = 0) buffer readonly InstanceData{ 
+    Instance per_instance[]; 
 } _storage;
+
+layout(set = 1, binding = 1) buffer readonly InstanceSmall{ 
+    SmolInst per_instance[]; 
+} _storage_b;
 
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_color;
@@ -61,28 +71,34 @@ vec3 unzip(vec2 zipped);
 // group locked at the middle of the screan
 // group gives info to precalculate surface
 void main() {
-    bool indepentednt = false;
     uint inst_idx = _pc.data.inst_base + gl_InstanceIndex;
-    Instance m_inst = _storage.per_instance[inst_idx];
     MatPack mvp = _ubo.data.matrices;
-    
-    // per instance transform matrix
-    vec3 front = m_inst.new_usage.xyz;
-    vec3 up = m_inst.depth_ctrl.xyz;
-    vec3 right = cross(up, front);
-    vec3 inst_pos = m_inst.offset_4d.xyz;
+    Instance m_inst = _storage.per_instance[inst_idx];
 
-    mat4 per_inst_t = mat4(vec4(right, 0), vec4(up, 0), vec4(front, 0), vec4(inst_pos,1));
-    vec4 before_ems = per_inst_t * vec4(a_pos, 1);
+    if (_pc.data.mode == 1) {
+        vec4 delta = vec4(m_inst.offset_2d.x, m_inst.offset_2d.y, 0, 0);
+        vec4 base = vec4(a_pos, 0);
+        gl_Position = mvp.proj * mvp.view * _pc.data.model * (base + delta);
+    }else {
+        
+        // per instance transform matrix
+        vec3 front = m_inst.new_usage.xyz;
+        vec3 up = m_inst.depth_ctrl.xyz;
+        vec3 right = cross(up, front);
+        vec3 inst_pos = m_inst.offset_4d.xyz;
 
-    gl_Position = mvp.proj * mvp.view * _pc.data.model * before_ems;
+        mat4 per_inst_t = mat4(vec4(right, 0), vec4(up, 0), vec4(front, 0), vec4(inst_pos,1));
+        vec4 before_ems = per_inst_t * vec4(a_pos, 1);
 
-    v_tex_idx = _pc.data.tex_base + gl_InstanceIndex;
-    //to choose right slice per instance
-    // int slices_at = 32;
-    // float inst_tex_idx_f = m_inst.offset_4d.a;
-    // int inst_tex = int(inst_tex_idx_f);
-    // v_tex_idx = slices_at + inst_tex;
-    
-    v_uv = a_color.xy;
+        gl_Position = mvp.proj * mvp.view * _pc.data.model * before_ems;
+
+        v_tex_idx = _pc.data.tex_base + gl_InstanceIndex;
+        //to choose right slice per instance
+        // int slices_at = 32;
+        // float inst_tex_idx_f = m_inst.offset_4d.a;
+        // int inst_tex = int(inst_tex_idx_f);
+        // v_tex_idx = slices_at + inst_tex;
+        
+        v_uv = a_color.xy;
+    }
 }

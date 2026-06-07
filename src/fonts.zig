@@ -249,4 +249,43 @@ pub const Alphabet = struct {
             .num = pos,
         };
     }
+
+    pub fn BlitText(
+        self: *const Alphabet,
+        storage_dset: dset.DescriptorPrep,
+        first_inst: u16,
+        text: []const u8,
+    ) !u16 {
+        const MAX_LETTERS = 256;
+        std.debug.assert(text.len < MAX_LETTERS);
+
+        const lim_num = 8096;
+        const stack_size = lim_num * @sizeOf(sht.PerInstance);
+        var stack_mem: [stack_size]u8 = undefined;
+        var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
+        const fba = provider.allocator();
+        const scratchpad: []sht.PerInstance = try fba.alloc(sht.PerInstance, text.len);
+
+        var inst_idx: u16 = 0;
+        for (text) |letter| {
+            if (letter == '\n') continue;
+
+            const tex_idx = self.char_map.get(letter) orelse continue;
+            const idxf: f32 = @as(f32, @floatFromInt(inst_idx));
+            const val = sht.PerInstance{
+                .offset_2d = .{ idxf * 0.1, idxf * 0.1 },
+                .other_offsets = .{ @bitCast(@as(u32, tex_idx)), 0 },
+            };
+            scratchpad[inst_idx] = val;
+            inst_idx += 1;
+        }
+
+        for (storage_dset.buff_arr.items) |possible_buffer| {
+            const storage = possible_buffer.?;
+            const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
+
+            @memcpy(mapping + first_inst, scratchpad[0..inst_idx]);
+        }
+        return inst_idx;
+    }
 };

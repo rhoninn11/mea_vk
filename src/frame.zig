@@ -1,3 +1,4 @@
+const std = @import("std");
 const gm = @import("graphics_context.zig");
 const vk = @import("vulkan-zig");
 const sht = @import("shaders/types.zig");
@@ -12,6 +13,8 @@ pub const FrameState = struct {
     ok_slices_num: u8,
     layer_instance_offset: u16,
     layer_instance_num: u16,
+    letters_inst_offset: u16,
+    letters_inst_num: u16,
 };
 
 fn Dynamic(t: type) type {
@@ -205,19 +208,36 @@ pub fn recordFrame(
             }
 
             //gui
+            hl_cmds.dSetsBind(all_sets, 2);
+            // _ = HEX_IDX;
             const guipush = gm.PushConstant.PCBlob{
                 .model = m.mat_translate(.{ 0, 0, 0 }).mat,
                 .inst_base = 0,
                 .mode = 2,
             };
             hl_cmds.useTriangles();
-            hl_cmds.dSetsBind(all_sets, 2);
             hl_cmds.push(&guipush);
             gc.dev.cmdDraw(
                 cbufr,
                 models.sizes[HEX_IDX],
                 256,
                 models.offsets[HEX_IDX],
+                0,
+            );
+
+            std.debug.print("+++ elo {d}\n", .{state.letters_inst_num});
+            const letter_push = gm.PushConstant.PCBlob{
+                .model = m.mat_translate(.{ 0, 0, 0 }).mat,
+                .inst_base = state.letters_inst_offset,
+                .mode = 0,
+            };
+            hl_cmds.useTriangles();
+            hl_cmds.push(&letter_push);
+            gc.dev.cmdDraw(
+                cbufr,
+                models.sizes[BILBORD_IDX],
+                2,
+                models.offsets[BILBORD_IDX],
                 0,
             );
 

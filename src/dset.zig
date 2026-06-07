@@ -6,7 +6,7 @@ pub const HLDSetPrep = struct {
     gc: *const gm.GraphicsContext,
     gpa: std.mem.Allocator,
 
-    pub fn init(self: *const HLDSetPrep, frame_copies_num: usize, using: gm.baked.DSetInit, data_info: gm.baked.DSetDataInfo, bindless_size: ?u32) !DescriptorPrep {
+    pub fn init(self: *const HLDSetPrep, frame_copies_num: usize, using: gm.baked.DSetInit, data_info: []const gm.baked.DSetDataInfo, bindless_size: ?u32) !DescriptorPrep {
         return DescriptorPrep.init(self.gpa, self.gc, //
             frame_copies_num, using, data_info, bindless_size);
     }
@@ -28,90 +28,111 @@ pub const DescriptorPrep = struct {
     set_binding: u32,
     set_type: vk.DescriptorType,
 
-    fn dsetLayout(
-        devk: vk.DeviceProxy,
-        binding: u32,
-        set_type: vk.DescriptorType,
-        sh_stage_flags: vk.ShaderStageFlags,
-        arr_size: ?u32,
-    ) !vk.DescriptorSetLayout {
-        var bindless: bool = false;
-        if (arr_size) |size| {
-            if (size > 1) bindless = true;
+    const LayoutHl = struct {
+        gc: *const gm.GraphicsContext,
+        dsctype: vk.DescriptorType,
+        stageflags: vk.ShaderStageFlags,
+
+        fn dsetLayout(
+            self: *const LayoutHl,
+            infos: []const gm.baked.DSetDataInfo,
+            arr_size: ?u32,
+        ) !vk.DescriptorSetLayout {
+            const SLOTS = 4;
+            std.debug.assert(infos.len > 0);
+            std.debug.assert(infos.len < SLOTS);
+
+            var bindless: bool = false;
+            if (arr_size) |size| {
+                if (size > 1) bindless = true;
+            }
+            if (bindless) {
+                std.debug.assert(infos.len == 1);
+                std.debug.print("+++ binding size is {d}\n", .{arr_size.?});
+            }
+
+            const bindless_textures_flags: vk.DescriptorBindingFlags = .{
+                .partially_bound_bit = true,
+                .variable_descriptor_count_bit = true,
+                .update_after_bind_bit = true,
+            };
+            const more_flags: vk.DescriptorSetLayoutBindingFlagsCreateInfo = .{
+                .p_binding_flags = @ptrCast(&bindless_textures_flags),
+                .binding_count = 1,
+            };
+            const more_flexibility: vk.DescriptorSetLayoutCreateFlags = .{
+                .update_after_bind_pool_bit = true,
+            };
+
+            var slot_used: u8 = 0;
+            var _bindings: [SLOTS]vk.DescriptorSetLayoutBinding = undefined;
+            for (infos) |info| {
+                _bindings[slot_used] = .{
+                    .binding = info.binding,
+                    .descriptor_count = if (bindless) arr_size.? else 1,
+                    .descriptor_type = self.dsctype,
+                    .p_immutable_samplers = null, // for textures ?
+                    .stage_flags = self.stageflags,
+                };
+                slot_used += 1;
+            }
+
+            const dslci: vk.DescriptorSetLayoutCreateInfo = .{
+                .p_next = if (bindless) &more_flags else null,
+                .flags = if (bindless) more_flexibility else .{},
+                .binding_count = slot_used,
+                .p_bindings = @ptrCast(&_bindings),
+            };
+
+            return self.gc.dev.createDescriptorSetLayout(&dslci, null);
         }
-        if (bindless) {
-            std.debug.print("+++ binding size is {d}\n", .{arr_size.?});
-        }
-
-        const _bind = vk.DescriptorSetLayoutBinding{
-            .binding = binding,
-            .descriptor_count = if (bindless) arr_size.? else 1,
-            .descriptor_type = set_type,
-            .p_immutable_samplers = null, // for textures ?
-            .stage_flags = sh_stage_flags,
-        };
-        const binding_flgs: vk.DescriptorBindingFlags = .{
-            .partially_bound_bit = true,
-            .variable_descriptor_count_bit = true,
-            .update_after_bind_bit = true,
-        };
-        const flags_info: vk.DescriptorSetLayoutBindingFlagsCreateInfo = .{
-            .p_binding_flags = @ptrCast(&binding_flgs),
-            .binding_count = 1,
-        };
-        const create_flags: vk.DescriptorSetLayoutCreateFlags = .{
-            .update_after_bind_pool_bit = true,
-        };
-
-        const dslci: vk.DescriptorSetLayoutCreateInfo = .{
-            .p_bindings = @ptrCast(&_bind),
-            .flags = if (bindless) create_flags else .{},
-            .binding_count = 1,
-            .p_next = if (bindless) &flags_info else null,
-        };
-
-        return devk.createDescriptorSetLayout(&dslci, null);
-    }
+    };
     pub fn init(
         gpa: std.mem.Allocator,
         gc: *const gm.GraphicsContext,
         frame_copies_num: usize,
         using: gm.baked.DSetInit,
-        data_info: gm.baked.DSetDataInfo,
+        data_info: []const gm.baked.DSetDataInfo,
         bindless_size: ?u32,
     ) !Self {
+        std.debug.assert(data_info.len > 0);
         const len_u32: u32 = @intCast(frame_copies_num);
 
         var self: Self = .{
             .gc = gc,
-            .set_binding = data_info.binding,
+            .set_binding = data_info[0].binding, // for writing bindless textures
             .set_type = using.usage.descriptor_type,
         };
+        const laytr = LayoutHl{
+            .gc = gc,
+            .dsctype = using.usage.descriptor_type,
+            .stageflags = using.shader_stage,
+        };
+        errdefer self.deinit(gpa);
+
         const arr_size: u32 = bindless_size orelse 1;
         const bindless: bool = bindless_size != null;
 
         //dynamic arrays alloc
-        const devk = self.gc.dev;
-        errdefer self.deinit(gpa);
         try self.d_set_layout_arr.resize(gpa, frame_copies_num);
         try self.buff_arr.resize(gpa, frame_copies_num);
         try self.d_set_arr.resize(gpa, frame_copies_num);
 
         //binding layout
-        self._d_set_layout = try Self.dsetLayout(devk, //
-            self.set_binding, self.set_type, //
-            using.shader_stage, arr_size);
+        self._d_set_layout = try laytr.dsetLayout(data_info, arr_size);
 
         for (0..frame_copies_num) |i| {
             self.d_set_layout_arr.items[i] = self._d_set_layout.?;
             self.buff_arr.items[i] = null;
-            if (data_info.element_size == 0) continue;
+            if (data_info[0].element_size == 0) continue;
 
+            var total_buffer_sz: u32 = 0;
+            for (data_info) |di| total_buffer_sz += di.element_size * di.num;
             self.buff_arr.items[i] = try gm.createBuffer(
                 self.gc,
                 using.memory_property,
                 using.usage.usage_flag,
-                data_info.element_size * data_info.num,
+                total_buffer_sz,
             );
         }
 
@@ -157,17 +178,17 @@ pub const DescriptorPrep = struct {
         // specify data
         // var hmm: std.ArrayList(vk.WriteDescriptorSet) = .empty;
 
-        for (0..frame_copies_num) |i| {
-            if (self.set_type != .combined_image_sampler) {
+        if (self.set_type != .combined_image_sampler) {
+            for (0..frame_copies_num) |i| {
                 const buf_info = vk.DescriptorBufferInfo{
                     .buffer = self.buff_arr.items[i].?.dvk_bfr,
-                    .range = data_info.element_size, // relevent for dynamics offset but not exactly the same as single instance data
+                    .range = data_info[0].element_size, // relevent for dynamics offset but not exactly the same as single instance data
                     .offset = 0,
                 };
                 const write_ops: []const vk.WriteDescriptorSet = &.{vk.WriteDescriptorSet{
                     .s_type = .write_descriptor_set,
                     .dst_set = self.d_set_arr.items[i],
-                    .dst_binding = data_info.binding,
+                    .dst_binding = data_info[0].binding,
                     .dst_array_element = 0,
                     .descriptor_type = using.usage.descriptor_type,
                     .descriptor_count = 1,

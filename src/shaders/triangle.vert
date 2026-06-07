@@ -40,6 +40,7 @@ layout(set = 0, binding = 0) uniform GroupDataUbo{
     GroupData data;
 } _group;
 
+// 80B
 struct Instance{
     vec2 offset_2d;
     vec2 other_offsets;
@@ -47,6 +48,11 @@ struct Instance{
     vec4 offset_4d;
     vec4 depth_ctrl;
     vec4 srgb;
+};
+
+// 16B
+struct SmolInst{
+    vec4 sizing;
 };
 layout(set = 1, binding = 0) buffer readonly InstanceData{
     Instance per_instance[];

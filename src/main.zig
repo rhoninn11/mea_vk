@@ -56,12 +56,16 @@ pub fn main(init: std.process.Init) !void {
 }
 
 const OK_SWEEP: u8 = 128;
+const last_q = sht.GridSize.g64.total + sht.GridSize.g64.total / 2;
+const last_half_of_last_q = sht.GridSize.g64.total + sht.GridSize.g64.total / 2;
 var frame_state: frame.FrameState = .{
     .alt_proj = false,
     .model_idx = 0,
     .ok_slices_num = OK_SWEEP,
-    .layer_instance_offset = @intCast(sht.GridSize.g64.total + sht.GridSize.g64.total / 2),
+    .layer_instance_offset = @intCast(last_q),
     .layer_instance_num = 0,
+    .letters_inst_offset = @intCast(last_half_of_last_q),
+    .letters_inst_num = 0,
 };
 
 pub fn gpCommandQueue(gc: *const gm.GraphicsContext) !vk.CommandPool {
@@ -138,41 +142,95 @@ fn theDeepest(access: EasyAcces) !void {
     std.debug.assert(grid.total * 2 == _8k);
 
     const ubo_sz = @sizeOf(sht.GroupData);
-    const ibox_sz = @sizeOf(sht.PerInstance);
-    const storage_sz = ibox_sz * grid.total * 2;
+    const instpool_num = grid.total * 2;
+    const storage_a_sz = @sizeOf(sht.PerInstance) * instpool_num;
+    const storage_b_sz = @sizeOf(sht.SmolInst) * instpool_num;
     std.debug.print(
-        "+++ instance_size {d: >12}B\n+++ storage size {d: >12}B",
-        .{ ibox_sz, storage_sz },
+        "+++ storage_med {d: >12}B | storage_small {d: >12}B",
+        .{ storage_a_sz, storage_b_sz },
     );
 
     var dset_uniform = try hl_dset.init(
         swapchain_len,
         gm.baked.uniform_frag_vert_dyn,
-        .{ .binding = 0, .element_size = ubo_sz, .num = 16 },
+        &.{.{ .binding = 0, .element_size = ubo_sz, .num = 16 }},
         null,
     );
     defer hl_dset.deinit(&dset_uniform);
 
-    var dset_storage = try hl_dset.init(
+    var dset_storage_a = try hl_dset.init(
         swapchain_len,
         gm.baked.storage_frag_vert,
-        .{ .binding = 0, .element_size = storage_sz, .num = 1 },
+        &.{
+            .{ .binding = 0, .element_size = storage_a_sz, .num = 1 },
+            .{ .binding = 0, .element_size = storage_a_sz, .num = 1 },
+        },
         null,
     );
-    defer hl_dset.deinit(&dset_storage);
+    defer hl_dset.deinit(&dset_storage_a);
+
+    var dset_storage_b = try hl_dset.init(
+        swapchain_len,
+        gm.baked.storage_frag_vert,
+        &.{.{ .binding = 1, .element_size = storage_b_sz, .num = 1 }},
+        null,
+    );
+    defer hl_dset.deinit(&dset_storage_b);
 
     const ATLAS_MAX = 256;
     var dset_atlas = try hl_dset.init(
         1,
         gm.baked.texture_frag,
-        .{ .binding = 0 },
+        &.{.{ .binding = 0 }},
         ATLAS_MAX,
     );
     defer hl_dset.deinit(&dset_atlas);
 
+    // rendering & pipelines
+    const render_pass = try createRenderPass(gc, swapchain);
+    defer gc.dev.destroyRenderPass(render_pass, null);
+
+    const dsets = [_]vk.DescriptorSetLayout{
+        dset_uniform._d_set_layout.?,
+        dset_storage_a._d_set_layout.?,
+        dset_atlas._d_set_layout.?,
+    };
+    const push_const_ranges = gm.PushConstant.Ranges();
+    const pipeline_layout = try gc.dev.createPipelineLayout(&.{
+        .flags = .{},
+        .p_set_layouts = &dsets,
+        .set_layout_count = dsets.len,
+        .p_push_constant_ranges = push_const_ranges.ptr,
+        .push_constant_range_count = @intCast(push_const_ranges.len),
+    }, null);
+    defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
+
+    const pipe_mod: pipe.Moduler = .{
+        .gc = gc,
+        .layout = pipeline_layout,
+    };
+    const pipeline = try pipe_mod.createPipeline(render_pass, .Triangle);
+    defer pipe_mod.destroyPipelin(pipeline);
+    const pipeline_2nd = try pipe_mod.createPipeline(render_pass, .Sprite);
+    defer pipe_mod.destroyPipelin(pipeline_2nd);
+
+    var repo = try vertex.repoSpawn(gpa, &pic);
+    defer repo.deinit(gc);
+    std.debug.print("+++ total verts {d}\n", .{repo.total});
+
+    const draw_instanced_attempt: gm.DrawInfo = .{
+        .instance_count = grid.total, // TODO: something like "InstanceMapping"...
+        .pipeline = [4]vk.Pipeline{ pipeline, pipeline_2nd, undefined, undefined },
+        .pipeline_layout = pipeline_layout,
+        .uniform_dsets = dset_uniform.d_set_arr,
+        .storage_dsets = dset_storage_a.d_set_arr,
+        .texture_dset = dset_atlas.d_set_arr.items[0],
+    };
+
+    // fill storage and textures
     const spacing = 0.1;
     const size = 0.04;
-    try prefils.storagePrefil(dset_storage, grid, spacing);
+    try prefils.storagePrefil(dset_storage_a, grid, spacing);
 
     const g64 = sht.GridSize.g64;
 
@@ -219,64 +277,7 @@ fn theDeepest(access: EasyAcces) !void {
         glyph_atlas_idx += 1;
     };
 
-    // render pass
-    const render_pass = try createRenderPass(gc, swapchain);
-    defer gc.dev.destroyRenderPass(render_pass, null);
-
-    // pipeline
-    const dsets = [_]vk.DescriptorSetLayout{
-        dset_uniform._d_set_layout.?,
-        dset_storage._d_set_layout.?,
-        dset_atlas._d_set_layout.?,
-    };
-    const push_const_ranges = gm.PushConstant.Ranges();
-    const pipeline_layout = try gc.dev.createPipelineLayout(&.{
-        .flags = .{},
-        .p_set_layouts = &dsets,
-        .set_layout_count = dsets.len,
-        .p_push_constant_ranges = push_const_ranges.ptr,
-        .push_constant_range_count = @as(u32, @intCast(push_const_ranges.len)),
-    }, null);
-    defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
-
-    const pipe_mod: pipe.Moduler = .{
-        .gc = gc,
-        .layout = pipeline_layout,
-    };
-    const pipeline = try pipe_mod.createPipeline(render_pass, .Triangle);
-    defer pipe_mod.destroyPipelin(pipeline);
-    const pipeline_2nd = try pipe_mod.createPipeline(render_pass, .Sprite);
-    defer pipe_mod.destroyPipelin(pipeline_2nd);
-
-    // framebuffers
-    var framebuffers = try createFramebuffers(
-        gc,
-        gpa,
-        render_pass,
-        swapchain,
-    );
-    defer destroyFramebuffers(gc, gpa, framebuffers);
-
-    var repo = try vertex.repoSpawn(gpa, &pic);
-    defer repo.deinit(gc);
-    std.debug.print("+++ total verts {d}\n", .{repo.total});
-
-    const draw_instanced_attempt: gm.DrawInfo = .{
-        .instance_count = grid.total,
-        .pipeline = [4]vk.Pipeline{ pipeline, pipeline_2nd, undefined, undefined },
-        .pipeline_layout = pipeline_layout,
-        .uniform_dsets = dset_uniform.d_set_arr,
-        .storage_dsets = dset_storage.d_set_arr,
-        .texture_dset = dset_atlas.d_set_arr.items[0],
-    };
-
-    const frame_pools_config: vk.CommandPoolCreateInfo = .{
-        .queue_family_index = gc.graphics_queue.family,
-        .flags = .{
-            .transient_bit = true,
-        },
-    };
-
+    // For frame recording
     const inflight_slots = 8;
     std.debug.assert(swapchain_len < inflight_slots);
     var inflight_stack: [1024]u8 = undefined;
@@ -285,33 +286,28 @@ fn theDeepest(access: EasyAcces) !void {
     const pools: []vk.CommandPool = try loc_stack.allocator().alloc(vk.CommandPool, swapchain_len);
     const recorders: []gm.FrameRecorder = try loc_stack.allocator().alloc(gm.FrameRecorder, swapchain_len);
 
+    var framebuffers = try createFramebuffers(
+        gc,
+        gpa,
+        render_pass,
+        swapchain,
+    );
+    defer destroyFramebuffers(gc, gpa, framebuffers);
+
     var created: u8 = 0;
-    for (0..swapchain_len) |i| {
-        pools[i] = try gc.dev.createCommandPool(&frame_pools_config, null);
+    const frame_pools_config: vk.CommandPoolCreateInfo = .{
+        .queue_family_index = gc.graphics_queue.family,
+        .flags = .{ .transient_bit = true },
+    };
+    for (0..swapchain_len) |_| {
+        pools[created] = try gc.dev.createCommandPool(&frame_pools_config, null);
         created += 1;
     }
     defer for (0..created) |i| {
         gc.dev.destroyCommandPool(pools[i], null);
     };
 
-    for (0..swapchain_len) |i| {
-        recorders[i] = gm.FrameRecorder{
-            .id = @intCast(i),
-            .gm = pic.gc,
-            .pool = pools[i],
-            .cmds = &cmdbufs[i],
-        };
-        try frame.recordFrame(
-            &recorders[i],
-            &repo,
-            swapchain.extent,
-            render_pass,
-            framebuffers,
-            &draw_instanced_attempt,
-            &frame_state,
-        );
-    }
-
+    // Related to scene
     var timeline = addons.Timeline.init(access.io);
     var timeline1 = addons.Timeline.init(access.io);
     time_glob = &timeline;
@@ -328,13 +324,45 @@ fn theDeepest(access: EasyAcces) !void {
     var inertia = IVec3.Inertia.init(.{ pamperek.phi_raw, 0, 0 });
     inertia.phx = .default;
 
-    var dbgmonit = u.DbgMonitor{
+    const dbgmonit = u.DbgMonitor{
         .name = "phi val",
         .val = 0,
     };
 
+    { // Frame recording
+        const frame_sz = try window.extent();
+        for (0..swapchain_len) |i| {
+            recorders[i] = gm.FrameRecorder{
+                .id = @intCast(i),
+                .gm = pic.gc,
+                .pool = pools[i],
+                .cmds = &cmdbufs[i],
+            };
+            try prefils.unifomRefil(
+                dset_uniform,
+                @intCast(i),
+                0.0,
+                pamperek.pos(),
+                size,
+                frame_sz,
+            );
+            try frame.recordFrame(
+                &recorders[i],
+                &repo,
+                swapchain.extent,
+                render_pass,
+                framebuffers,
+                &draw_instanced_attempt,
+                &frame_state,
+            );
+        }
+    }
+
+    //state
     var okphi: f32 = 0;
     var glyphphi: f32 = 0;
+
+    // main loop
     while (!window.shoudClose()) {
         const img_idx = swapchain.image_index;
         // input_continue();
@@ -359,24 +387,25 @@ fn theDeepest(access: EasyAcces) !void {
         glyphphi += td1 * 0.13;
         pamperek.control(&input.plr_input, td);
 
-        try dbgmonit.update(access.io, pamperek.p.phi, frame_state.layer_instance_num);
+        // try dbgmonit.update(access.io, pamperek.p.phi, frame_state.layer_instance_num);
+        _ = dbgmonit;
 
         if (glass.update(&input.glass_input)) {
-            try glass.updateStorage(dset_storage, true);
+            try glass.updateStorage(dset_storage_a, true);
             const lnum = try glass.updateLayerStorage(
-                dset_storage,
+                dset_storage_a,
                 frame_state.layer_instance_offset,
             );
             frame_state.layer_instance_num = lnum;
         }
         if (input.shader_reset_trigger.fired()) {
-            try glass.updateStorage(dset_storage, false);
+            try glass.updateStorage(dset_storage_a, false);
         }
         if (input.alt_projection_trigger.fired()) {
             frame_state.alt_proj = !frame_state.alt_proj;
         }
         if (input.ok_vis_trigger.fired()) {
-            try ok_understanding.labAtInfinitum(dset_storage);
+            try ok_understanding.labAtInfinitum(dset_storage_a);
         }
 
         if (input.slide_r_trig.fired()) {
@@ -396,38 +425,52 @@ fn theDeepest(access: EasyAcces) !void {
             continue;
         }
         try swapchain.currentWaitG();
-        try frame.recordFrame(
-            &recorders[img_idx],
-            &repo,
-            swapchain.extent,
-            render_pass,
-            framebuffers,
-            &draw_instanced_attempt,
-            &frame_state,
-        );
-        try prefils.unifomRefil(
-            dset_uniform,
-            @intCast(img_idx),
-            timeline1.total_s,
-            pamperek.pos(),
-            size,
-            win_size,
-        );
-        const first_ok_instance = g64.total;
-        try oklab.OkUnderstanding.labSpliced(
-            dset_storage,
-            first_ok_instance,
-            OK_SWEEP,
-            okphi,
-        );
+        {
+            try prefils.unifomRefil(
+                dset_uniform,
+                @intCast(img_idx),
+                timeline1.total_s,
+                pamperek.pos(),
+                size,
+                win_size,
+            );
 
-        const first_glyph_insatnce = first_ok_instance + OK_SWEEP;
-        try fonts.lettersSpliced(
-            dset_storage,
-            first_glyph_insatnce,
-            glyph_count,
-            glyphphi,
-        );
+            const first_ok_instance = g64.total;
+            try oklab.OkUnderstanding.labSpliced(
+                dset_storage_a,
+                first_ok_instance,
+                OK_SWEEP,
+                okphi,
+            );
+
+            const first_glyph_insatnce = first_ok_instance + OK_SWEEP;
+            try fonts.lettersSpliced(
+                dset_storage_a,
+                first_glyph_insatnce,
+                glyph_count,
+                glyphphi,
+            );
+
+            if (mbalphabet) |alphabet| {
+                frame_state.letters_inst_num = try alphabet.BlitText(
+                    dset_storage_a,
+                    frame_state.letters_inst_offset,
+                    "hello world",
+                );
+
+                std.debug.print("+++ well {d}\n", .{frame_state.letters_inst_num});
+            }
+
+            try frame.recordFrame(
+                &recorders[img_idx],
+                &repo,
+                swapchain.extent,
+                render_pass,
+                framebuffers,
+                &draw_instanced_attempt,
+                &frame_state,
+            );
+        }
 
         if (state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {
             // std.debug.assert(false); //cuz it will throw error due to bad depth_img resolution

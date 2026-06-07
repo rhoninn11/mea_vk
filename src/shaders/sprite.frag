@@ -27,9 +27,13 @@ layout(location = 0) out vec4 f_color;
 
 
 void main() {
-    vec4 tex_color = texture(tex_bindless[nonuniformEXT(v_tex_idx)], v_uv);
-    if (tex_color.a < 0.99) {
-        discard;
+    if (_pc.data.mode == 1) {
+        f_color = vec4(1.0, 1.0, 1.0, 1.0);
+    } else {
+        vec4 tex_color = texture(tex_bindless[nonuniformEXT(v_tex_idx)], v_uv);
+        if (tex_color.a < 0.99) {
+            discard;
+        }
+        f_color = tex_color;
     }
-    f_color = tex_color;
 }
