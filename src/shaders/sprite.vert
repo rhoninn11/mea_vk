@@ -77,11 +77,16 @@ void main() {
 
     if (_pc.data.mode == 1) {
         
-        float scale = m_inst.other_offsets.y;
+        float scale = 0.2;
+        float x_scale = m_inst.other_offsets.x;
         vec4 delta = vec4(m_inst.offset_2d.x, m_inst.offset_2d.y, 0, 0);
         vec4 base = vec4(a_pos*scale, 1);
+        
+        base.x = base.x*x_scale;
+        base.y = base.y*0.6;
+        
         gl_Position = mvp.proj * mvp.view * _pc.data.model * (base + delta);
-        v_tex_idx = _pc.data.tex_base + floatBitsToUint(m_inst.other_offsets.x);
+        v_tex_idx = _pc.data.tex_base + floatBitsToUint(m_inst.other_offsets.y);
     }else {
         
         // per instance transform matrix

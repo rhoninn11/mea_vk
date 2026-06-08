@@ -158,7 +158,7 @@ fn theDeepest(access: EasyAcces) !void {
     );
     defer hl_dset.deinit(&dset_uniform);
 
-    var dset_storage_a = try hl_dset.init(
+    var storage = try hl_dset.init(
         swapchain_len,
         gm.baked.storage_frag_vert,
         &.{
@@ -167,7 +167,7 @@ fn theDeepest(access: EasyAcces) !void {
         },
         null,
     );
-    defer hl_dset.deinit(&dset_storage_a);
+    defer hl_dset.deinit(&storage);
 
     // var dset_storage_b = try hl_dset.init(
     //     swapchain_len,
@@ -192,7 +192,7 @@ fn theDeepest(access: EasyAcces) !void {
 
     const dsets = [_]vk.DescriptorSetLayout{
         dset_uniform._d_set_layout.?,
-        dset_storage_a._d_set_layout.?,
+        storage._d_set_layout.?,
         dset_atlas._d_set_layout.?,
     };
     const push_const_ranges = gm.PushConstant.Ranges();
@@ -223,14 +223,14 @@ fn theDeepest(access: EasyAcces) !void {
         .pipeline = [4]vk.Pipeline{ pipeline, pipeline_2nd, undefined, undefined },
         .pipeline_layout = pipeline_layout,
         .uniform_dsets = dset_uniform.d_set_arr,
-        .storage_dsets = dset_storage_a.d_set_arr,
+        .storage_dsets = storage.d_set_arr,
         .texture_dset = dset_atlas.d_set_arr.items[0],
     };
 
     // fill storage and textures
     const spacing = 0.1;
     const size = 0.04;
-    try prefils.storagePrefil(dset_storage_a, grid, spacing);
+    try prefils.storagePrefil(storage, grid, spacing);
 
     const g64 = sht.GridSize.g64;
 
@@ -390,21 +390,21 @@ fn theDeepest(access: EasyAcces) !void {
         try dbgmonit.update(access.io, pamperek.p.phi, frame_state.layer_instance_num);
 
         if (glass.update(&input.glass_input)) {
-            try glass.updateStorage(dset_storage_a, true);
+            try glass.updateStorage(storage, true);
             const lnum = try glass.updateLayerStorage(
-                dset_storage_a,
+                storage,
                 frame_state.layer_instance_offset,
             );
             frame_state.layer_instance_num = lnum;
         }
         if (input.shader_reset_trigger.fired()) {
-            try glass.updateStorage(dset_storage_a, false);
+            try glass.updateStorage(storage, false);
         }
         if (input.alt_projection_trigger.fired()) {
             frame_state.alt_proj = !frame_state.alt_proj;
         }
         if (input.ok_vis_trigger.fired()) {
-            try ok_understanding.labAtInfinitum(dset_storage_a);
+            try ok_understanding.labAtInfinitum(storage);
         }
 
         if (input.slide_r_trig.fired()) {
@@ -436,7 +436,7 @@ fn theDeepest(access: EasyAcces) !void {
 
             const first_ok_instance = g64.total;
             try oklab.OkUnderstanding.labSpliced(
-                dset_storage_a,
+                storage,
                 first_ok_instance,
                 OK_SWEEP,
                 okphi,
@@ -444,20 +444,18 @@ fn theDeepest(access: EasyAcces) !void {
 
             const first_glyph_insatnce = first_ok_instance + OK_SWEEP;
             try fonts.lettersSpliced(
-                dset_storage_a,
+                storage,
                 first_glyph_insatnce,
                 glyph_count,
                 glyphphi,
             );
 
-            if (mbalphabet) |alphabet| {
+            if (mbalphabet) |*alphabet| {
                 frame_state.letters_inst_num = try alphabet.BlitText(
-                    dset_storage_a,
+                    storage,
                     frame_state.letters_inst_offset,
-                    "Sample text",
+                    "Some simple text to blit on a screan",
                 );
-
-                // std.debug.print("+++ well {d}\n", .{frame_state.letters_inst_num});
             }
 
             try frame.recordFrame(

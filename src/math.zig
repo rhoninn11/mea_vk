@@ -443,6 +443,6 @@ pub inline fn uinty(val: usize) u32 {
     return @as(u32, @intCast(val));
 }
 
-pub inline fn floaty(usz: usize) f32 {
+pub inline fn floaty(usz: anytype) f32 {
     return @as(f32, @floatFromInt(usz));
 }

@@ -190,11 +190,14 @@ pub fn lettersSpliced(
 }
 
 pub const Alphabet = struct {
+    const show_first_blit: bool = false;
     const CharLocMap = std.AutoHashMap(u8, u16);
     num: u16,
     char_map: CharLocMap,
     char_sz_arr: []GlyphSz,
     char_texd_arr: [][]u8,
+
+    first: bool = true,
 
     pub fn deinit(self: *Alphabet, gpa: std.mem.Allocator) void {
         for (0..self.num + 1) |i| {
@@ -251,7 +254,7 @@ pub const Alphabet = struct {
     }
 
     pub fn BlitText(
-        self: *const Alphabet,
+        self: *Alphabet,
         storage_dset: dset.DescriptorPrep,
         first_inst: u16,
         text: []const u8,
@@ -266,25 +269,40 @@ pub const Alphabet = struct {
         const fba = provider.allocator();
         const scratchpad: []sht.PerInstance = try fba.alloc(sht.PerInstance, text.len);
 
-        var inst_idx: u16 = 0;
-        for (text) |letter| {
-            if (letter == '\n') continue;
-            const tex_idx = self.char_map.get(letter) orelse continue;
-            const idxf: f32 = @as(f32, @floatFromInt(inst_idx));
-            const val = sht.PerInstance{
-                .offset_2d = .{ idxf * 0.3, 0 },
-                .other_offsets = .{ @bitCast(@as(u32, tex_idx)), 0.1 },
-            };
-            scratchpad[inst_idx] = val;
-            inst_idx += 1;
-        }
+        const inst_num = try self.blitInstances(text, scratchpad);
 
         for (storage_dset.buff_arr.items) |possible_buffer| {
             const storage = possible_buffer.?;
             const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
 
-            @memcpy(mapping + first_inst, scratchpad[0..inst_idx]);
+            @memcpy(mapping + first_inst, scratchpad[0..inst_num]);
         }
-        return inst_idx;
+        return inst_num;
+    }
+
+    fn blitInstances(self: *Alphabet, text: []const u8, dst: []sht.PerInstance) !u16 {
+        defer self.first = false;
+        var i: u16 = 0;
+        for (text) |letter| {
+            if (letter == '\n') continue;
+            const tid = self.char_map.get(letter) orelse continue;
+            const if32: f32 = m.floaty(i);
+
+            const letter_sz = self.char_sz_arr[tid];
+
+            const charw = letter_sz.w;
+            const xfrac = m.floaty(charw) / 128;
+            if (Alphabet.show_first_blit) if (self.first)
+                std.debug.print("+++ char({c}) at index({d}) has w({d}), xfrac({d})\n", //
+                    .{ letter, tid, charw, xfrac });
+
+            const val = sht.PerInstance{
+                .offset_2d = .{ if32 * 0.3, 0 },
+                .other_offsets = .{ xfrac, @bitCast(@as(u32, tid)) },
+            };
+            dst[i] = val;
+            i += 1;
+        }
+        return i;
     }
 };

@@ -227,7 +227,7 @@ pub fn recordFrame(
 
             // std.debug.print("+++ elo {d}\n", .{state.letters_inst_num});
             const letter_push = gm.PushConstant.PCBlob{
-                .model = m.mat_translate(.{ 0, 0, 0 }).mat,
+                .model = m.mat_translate(.{ -6, 3, 0 }).mat,
                 .inst_base = state.letters_inst_offset,
                 .tex_base = 160,
                 .mode = 1,
