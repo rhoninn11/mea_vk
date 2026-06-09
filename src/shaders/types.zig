@@ -1,4 +1,6 @@
 const m = @import("../math.zig");
+pub const shu = @import("utils.zig");
+
 pub const MatPack = extern struct {
     model: [16]f32 = m.mat_identity().arr,
     view: [16]f32 = m.mat_identity().arr,

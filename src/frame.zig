@@ -241,12 +241,6 @@ pub fn recordFrame(
                 models.offsets[BILBORD_IDX],
                 0,
             );
-
-            // TODO: render text here xD
-            // but how?! meaby use https://github.com/Chlumsky/msdf-atlas-gen as offline step?
-            // but i need to build that. Cmake project will be problematic
-            // maybe https://github.com/nothings/stb/blob/master/stb_truetype.h as a lighter_alternative
-
         }
         try gc.dev.endCommandBuffer(cbufr);
     }

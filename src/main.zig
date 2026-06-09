@@ -105,8 +105,11 @@ fn theDeepest(access: EasyAcces) !void {
         mbalphabet = try fonts.Alphabet.init(access.gpa, font);
     }
 
-    var glass = proto.LookingGlass.init(&duald_img, grid);
     const ok_understanding = oklab.OkUnderstanding{ .grid = grid };
+    var glass = proto.LookingGlass.init(&duald_img, grid);
+
+    var proto_ok = try glass.sampleOkGradient(access.gpa);
+    defer proto_ok.deinit(access.gpa);
 
     var swapchain_len: u8 = undefined;
 
@@ -254,7 +257,7 @@ fn theDeepest(access: EasyAcces) !void {
     for (0..OK_SWEEP) |i| {
         std.debug.assert(ok_atlas_idx < ATLAS_MAX);
         const pixels = switch (i) {
-            0 => try oklab.OkUnderstanding.sampleInfernoAlt(gpa, &ok_g),
+            0 => try oklab.sampleInfernoAlt(gpa, &ok_g),
             else => try oklab.OkUnderstanding.sampleSpace(gpa, L, &ok_g),
         };
         defer gpa.free(pixels);

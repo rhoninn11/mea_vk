@@ -10,6 +10,7 @@ const shu = @import("shaders/utils.zig");
 const m = @import("math.zig");
 const input = @import("input.zig");
 const files = @import("files.zig");
+const oklab = @import("oklab.zig");
 
 const Errorset = error{
     constrained,
@@ -205,25 +206,30 @@ pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator) !meagen.Image {
 
 pub const LookingGlass = struct {
     pos: @Vector(2, i32),
-    g_sz: sht.GridSize,
+    win_sz: sht.GridSize,
     scan_raw: *meagen.Image,
     scan_lyr: *meagen.Image,
+    img_sz: sht.GridSize,
 
     pub fn init(from: *DualImageData, g_sz: sht.GridSize) LookingGlass {
         std.debug.assert(from.raw_data.info.?.img_type == meagen.ImgType.DUO);
         std.debug.assert(from.layer_data.info.?.img_type == meagen.ImgType.MONO);
+
+        const src = &from.raw_data.info.?;
+
         return LookingGlass{
             .pos = .{ 0, 0 },
-            .g_sz = g_sz,
+            .win_sz = g_sz,
             .scan_raw = &from.raw_data,
             .scan_lyr = &from.layer_data,
+            .img_sz = sht.shu.xyGrid(@intCast(src.width), @intCast(src.height)),
         };
     }
     pub fn update(self: *LookingGlass, axes: *const input.DulaHoldsAxis) bool {
         const src_size = self.scan_raw.info.?;
 
-        const max_x = @as(i32, @intCast(src_size.width)) - @as(i32, @intCast(self.g_sz.w)) - 1;
-        const max_y = @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.g_sz.h)) - 1;
+        const max_x = @as(i32, @intCast(src_size.width)) - @as(i32, @intCast(self.win_sz.w)) - 1;
+        const max_y = @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.win_sz.h)) - 1;
 
         const x_axis = axes.value()[1];
         self.pos[0] = switch (x_axis) {
@@ -243,58 +249,45 @@ pub const LookingGlass = struct {
         return is_moveing;
     }
 
-    const Spot2D = struct { x: u16, y: u16 };
+    const LookingSpot = struct { x: u16, y: u16 };
 
-    fn linear2Spot(self: *LookingGlass, i: usize) Spot2D {
-        const x = @mod(i, @as(usize, @intCast(self.g_sz.w)));
-        const y = i / @as(usize, @intCast(self.g_sz.w));
-        std.debug.assert(y < self.g_sz.h);
+    fn lookingSpot(self: *LookingGlass, i: usize) LookingSpot {
+        const x = @mod(i, @as(usize, @intCast(self.win_sz.w)));
+        const y = i / @as(usize, @intCast(self.win_sz.w));
+        std.debug.assert(y < self.win_sz.h);
 
-        return .{ .x = @intCast(x), .y = @intCast(y) };
+        return LookingSpot{ .x = @intCast(x), .y = @intCast(y) };
     }
 
-    pub fn pixval(self: *LookingGlass, i: usize) u16 {
-        const spot2d = self.linear2Spot(i);
-        return pixvalXY(self, spot2d.x, spot2d.y);
-    }
-
-    pub fn pixvalXY(self: *LookingGlass, x: usize, y: usize) u16 {
-        const img_x = @as(usize, @intCast(self.pos[0])) + x;
-        const img_y = @as(usize, @intCast(self.pos[1])) + y;
+    fn lookingIdx(self: *LookingGlass, i: usize) usize {
+        const spot = lookingSpot(self, i);
+        const img_x = @as(usize, @intCast(self.pos[0])) + spot.x;
+        const img_y = @as(usize, @intCast(self.pos[1])) + spot.y;
 
         const _info = self.scan_raw.info.?;
         const w = _info.width;
 
-        const idx = w * img_y + img_x;
+        return w * img_y + img_x;
+    }
 
+    pub fn pixval(self: *LookingGlass, i: usize) u16 {
         var hdr_val: uHdr = undefined;
-        hdr_val.byte[0] = self.scan_raw.pixels[idx * 2];
-        hdr_val.byte[1] = self.scan_raw.pixels[idx * 2 + 1];
-
+        const lo_idx = self.lookingIdx(i);
+        hdr_val.byte[0] = self.scan_raw.pixels[lo_idx * 2];
+        hdr_val.byte[1] = self.scan_raw.pixels[lo_idx * 2 + 1];
         return hdr_val.hdr;
     }
 
     pub fn pixvalLayer(self: *LookingGlass, i: usize) u8 {
-        const spot2d = self.linear2Spot(i);
-        return pixvalXYLayer(self, spot2d.x, spot2d.y);
-    }
-
-    pub fn pixvalXYLayer(self: *LookingGlass, x: usize, y: usize) u8 {
-        const img_x = @as(usize, @intCast(self.pos[0])) + x;
-        const img_y = @as(usize, @intCast(self.pos[1])) + y;
-
-        const _info = self.scan_lyr.info.?;
-
-        const idx = _info.width * img_y + img_x;
-
-        return self.scan_lyr.pixels[idx];
+        const lo_idx = self.lookingIdx(i);
+        return self.scan_lyr.pixels[lo_idx];
     }
 
     const U16max: f32 = 1 << 16;
     const TRIM_FACTOR = 0.4;
     const INST_LIM = 8096 + 4096;
     pub fn updateStorage(self: *LookingGlass, storage_dset: dset.DescriptorPrep, enabled: bool) !void {
-        const total = self.g_sz.total;
+        const total = self.win_sz.total;
 
         std.debug.assert(total <= INST_LIM);
         const stack_size = INST_LIM * @sizeOf(sht.PerInstance);
@@ -334,8 +327,8 @@ pub const LookingGlass = struct {
         first_layer_instance: u32,
         debug_info: bool,
     ) !u16 {
-        const total_cells = self.g_sz.total;
-        const layer_inst_total = self.g_sz.total / 2;
+        const total_cells = self.win_sz.total;
+        const layer_inst_total = self.win_sz.total / 2;
 
         const stack_size = INST_LIM * @sizeOf(sht.PerInstance);
         var stack_mem: [stack_size]u8 = undefined;
@@ -363,7 +356,7 @@ pub const LookingGlass = struct {
             const layer_val = self.pixvalLayer(i);
             if (layer_val == 0) continue;
 
-            const spot = self.linear2Spot(i);
+            const spot = self.lookingSpot(i);
             if (debug_info) try dbg_info.print(fba, "i({d}) x({d}) y({d})\n", .{ i, spot.x, spot.y });
 
             src_inst.depth_ctrl[1] = tresholded_h;
@@ -383,5 +376,30 @@ pub const LookingGlass = struct {
         }
 
         return inst_idx;
+    }
+
+    // TODO: making some space
+    const LookingOk = struct {
+        sz: sht.GridSize,
+        pix: []u8,
+
+        pub fn deinit(self: *LookingOk, gpa: std.mem.Allocator) void {
+            gpa.free(self.pix);
+        }
+    };
+    pub fn sampleOkGradient(self: *const LookingGlass, gpa: std.mem.Allocator) !LookingOk {
+        const sample_sz = sht.shu.xyGrid(1024, 16);
+        const inferno = try oklab.sampleInfernoAlt(gpa, &sample_sz);
+        defer gpa.free(inferno);
+
+        const isz = self.img_sz;
+        var sample = LookingOk{
+            .sz = isz,
+            .pix = try gpa.alloc(u8, isz.total * @sizeOf(u32)),
+        };
+        errdefer sample.deinit(sample);
+
+        sample.pix[0] = 0;
+        return sample;
     }
 };

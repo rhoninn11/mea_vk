@@ -182,50 +182,50 @@ pub const OkUnderstanding = struct {
 
         return texture_mem;
     }
+};
 
-    const LabSpot = struct { key: f32, lab: m.vec3 };
-    pub fn sampleInfernoAlt(alloc: std.mem.Allocator, g: *const sht.GridSize) ![]u8 {
-        const path: []const LabSpot = &.{
-            .{ .key = 0.0, .lab = .{ 0.6, 0.15, 0.0 } },
-            .{ .key = 0.7, .lab = .{ 0.8, 0.0, 0.15 } },
-            .{ .key = 0.85, .lab = .{ 0.85, -0.05, 0.0 } },
-            .{ .key = 1.0, .lab = .{ 0.9, 0.0, -0.02 } },
-        };
+const LabSpot = struct { key: f32, lab: m.vec3 };
+pub fn sampleInfernoAlt(alloc: std.mem.Allocator, g: *const sht.GridSize) ![]u8 {
+    const path: []const LabSpot = &.{
+        .{ .key = 0.0, .lab = .{ 0.6, 0.15, 0.0 } },
+        .{ .key = 0.7, .lab = .{ 0.8, 0.0, 0.15 } },
+        .{ .key = 0.85, .lab = .{ 0.85, -0.05, 0.0 } },
+        .{ .key = 1.0, .lab = .{ 0.9, 0.0, -0.02 } },
+    };
 
-        const texture_mem = try alloc.alloc(u8, g.total * @sizeOf(u32));
+    const texture_mem = try alloc.alloc(u8, g.total * @sizeOf(u32));
 
-        // var spot: u8 = 0;
-        for (0..g.h) |yy| {
-            var from: u8 = 0;
-            var to: u8 = 1;
-            for (0..g.w) |x| {
-                const gwf = @as(f32, @floatFromInt(g.w));
-                const sf = @as(f32, @floatFromInt(x));
-                const mem_idx = (yy * g.w + x) * 4;
-                const progress = sf / (gwf - 1);
-                while (progress > path[to].key) {
-                    from += 1;
-                    to += 1;
+    // var spot: u8 = 0;
+    for (0..g.h) |yy| {
+        var from: u8 = 0;
+        var to: u8 = 1;
+        for (0..g.w) |x| {
+            const gwf = @as(f32, @floatFromInt(g.w));
+            const sf = @as(f32, @floatFromInt(x));
+            const mem_idx = (yy * g.w + x) * 4;
+            const progress = sf / (gwf - 1);
+            while (progress > path[to].key) {
+                from += 1;
+                to += 1;
+            }
+
+            const prog_scaled = (progress - path[from].key) / (path[to].key - path[from].key);
+            const lab_v = path[from].lab * m.splat3d(1 - prog_scaled) + path[to].lab * m.splat3d(prog_scaled);
+
+            var valid = true;
+            const s_rgb: [3]f32 = oklab_to_srgb(lab_v);
+            for (0..3) |i| valid = (valid and (s_rgb[i] > 0) and (s_rgb[i] <= 1));
+
+            if (valid) {
+                inline for (0..3) |i| {
+                    texture_mem[mem_idx + i] = @as(u8, @intFromFloat(s_rgb[i] * 255));
                 }
-
-                const prog_scaled = (progress - path[from].key) / (path[to].key - path[from].key);
-                const lab_v = path[from].lab * m.splat3d(1 - prog_scaled) + path[to].lab * m.splat3d(prog_scaled);
-
-                var valid = true;
-                const s_rgb: [3]f32 = oklab_to_srgb(lab_v);
-                for (0..3) |i| valid = (valid and (s_rgb[i] > 0) and (s_rgb[i] <= 1));
-
-                if (valid) {
-                    inline for (0..3) |i| {
-                        texture_mem[mem_idx + i] = @as(u8, @intFromFloat(s_rgb[i] * 255));
-                    }
-                    texture_mem[mem_idx + 3] = 255;
-                } else {
-                    inline for (0..3) |i| texture_mem[mem_idx + i] = 0;
-                    texture_mem[mem_idx + 3] = 255;
-                }
+                texture_mem[mem_idx + 3] = 255;
+            } else {
+                inline for (0..3) |i| texture_mem[mem_idx + i] = 0;
+                texture_mem[mem_idx + 3] = 255;
             }
         }
-        return texture_mem;
     }
-};
+    return texture_mem;
+}
