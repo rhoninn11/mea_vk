@@ -239,19 +239,23 @@ pub const LookingGlass = struct {
             else => self.pos[1],
         };
 
-        if (x_axis != motion.Axis.none or y_axis != motion.Axis.none) {
-            // std.debug.print("new position at x:{} y:{}\n", .{ self.pos[0], self.pos[1] });
-            return true;
-        }
-        return false;
+        const is_moveing = x_axis != motion.Axis.none or y_axis != motion.Axis.none;
+        return is_moveing;
     }
 
-    pub fn pixval(self: *LookingGlass, i: usize) u16 {
+    const Spot2D = struct { x: u16, y: u16 };
+
+    fn linear2Spot(self: *LookingGlass, i: usize) Spot2D {
         const x = @mod(i, @as(usize, @intCast(self.g_sz.w)));
         const y = i / @as(usize, @intCast(self.g_sz.w));
         std.debug.assert(y < self.g_sz.h);
 
-        return pixvalXY(self, x, y);
+        return .{ .x = @intCast(x), .y = @intCast(y) };
+    }
+
+    pub fn pixval(self: *LookingGlass, i: usize) u16 {
+        const spot2d = self.linear2Spot(i);
+        return pixvalXY(self, spot2d.x, spot2d.y);
     }
 
     pub fn pixvalXY(self: *LookingGlass, x: usize, y: usize) u16 {
@@ -271,11 +275,8 @@ pub const LookingGlass = struct {
     }
 
     pub fn pixvalLayer(self: *LookingGlass, i: usize) u8 {
-        const x = @mod(i, @as(usize, @intCast(self.g_sz.w)));
-        const y = i / @as(usize, @intCast(self.g_sz.w));
-        std.debug.assert(y < self.g_sz.h);
-
-        return pixvalXYLayer(self, x, y);
+        const spot2d = self.linear2Spot(i);
+        return pixvalXYLayer(self, spot2d.x, spot2d.y);
     }
 
     pub fn pixvalXYLayer(self: *LookingGlass, x: usize, y: usize) u8 {
@@ -291,7 +292,7 @@ pub const LookingGlass = struct {
 
     const U16max: f32 = 1 << 16;
     const TRIM_FACTOR = 0.4;
-    const INST_LIM = 8096;
+    const INST_LIM = 8096 + 4096;
     pub fn updateStorage(self: *LookingGlass, storage_dset: dset.DescriptorPrep, enabled: bool) !void {
         const total = self.g_sz.total;
 
@@ -303,22 +304,26 @@ pub const LookingGlass = struct {
         const local_a = provider.allocator();
 
         var scratchpad = try local_a.alloc(sht.PerInstance, total);
+        const src_mapping = storage_dset.buff_arr.items[0].?.mapping.?;
+        const instances: [*]sht.PerInstance = @ptrCast(@alignCast(src_mapping));
+        @memcpy(scratchpad, instances);
+
+        for (0..total) |i| {
+            var prev_one: sht.PerInstance = scratchpad[i];
+            const h = @as(f32, @floatFromInt(self.pixval(i)));
+
+            const level = h / U16max;
+            const tresholded_h = @max(0, ((level - TRIM_FACTOR) / (1 - TRIM_FACTOR)));
+            // TODO: depth can be controlled by push constant mode i guess
+            prev_one.depth_ctrl[0] = if (enabled) 1 else 0;
+            prev_one.depth_ctrl[1] = tresholded_h;
+
+            scratchpad[i] = prev_one;
+        }
+
         for (storage_dset.buff_arr.items) |possible_buffer| {
             const storage = possible_buffer.?;
             const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
-            @memcpy(scratchpad, mapping);
-            for (0..total) |i| {
-                var prev_one: sht.PerInstance = scratchpad[i];
-                const h = @as(f32, @floatFromInt(self.pixval(i)));
-
-                const level = h / U16max;
-                const tresholded_h = @max(0, ((level - TRIM_FACTOR) / (1 - TRIM_FACTOR)));
-                // TODO: depth can be controlled by push constant mode i guess
-                prev_one.depth_ctrl[0] = if (enabled) 1 else 0;
-                prev_one.depth_ctrl[1] = tresholded_h;
-
-                scratchpad[i] = prev_one;
-            }
             @memcpy(mapping, scratchpad);
         }
     }
@@ -327,6 +332,7 @@ pub const LookingGlass = struct {
         self: *LookingGlass,
         storage_dset: dset.DescriptorPrep,
         first_layer_instance: u32,
+        debug_info: bool,
     ) !u16 {
         const total_cells = self.g_sz.total;
         const layer_inst_total = self.g_sz.total / 2;
@@ -334,38 +340,48 @@ pub const LookingGlass = struct {
         const stack_size = INST_LIM * @sizeOf(sht.PerInstance);
         var stack_mem: [stack_size]u8 = undefined;
 
-        var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
-        const local_a = provider.allocator();
+        var on_stack_alloc: std.heap.FixedBufferAllocator = .init(&stack_mem);
+        const fba = on_stack_alloc.allocator();
 
-        const source_cells = try local_a.alloc(sht.PerInstance, total_cells);
-        const scratchpad = try local_a.alloc(sht.PerInstance, layer_inst_total);
-        var active_layer_instances: u16 = 0;
-        for (storage_dset.buff_arr.items) |possible_buffer| {
-            const storage = possible_buffer.?;
-            const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
-            @memcpy(source_cells, mapping);
-            var presence_count: u16 = 0;
+        const src_cells_data = try fba.alloc(sht.PerInstance, total_cells);
+        const scratchpad = try fba.alloc(sht.PerInstance, layer_inst_total);
+        var dbg_info: std.ArrayList(u8) = try .initCapacity(fba, 4096);
+        defer dbg_info.deinit(fba);
 
-            for (0..total_cells) |i| {
-                var prev_one: sht.PerInstance = source_cells[i];
-                const h = @as(f32, @floatFromInt(self.pixval(i)));
+        const data_mapping = storage_dset.buff_arr.items[0].?.mapping.?;
+        const instances: [*]sht.PerInstance = @ptrCast(@alignCast(data_mapping));
+        @memcpy(src_cells_data, instances);
+        var inst_idx: u16 = 0;
 
-                const level = h / U16max;
-                const tresholded_h = @max(0, ((level - TRIM_FACTOR) / (1 - TRIM_FACTOR)));
+        for (0..total_cells) |i| {
+            var src_inst: sht.PerInstance = src_cells_data[i];
+            const h = @as(f32, @floatFromInt(self.pixval(i)));
 
-                const layer_val = self.pixvalLayer(i);
-                if (layer_val == 0) continue;
+            const level = h / U16max;
+            const tresholded_h = @max(0, ((level - TRIM_FACTOR) / (1 - TRIM_FACTOR)));
 
-                prev_one.depth_ctrl[1] = tresholded_h;
+            const layer_val = self.pixvalLayer(i);
+            if (layer_val == 0) continue;
 
-                scratchpad[presence_count] = prev_one;
-                presence_count += 1;
-            }
-            if (presence_count > 0) {
-                @memcpy(mapping + first_layer_instance, scratchpad[0..presence_count]);
-                active_layer_instances = presence_count;
+            const spot = self.linear2Spot(i);
+            if (debug_info) try dbg_info.print(fba, "i({d}) x({d}) y({d})\n", .{ i, spot.x, spot.y });
+
+            src_inst.depth_ctrl[1] = tresholded_h;
+
+            scratchpad[inst_idx] = src_inst;
+            inst_idx += 1;
+        }
+
+        if (debug_info) std.debug.print("+++ layer debug | \n{s}\n+++ layer debug\n", .{dbg_info.items});
+
+        if (inst_idx > 0) {
+            for (storage_dset.buff_arr.items) |possible_buffer| {
+                const storage = possible_buffer.?;
+                const storage_mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
+                @memcpy(storage_mapping + first_layer_instance, scratchpad[0..inst_idx]);
             }
         }
-        return active_layer_instances;
+
+        return inst_idx;
     }
 };

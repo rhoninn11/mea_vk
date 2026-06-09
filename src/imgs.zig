@@ -7,6 +7,7 @@ const t = @import("types.zig");
 const m = @import("math.zig");
 const swpchn = @import("swapchain.zig");
 const sht = @import("shaders/types.zig");
+const shut = @import("shaders/utils.zig");
 
 // Checkboard texture spawned in memory
 const pixel_size = 4;
@@ -132,6 +133,7 @@ pub const DepthImage = struct {
 };
 
 pub const RGBImage = struct {
+    const show_size_at_init = false;
     const Self = @This();
 
     gc: *const GraphicsContext,
@@ -165,6 +167,9 @@ pub const RGBImage = struct {
             .sharing_mode = .exclusive,
             .initial_layout = .undefined,
         };
+
+        if (Self.show_size_at_init) shut.printGrid(&g, "+++ rgb_img_init");
+
         const vk_img = try devk.createImage(&img_create_info, null);
         errdefer devk.destroyImage(vk_img, null);
 
@@ -230,8 +235,8 @@ pub const RGBImage = struct {
             devk.destroyImageView(_img_view, null);
         }
 
-        devk.freeMemory(self.dvk_mem, null);
         devk.destroyImage(self.dvk_img, null);
+        devk.freeMemory(self.dvk_mem, null);
     }
 };
 

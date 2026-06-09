@@ -195,11 +195,25 @@ pub const DbgMonitor = struct {
     name: []const u8,
     val: f32,
 
+    pub fn clear(self: *DbgMonitor, io: std.Io) !void {
+        var buffer: [1024]u8 = undefined;
+        const stdout: std.Io.File = .stderr();
+        var w = stdout.writer(io, &buffer);
+        const iowriter: *std.Io.Writer = &w.interface;
+
+        if (self.linecount != 0) for (0..self.linecount) |_| {
+            try iowriter.print("\x1b[2K", .{}); // wyczyść linię
+            try iowriter.print("\x1b[1A", .{}); // w górę
+        };
+        try iowriter.flush();
+    }
+
     pub fn update(
         self: *DbgMonitor,
         io: std.Io,
         new_val: f32,
         cell_num: u16,
+        camera_pos: m.vec3,
     ) !void {
         self.val = new_val;
 
@@ -210,14 +224,11 @@ pub const DbgMonitor = struct {
         //const pointer to interface was the right way on windows
         const iowriter: *std.Io.Writer = &w.interface;
 
-        if (self.linecount != 0) for (0..self.linecount) |_| {
-            try iowriter.print("\x1b[2K", .{}); // wyczyść linię
-            try iowriter.print("\x1b[1A", .{}); // w górę
-        };
-        var lines: u8 = 6;
+        var lines: u8 = 7;
         try iowriter.print("---------------\n", .{});
         try iowriter.print("--- {s: <12}: \x1b[31m{d}\x1b[0m\n", .{ self.name, self.val });
         try iowriter.print("--- {s: <12}: \x1b[32m{d}\x1b[0m\n", .{ "cell_num", cell_num });
+        try iowriter.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "camera_pos", camera_pos });
         try iowriter.print("---------------\n", .{});
         lines += try sdl.peekPointer().info("---", iowriter);
         try iowriter.print("---------------\n", .{});

@@ -158,7 +158,7 @@ pub fn recordFrame(
             if (state.layer_instance_num > 0) {
                 const cube_index = 1;
                 const layerpush = gm.PushConstant.PCBlob{
-                    .model = m.mat_translate(.{ 0, 1, 0 }).mat,
+                    .model = m.mat_translate(.{ 0, 0, 0 }).mat,
                     .inst_base = state.layer_instance_offset,
                     .mode = 1,
                 };

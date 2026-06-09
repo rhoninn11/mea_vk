@@ -301,7 +301,11 @@ const SwapImage = struct {
     }
 
     fn waitForFence(self: SwapImage, gc: *const GraphicsContext) !void {
-        _ = try gc.dev.waitForFences(@ptrCast(&self.frame_fence), .true, std.math.maxInt(u64));
+        _ = try gc.dev.waitForFences(
+            @ptrCast(&self.frame_fence),
+            .true,
+            std.math.maxInt(u64),
+        );
     }
 
     fn resetFence(self: SwapImage, gc: *const GraphicsContext) !void {

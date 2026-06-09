@@ -69,6 +69,7 @@ pub var shader_reset_trigger: Trigger = .{};
 pub var alt_projection_trigger: Trigger = .{};
 pub var slide_l_trig: Trigger = .{};
 pub var slide_r_trig: Trigger = .{};
+pub var dbg_trig: Trigger = .{};
 
 pub var ok_vis: KeyAction = .{ .key = glfw.KeyY, .action = glfw.KeyDown };
 pub var shader_reset: KeyAction = .{ .key = glfw.KeyQ, .action = glfw.KeyDown };
@@ -162,6 +163,7 @@ const sdl_inputs: []const Tied = &.{
     .{ .key = sdl.keycode.Keycode.left_alt, .trig = &alt_projection_trigger },
     .{ .key = sdl.keycode.Keycode.v, .trig = &slide_l_trig },
     .{ .key = sdl.keycode.Keycode.b, .trig = &slide_r_trig },
+    .{ .key = sdl.keycode.Keycode.p, .trig = &dbg_trig },
 };
 
 const axesCheck = [_]*DulaHoldsAxis{ &glass_input, &plr_input };

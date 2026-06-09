@@ -20,7 +20,7 @@ const t = @import("types.zig");
 const u = @import("utils.zig");
 const phx = @import("phys.zig");
 const imgs = @import("imgs.zig");
-const prefils = @import("refills.zig");
+const refils = @import("refills.zig");
 const oklab = @import("oklab.zig");
 
 const InertiaVec2 = phx.InertiaPack(m.vec3);
@@ -58,13 +58,15 @@ pub fn main(init: std.process.Init) !void {
 const OK_SWEEP: u8 = 128;
 const last_q = sht.GridSize.g64.total + sht.GridSize.g64.total / 2;
 const last_half_of_last_q = sht.GridSize.g64.total + sht.GridSize.g64.total / 2;
+const first_letter_instance = 4608;
+const first_layer_instance = 6144;
 var frame_state: frame.FrameState = .{
     .alt_proj = false,
     .model_idx = 0,
     .ok_slices_num = OK_SWEEP,
-    .layer_instance_offset = @intCast(last_q),
+    .layer_instance_offset = first_layer_instance,
     .layer_instance_num = 0,
-    .letters_inst_offset = @intCast(last_half_of_last_q),
+    .letters_inst_offset = first_letter_instance,
     .letters_inst_num = 0,
 };
 
@@ -230,7 +232,7 @@ fn theDeepest(access: EasyAcces) !void {
     // fill storage and textures
     const spacing = 0.1;
     const size = 0.04;
-    try prefils.storagePrefil(storage, grid, spacing);
+    try refils.storagePrefil(storage, grid, spacing);
 
     const g64 = sht.GridSize.g64;
 
@@ -269,11 +271,12 @@ fn theDeepest(access: EasyAcces) !void {
     var glyph_atlas_idx: u8 = 160;
     if (mbalphabet) |*abc| for (0..abc.num) |i| {
         const pixels = abc.char_texd_arr[i];
-        const g_sz = abc.char_sz_arr[i].gSize();
-
-        const rgba = try imgs.vulkanTexture(&pic, g_sz, pixels);
-        dset_atlas.updateTexture(0, &rgba, glyph_atlas_idx);
-        try all_imgs.appen(&rgba);
+        const gly_sz = abc.char_sz_arr[i];
+        if (!gly_sz.empty()) {
+            const rgba = try imgs.vulkanTexture(&pic, gly_sz.gSize(), pixels);
+            dset_atlas.updateTexture(0, &rgba, glyph_atlas_idx);
+            try all_imgs.appen(&rgba);
+        }
         glyph_atlas_idx += 1;
     };
 
@@ -328,6 +331,7 @@ fn theDeepest(access: EasyAcces) !void {
         .name = "phi val",
         .val = 0,
     };
+    dbgmonit.val = 0;
 
     { // Frame recording
         const frame_sz = try window.extent();
@@ -338,7 +342,7 @@ fn theDeepest(access: EasyAcces) !void {
                 .pool = pools[i],
                 .cmds = &cmdbufs[i],
             };
-            try prefils.unifomRefil(
+            try refils.unifomRefil(
                 dset_uniform,
                 @intCast(i),
                 0.0,
@@ -387,24 +391,16 @@ fn theDeepest(access: EasyAcces) !void {
         glyphphi += td1 * 0.13;
         pamperek.control(&input.plr_input, td);
 
-        try dbgmonit.update(access.io, pamperek.p.phi, frame_state.layer_instance_num);
+        try dbgmonit.clear(access.io);
+        defer dbgmonit.update(
+            access.io,
+            pamperek.p.phi,
+            frame_state.layer_instance_num,
+            pamperek.pos(),
+        ) catch @panic("tmp workaround is failing");
 
-        if (glass.update(&input.glass_input)) {
-            try glass.updateStorage(storage, true);
-            const lnum = try glass.updateLayerStorage(
-                storage,
-                frame_state.layer_instance_offset,
-            );
-            frame_state.layer_instance_num = lnum;
-        }
-        if (input.shader_reset_trigger.fired()) {
-            try glass.updateStorage(storage, false);
-        }
         if (input.alt_projection_trigger.fired()) {
             frame_state.alt_proj = !frame_state.alt_proj;
-        }
-        if (input.ok_vis_trigger.fired()) {
-            try ok_understanding.labAtInfinitum(storage);
         }
 
         if (input.slide_r_trig.fired()) {
@@ -425,7 +421,29 @@ fn theDeepest(access: EasyAcces) !void {
         }
         try swapchain.currentWaitG();
         {
-            try prefils.unifomRefil(
+            // cubes 0-4095
+            // ok slices 4096-4223
+            // glyphs 4224-4247
+            // text 4608-?
+            // layers 6144-?
+            if (glass.update(&input.glass_input)) {
+                try glass.updateStorage(storage, true);
+                const lnum = try glass.updateLayerStorage(
+                    storage,
+                    frame_state.layer_instance_offset,
+                    input.dbg_trig.fired(),
+                );
+                frame_state.layer_instance_num = lnum;
+                // std.debug.print("+++ layer inst num ({d}) inst first ({d})\n", .{ lnum, frame_state.layer_instance_offset });
+            }
+            if (input.shader_reset_trigger.fired()) {
+                try glass.updateStorage(storage, false);
+            }
+            if (input.ok_vis_trigger.fired()) {
+                try ok_understanding.labAtInfinitum(storage);
+            }
+
+            try refils.unifomRefil(
                 dset_uniform,
                 @intCast(img_idx),
                 timeline1.total_s,
@@ -454,7 +472,7 @@ fn theDeepest(access: EasyAcces) !void {
                 frame_state.letters_inst_num = try alphabet.BlitText(
                     storage,
                     frame_state.letters_inst_offset,
-                    "Some simple text to blit on a screan",
+                    "Some sample text to blit on a screan\n -> To test line spacing",
                 );
             }
 
@@ -498,7 +516,10 @@ fn theDeepest(access: EasyAcces) !void {
         const cmdbuf = cmdbufs[swapchain.image_index];
         state = swapchain.present(cmdbuf) catch |err| switch (err) {
             error.OutOfDateKHR => Swapchain.PresentState.suboptimal,
-            else => |narrow| return narrow,
+            else => |narrow| {
+                std.debug.print("+++ some other presentation error {s}\n", .{@errorName(narrow)});
+                return narrow;
+            },
         };
 
         access.host.pollEvents();
@@ -611,6 +632,7 @@ fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain) !vk.Render
         .p_attachments = att_arr.ptr,
         .subpass_count = 1,
         .p_subpasses = @ptrCast(&subpass),
+        .dependency_count = 1,
         .p_dependencies = @ptrCast(&subpass_dependency),
         // here we will pass multiview config
         .p_next = null,

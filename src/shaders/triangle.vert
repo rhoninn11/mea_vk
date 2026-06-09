@@ -70,7 +70,8 @@ layout(location = 4) out vec2 v_color_rest;
 // group locked at the middle of the screan
 // group gives info to precalculate surface
 void main() {
-    Instance m_inst = _storage.per_instance[gl_InstanceIndex];
+    uint inst_idx = gl_InstanceIndex + _pc.data.inst_base;
+    Instance m_inst = _storage.per_instance[inst_idx];
     MatPack ems = _group.data.matrices;
     float gate = m_inst.depth_ctrl.x;
     float h = m_inst.depth_ctrl.y;
@@ -87,8 +88,6 @@ void main() {
     }
 
     float phase_offset = m_inst.other_offsets.x;
-    float spread_offset = m_inst.other_offsets.y;
-    
     float phase = _group.data.temporal.x + phase_offset;
 
 //  should be visible after depth testing
@@ -107,6 +106,8 @@ void main() {
     gl_Position = ems.proj * ems.view * _pc.data.model * before_transform;
     // gl_Position = before_transform; 
     v_uv.rg = a_color.rg;
+    
+    float spread_offset = m_inst.other_offsets.y;
     v_color_rest = vec2(spread_offset, y_anim);
 
     v_progress = a_color.r + m_inst.new_usage.x;

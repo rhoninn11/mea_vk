@@ -132,6 +132,8 @@ pub const Utils = struct {
         for (0..lid.len) |i| lid[i].color = .{ 0, 1, 0 };
         Math.matApply(lid[0..], Math.xrot180);
         try triangles.appendSlice(alloc, lid[0..]);
+
+        Math.scaleApply(triangles.items, .{ 0.9, 0.9, 0.9 });
         return triangles;
     }
 

@@ -70,37 +70,40 @@ pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spac
 
     const wave_scale = 1.5;
     var scratchpad = try local_a.alloc(sht.PerInstance, instance_num);
+
+    for (0..instance_num) |i| {
+        const i_f: f32 = @floatFromInt(i);
+
+        const g_idx = addons.GridOps.gridIdx(&grid, i);
+
+        const delt = ((middle - g_idx) / m.splat3d(min_dim)) * m.splat3d(6 * wave_scale);
+
+        const dist = std.math.sqrt(delt[m.X] * delt[m.X] + delt[m.Z] * delt[m.Z]);
+
+        var fresh_one: sht.PerInstance = undefined;
+        const pos_1 = (g_idx - middle) * m.splat3d(spacing);
+
+        fresh_one.other_offsets[0] = i_f * phase_delta;
+        fresh_one.other_offsets[1] = spread_base + i_f * spread_delta;
+        fresh_one.new_usage[0] = storage_baker.items[i]; //offset on ring
+        fresh_one.new_usage[1] = dist;
+        fresh_one.new_usage[2] = g_idx[m.X];
+        fresh_one.new_usage[3] = delt[m.X];
+        fresh_one.offset_4d = m.stack4(pos_1, 1);
+
+        fresh_one.depth_ctrl[0] = 0;
+        fresh_one.depth_ctrl[1] = 0;
+
+        scratchpad[i] = fresh_one;
+
+        if (i % 1024 == 0) {
+            std.debug.print("+++ storage refil i({d}) stores position v({})\n", .{ i, pos_1 });
+        }
+    }
+
     for (storage_dset.buff_arr.items) |possible_buffer| {
         const storage = possible_buffer.?;
         const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
         defer @memcpy(mapping, scratchpad);
-
-        for (0..instance_num) |i| {
-            const i_f: f32 = @floatFromInt(i);
-
-            const g_idx = addons.GridOps.gridIdx(&grid, i);
-
-            const delt = ((middle - g_idx) / m.splat3d(min_dim)) * m.splat3d(6 * wave_scale);
-
-            const dist = std.math.sqrt(delt[m.X] * delt[m.X] + delt[m.Z] * delt[m.Z]);
-
-            var fresh_one: sht.PerInstance = undefined;
-            const pos_1 = (g_idx - middle) * m.splat3d(spacing);
-
-            fresh_one.other_offsets[0] = i_f * phase_delta;
-            fresh_one.other_offsets[1] = spread_base + i_f * spread_delta;
-            fresh_one.new_usage[0] = storage_baker.items[i]; //offset on ring
-            fresh_one.new_usage[1] = dist;
-            fresh_one.new_usage[2] = g_idx[m.X];
-            fresh_one.new_usage[3] = delt[m.X];
-            fresh_one.offset_4d = m.stack4(pos_1, 1);
-
-            fresh_one.depth_ctrl[0] = 0;
-            fresh_one.depth_ctrl[1] = 0;
-
-            scratchpad[i] = fresh_one;
-        }
-
-        std.debug.print("\n", .{});
     }
 }

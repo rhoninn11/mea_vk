@@ -21,6 +21,10 @@ pub const GlyphSz = struct {
             .total = @intCast(self.w * self.h),
         };
     }
+
+    pub inline fn empty(self: *const GlyphSz) bool {
+        return self.w == 0 or self.h == 0;
+    }
 };
 
 pub fn getGlyphSDF(
@@ -282,27 +286,39 @@ pub const Alphabet = struct {
 
     fn blitInstances(self: *Alphabet, text: []const u8, dst: []sht.PerInstance) !u16 {
         defer self.first = false;
-        var i: u16 = 0;
+        var inst_num: u16 = 0;
+        var cursor: u16 = 0;
+        var line: u8 = 0;
         for (text) |letter| {
-            if (letter == '\n') continue;
-            const tid = self.char_map.get(letter) orelse continue;
-            const if32: f32 = m.floaty(i);
+            if (letter == '\n') {
+                line += 1;
+                cursor = 0;
+                continue;
+            }
 
-            const letter_sz = self.char_sz_arr[tid];
+            const tid = self.char_map.get(letter) orelse return error.charMissing;
+            const gly_sz = self.char_sz_arr[tid];
+            if (gly_sz.empty()) { //skips " "
+                cursor += 1;
+                continue;
+            }
 
-            const charw = letter_sz.w;
+            const x_off: f32 = m.floaty(cursor) * 0.3;
+            const yf32: f32 = m.floaty(line);
+            const charw = gly_sz.w;
             const xfrac = m.floaty(charw) / 128;
             if (Alphabet.show_first_blit) if (self.first)
-                std.debug.print("+++ char({c}) at index({d}) has w({d}), xfrac({d})\n", //
-                    .{ letter, tid, charw, xfrac });
+                std.debug.print("+++ char({c}) at index({d}) has w({d}), xfrac({d}) xoff({d})\n", //
+                    .{ letter, tid, charw, xfrac, x_off });
 
             const val = sht.PerInstance{
-                .offset_2d = .{ if32 * 0.3, 0 },
+                .offset_2d = .{ x_off, -yf32 },
                 .other_offsets = .{ xfrac, @bitCast(@as(u32, tid)) },
             };
-            dst[i] = val;
-            i += 1;
+            dst[inst_num] = val;
+            inst_num += 1;
+            cursor += 1;
         }
-        return i;
+        return inst_num;
     }
 };

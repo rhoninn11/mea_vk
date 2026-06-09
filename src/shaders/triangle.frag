@@ -73,7 +73,7 @@ void main() {
     vec3 level_color = f_color.xyz;
 
     if (gate > 0.5) {
-        vec4 inferno_alt = texture(tex_bindless[3], v_uv);
+        // vec4 inferno_alt = texture(tex_bindless[nonuniformEXT(3)], v_uv);
         level_color = inferno(h) * vec3(uv.x);
     }
     if (gate > 1.5) {

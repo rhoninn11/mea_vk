@@ -1,4 +1,5 @@
 const sht = @import("types.zig");
+const std = @import("std");
 
 pub fn gridI(grid: sht.GridSize, x: usize, y: usize) usize {
     const cols = @as(usize, @intCast(grid.w));
@@ -16,4 +17,8 @@ pub fn xyGrid(x: u16, y: u16) sht.GridSize {
         .w = x,
         .h = y,
     };
+}
+
+pub fn printGrid(g: *const sht.GridSize, prefix: []const u8) void {
+    std.debug.print("{s} w({d}) h({d}) total({d})\n", .{ prefix, g.w, g.h, g.total });
 }

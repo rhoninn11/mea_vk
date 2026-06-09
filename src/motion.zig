@@ -82,8 +82,6 @@ pub fn HostMotion(keytype: type) type {
                         self.holds[i] = Hold{};
                         const j = ss * self.keyn + i;
                         self.keys[j] = key;
-
-                        std.debug.print("hold({d}) binded with key({d})\n", .{ i, j });
                     }
                 }
 

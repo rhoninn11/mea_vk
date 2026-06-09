@@ -209,6 +209,7 @@ pub fn build(b: *std.Build) !void {
         const bld_cmd: []const []const u8 = &.{
             "glslc",
             "--target-env=vulkan1.2",
+            "-g",
             "-o",
         };
         for (0..sdrs_map.names.len) |i| {

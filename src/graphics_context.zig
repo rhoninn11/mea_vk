@@ -19,7 +19,6 @@ const required_layer_names = [_][*:0]const u8{"VK_LAYER_KHRONOS_validation"};
 // TODO: https://claude.ai/chat/a8727d87-0510-44f0-a8af-664e93844a26
 const required_device_extensions = [_][*:0]const u8{
     vk.extensions.khr_swapchain.name,
-    vk.extensions.khr_multiview.name,
     vk.extensions.khr_synchronization_2.name,
 };
 
@@ -114,8 +113,8 @@ pub const BufferData = struct {
     pub fn deinit(self: *const BufferData, gc: *const GraphicsContext) void {
         const dev = gc.dev;
         if (self.mapping) |_| dev.unmapMemory(self.dvk_mem);
-        dev.freeMemory(self.dvk_mem, null);
         dev.destroyBuffer(self.dvk_bfr, null);
+        dev.freeMemory(self.dvk_mem, null);
     }
 };
 
@@ -209,6 +208,7 @@ pub const FrameRecorder = struct {
 };
 
 pub const GraphicsContext = struct {
+    const enable_validation = false;
     pub const CommandBuffer = vk.CommandBufferProxy;
     const Self = @This();
 
@@ -226,56 +226,36 @@ pub const GraphicsContext = struct {
     dev: Device,
     graphics_queue: Queue,
     present_queue: Queue,
-    pub fn initUnderSdl(allocator: Allocator, app_name: [*:0]const u8, window: sdl.video.Window) !GraphicsContext {
-        var self: GraphicsContext = undefined;
-        self.allocator = allocator;
 
-        // ofc signature is for extern function, but signature should reflect that as callconv(.c)
-        const Signature = *const fn (instance: vk.Instance, procname: [*:0]const u8) callconv(.c) vk.PfnVoidFunction;
-        const raw = try sdl.vulkan.getVkGetInstanceProcAddr();
-        const callback: Signature = @ptrCast(raw);
-        self.vkb = BaseWrapper.load(callback);
-
-        std.debug.print("whats the problem?\n", .{});
-        if (try checkLayerSupport(&self.vkb, self.allocator) == false) {
-            return error.MissingLayer;
-        }
-
+    fn getExtNamesList(gpa: Allocator) !std.ArrayList([*:0]const u8) {
         var extension_names: std.ArrayList([*:0]const u8) = .empty;
-        defer extension_names.deinit(allocator);
-        try extension_names.append(allocator, vk.extensions.ext_debug_utils.name);
+        errdefer extension_names.deinit(gpa);
+        try extension_names.append(gpa, vk.extensions.ext_debug_utils.name);
         // try extension_names.append(allocator, vk.extensions.khr_portability_enumeration.name); //for apple
-        try extension_names.append(allocator, vk.extensions.khr_get_physical_device_properties_2.name);
-
-        const sdl_ext_required = try sdl.vulkan.getInstanceExtensions();
-        try extension_names.appendSlice(allocator, sdl_ext_required);
+        try extension_names.append(gpa, vk.extensions.khr_get_physical_device_properties_2.name);
+        try extension_names.appendSlice(gpa, try sdl.vulkan.getInstanceExtensions());
+        // try extension_names.append(gpa, vk.extensions.ext_validation_features);
 
         for (extension_names.items) |name| {
             std.debug.print("+++ we are looking for {s} exension\n", .{name});
         }
+        return extension_names;
+    }
 
-        const instance = try self.vkb.createInstance(&.{
-            .p_application_info = &.{
-                .p_application_name = app_name,
-                .application_version = @bitCast(vk.makeApiVersion(0, 0, 0, 0)),
-                .p_engine_name = app_name,
-                .engine_version = @bitCast(vk.makeApiVersion(0, 0, 0, 0)),
-                .api_version = @bitCast(vk.API_VERSION_1_2),
-            },
+    fn validationFeatures() vk.ValidationFeaturesEXT {
+        const v_enables: []const vk.ValidationFeatureEnableEXT = &.{
+            .gpu_assisted_ext,
+            .synchronization_validation_ext,
+            .best_practices_ext,
+        };
 
-            .enabled_layer_count = required_layer_names.len,
-            .pp_enabled_layer_names = @ptrCast(&required_layer_names),
-            .enabled_extension_count = @intCast(extension_names.items.len),
-            .pp_enabled_extension_names = extension_names.items.ptr,
-            .flags = .{ .enumerate_portability_bit_khr = false }, //true for apple
-        }, null);
+        return vk.ValidationFeaturesEXT{
+            .enabled_validation_feature_count = m.uinty(v_enables.len),
+            .p_enabled_validation_features = v_enables.ptr,
+        };
+    }
 
-        const vki = try allocator.create(InstanceWrapper);
-        errdefer allocator.destroy(vki);
-        vki.* = InstanceWrapper.load(instance, self.vkb.dispatch.vkGetInstanceProcAddr.?);
-        self.instance = Instance.init(instance, vki);
-        errdefer self.instance.destroyInstance(null);
-
+    fn setupDebug(self: *Self) !void {
         self.debug_messenger = try self.instance.createDebugUtilsMessengerEXT(&.{
             .message_severity = .{
                 //.verbose_bit_ext = true,
@@ -291,18 +271,59 @@ pub const GraphicsContext = struct {
             .pfn_user_callback = &debugUtilsMessengerCallback,
             .p_user_data = null,
         }, null);
+    }
+
+    pub fn initUnderSdl(gpa: Allocator, app_name: [*:0]const u8, window: sdl.video.Window) !GraphicsContext {
+        var self: GraphicsContext = undefined;
+        self.allocator = gpa;
+
+        // ofc signature is for extern function, but signature should reflect that as callconv(.c)
+        const Signature = *const fn (instance: vk.Instance, procname: [*:0]const u8) callconv(.c) vk.PfnVoidFunction;
+        const raw = try sdl.vulkan.getVkGetInstanceProcAddr();
+        const callback: Signature = @ptrCast(raw);
+        self.vkb = BaseWrapper.load(callback);
+
+        if (try checkLayerSupport(&self.vkb, self.allocator, required_layer_names[0..]) == false) {
+            return error.MissingLayer;
+        }
+
+        var ext_names = try getExtNamesList(gpa);
+        defer ext_names.deinit(gpa);
+
+        const validation_features = validationFeatures();
+
+        const instance = try self.vkb.createInstance(&.{
+            .p_next = if (Self.enable_validation) &validation_features else null,
+            .p_application_info = &appInfo(app_name),
+
+            .enabled_layer_count = required_layer_names.len,
+            .pp_enabled_layer_names = @ptrCast(&required_layer_names),
+
+            .enabled_extension_count = @intCast(ext_names.items.len),
+            .pp_enabled_extension_names = ext_names.items.ptr,
+
+            .flags = .{ .enumerate_portability_bit_khr = false }, //true for apple
+        }, null);
+
+        const vki = try gpa.create(InstanceWrapper);
+        errdefer gpa.destroy(vki);
+        vki.* = InstanceWrapper.load(instance, self.vkb.dispatch.vkGetInstanceProcAddr.?);
+        self.instance = Instance.init(instance, vki);
+        errdefer self.instance.destroyInstance(null);
+
+        try self.setupDebug();
 
         self.surface = try createSurfaceSdl(self.instance.handle, window);
         errdefer self.instance.destroySurfaceKHR(self.surface, null);
 
-        const candidate = try pickPhysicalDevice(self.instance, allocator, self.surface);
+        const candidate = try pickPhysicalDevice(self.instance, gpa, self.surface);
         self.pdev = candidate.pdev;
         self.props = candidate.props;
 
         const dev = try initializeCandidate(self.instance, candidate);
 
-        const vkd = try allocator.create(DeviceWrapper);
-        errdefer allocator.destroy(vkd);
+        const vkd = try gpa.create(DeviceWrapper);
+        errdefer gpa.destroy(vkd);
         vkd.* = DeviceWrapper.load(dev, self.instance.wrapper.dispatch.vkGetDeviceProcAddr.?);
         self.dev = Device.init(dev, vkd);
         errdefer self.dev.destroyDevice(null);
@@ -316,98 +337,14 @@ pub const GraphicsContext = struct {
         return self;
     }
 
-    pub fn init(allocator: Allocator, app_name: [*:0]const u8, window: *glfw.Window) !GraphicsContext {
-        var self: GraphicsContext = undefined;
-        self.allocator = allocator;
-        // self.vkb = BaseWrapper.load(c.glfwGetInstanceProcAddress);
-
-        std.debug.print("whats the problem?\n", .{});
-        if (try checkLayerSupport(&self.vkb, self.allocator) == false) {
-            return error.MissingLayer;
-        }
-
-        var extension_names: std.ArrayList([*:0]const u8) = .empty;
-        defer extension_names.deinit(allocator);
-        try extension_names.append(allocator, vk.extensions.ext_debug_utils.name);
-        // the following extensions are to support vulkan in mac os
-        // see https://github.com/glfw/glfw/issues/2335
-        // try extension_names.append(allocator, vk.extensions.khr_portability_enumeration.name);
-        // it crush intel on intel gpu with this extension on  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-        try extension_names.append(allocator, vk.extensions.khr_get_physical_device_properties_2.name);
-
-        var glfw_exts_count: u32 = 0;
-        const glfw_exts0 = glfw.getRequiredInstanceExtensions(&glfw_exts_count).?;
-        try extension_names.appendSlice(allocator, @ptrCast(glfw_exts0[0..glfw_exts_count]));
-
-        for (extension_names.items) |name| {
-            std.debug.print("+++ we are looking for {s} exension\n", .{name});
-        }
-
-        const instance = try self.vkb.createInstance(&.{
-            .p_application_info = &.{
-                .p_application_name = app_name,
-                .application_version = @bitCast(vk.makeApiVersion(0, 0, 0, 0)),
-                .p_engine_name = app_name,
-                .engine_version = @bitCast(vk.makeApiVersion(0, 0, 0, 0)),
-                .api_version = @bitCast(vk.API_VERSION_1_2),
-            },
-
-            .enabled_layer_count = required_layer_names.len,
-            .pp_enabled_layer_names = @ptrCast(&required_layer_names),
-            .enabled_extension_count = @intCast(extension_names.items.len),
-            .pp_enabled_extension_names = extension_names.items.ptr,
-            // enumerate_portability_bit_khr to support vulkan in mac os
-            // see https://github.com/glfw/glfw/issues/2335
-            .flags = .{ .enumerate_portability_bit_khr = false },
-            // .flags = .{ .enumerate_portability_bit_khr = true }, // for apple
-            // should be commented but it just warns so no big deal
-        }, null);
-
-        const vki = try allocator.create(InstanceWrapper);
-        errdefer allocator.destroy(vki);
-        vki.* = InstanceWrapper.load(instance, self.vkb.dispatch.vkGetInstanceProcAddr.?);
-        self.instance = Instance.init(instance, vki);
-        errdefer self.instance.destroyInstance(null);
-
-        self.debug_messenger = try self.instance.createDebugUtilsMessengerEXT(&.{
-            .message_severity = .{
-                //.verbose_bit_ext = true,
-                //.info_bit_ext = true,
-                .warning_bit_ext = true,
-                .error_bit_ext = true,
-            },
-            .message_type = .{
-                .general_bit_ext = true,
-                .validation_bit_ext = true,
-                .performance_bit_ext = true,
-            },
-            .pfn_user_callback = &debugUtilsMessengerCallback,
-            .p_user_data = null,
-        }, null);
-
-        self.surface = try createSurface(self.instance, window);
-        errdefer self.instance.destroySurfaceKHR(self.surface, null);
-
-        const candidate = try pickPhysicalDevice(self.instance, allocator, self.surface);
-        self.pdev = candidate.pdev;
-        self.props = candidate.props;
-
-        const dev = try initializeCandidate(self.instance, candidate);
-
-        const vkd = try allocator.create(DeviceWrapper);
-        errdefer allocator.destroy(vkd);
-        vkd.* = DeviceWrapper.load(dev, self.instance.wrapper.dispatch.vkGetDeviceProcAddr.?);
-        self.dev = Device.init(dev, vkd);
-        errdefer self.dev.destroyDevice(null);
-
-        self.graphics_queue = Queue.init(self.dev, candidate.queues.graphics_family);
-        self.present_queue = Queue.init(self.dev, candidate.queues.present_family);
-
-        try self.memoryPropsWithExp();
-        try self.propsExplore();
-
-        return self;
+    pub fn appInfo(app_name: [*:0]const u8) vk.ApplicationInfo {
+        return vk.ApplicationInfo{
+            .p_application_name = app_name,
+            .application_version = @bitCast(vk.makeApiVersion(0, 0, 0, 0)),
+            .p_engine_name = app_name,
+            .engine_version = @bitCast(vk.makeApiVersion(0, 0, 0, 0)),
+            .api_version = @bitCast(vk.API_VERSION_1_2),
+        };
     }
 
     fn memoryPropsWithExp(self: *Self) !void {
@@ -519,17 +456,17 @@ pub const PushConstant = struct {
     pub fn PushConstantCmd() void {}
 };
 
-fn checkLayerSupport(vkb: *const BaseWrapper, alloc: Allocator) !bool {
+fn checkLayerSupport(vkb: *const BaseWrapper, alloc: Allocator, layers_2_check: []const [*:0]const u8) !bool {
     const available_layers = try vkb.enumerateInstanceLayerPropertiesAlloc(alloc);
     defer alloc.free(available_layers);
     std.debug.print(
         "our instance has {d} layers\n we require {d} layers\n",
-        .{ available_layers.len, required_layer_names.len },
+        .{ available_layers.len, layers_2_check.len },
     );
 
     //https://claude.ai/chat/c91e18de-8740-4c55-bcd9-21280657196e
     var result = true;
-    for (required_layer_names) |required_layer| {
+    for (layers_2_check) |required_layer| {
         for (available_layers) |layer| {
             if (std.mem.eql(u8, std.mem.span(required_layer), std.mem.sliceTo(&layer.layer_name, 0))) {
                 break;
