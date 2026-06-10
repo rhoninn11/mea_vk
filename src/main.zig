@@ -60,6 +60,10 @@ const last_q = sht.GridSize.g64.total + sht.GridSize.g64.total / 2;
 const last_half_of_last_q = sht.GridSize.g64.total + sht.GridSize.g64.total / 2;
 const first_letter_instance = 4608;
 const first_layer_instance = 6144;
+var navig: frame.Navig = .{
+    .g = sht.GridSize.g64,
+};
+
 var frame_state: frame.FrameState = .{
     .alt_proj = false,
     .model_idx = 0,
@@ -68,6 +72,7 @@ var frame_state: frame.FrameState = .{
     .layer_instance_num = 0,
     .letters_inst_offset = first_letter_instance,
     .letters_inst_num = 0,
+    .nav = &navig,
 };
 
 pub fn gpCommandQueue(gc: *const gm.GraphicsContext) !vk.CommandPool {
@@ -92,7 +97,8 @@ fn theDeepest(access: EasyAcces) !void {
     // const grid = sht.GridSize.g64;
     const grid = sht.GridSize.g64;
     const deeper_allocator = std.heap.page_allocator;
-    var duald_img = try proto.serdesLoadBackup(access.io, deeper_allocator);
+    // var duald_img = try proto.serdesLoadBackup(access.io, deeper_allocator);
+    var duald_img = try proto.serdesLoad2(access.io, deeper_allocator);
     defer duald_img.deinit(deeper_allocator);
 
     var mbfont: ?fonts.FontRendering = fonts.FontRendering.init(access.io, access.gpa, "fs/roboto.ttf") catch null;
@@ -110,6 +116,10 @@ fn theDeepest(access: EasyAcces) !void {
 
     var proto_ok = try glass.sampleOkGradient(access.gpa);
     defer proto_ok.deinit(access.gpa);
+    var proto_lay = try glass.sampleLayers(access.gpa);
+    defer proto_lay.deinit(access.gpa);
+
+    navig.g = proto_ok.sz;
 
     var swapchain_len: u8 = undefined;
 
@@ -241,10 +251,16 @@ fn theDeepest(access: EasyAcces) !void {
 
     var demo_rgb = try imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb);
     var demo_r = try imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_r);
+    var proto_vk = try imgs.vulkanTexture(&pic, proto_ok.sz, proto_ok.pix);
+    var lay_vk = try imgs.vulkanTexture(&pic, proto_lay.sz, proto_lay.pix);
     defer demo_rgb.deinit();
     defer demo_r.deinit();
+    defer proto_vk.deinit();
+    defer lay_vk.deinit();
     dset_atlas.updateTexture(0, &demo_rgb, 0);
     dset_atlas.updateTexture(0, &demo_r, 1);
+    dset_atlas.updateTexture(0, &proto_vk, 2);
+    dset_atlas.updateTexture(0, &lay_vk, 3);
 
     var all_imgs: imgs.ManyImages = try .init(access.gpa);
     defer all_imgs.deinit();

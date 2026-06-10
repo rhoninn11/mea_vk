@@ -87,6 +87,14 @@ void main() {
         
         gl_Position = mvp.proj * mvp.view * _pc.data.model * (base + delta);
         v_tex_idx = _pc.data.tex_base + floatBitsToUint(m_inst.other_offsets.y);
+    }else if (_pc.data.mode == 2) {
+        vec4 base = vec4(a_pos, 1);
+        gl_Position = mvp.proj * mvp.view * _pc.data.model * base;
+        v_tex_idx = 2;
+    }else if (_pc.data.mode == 3) {
+        vec4 base = vec4(a_pos, 1);
+        gl_Position = mvp.proj * mvp.view * _pc.data.model * base;
+        v_tex_idx = 3;
     }else {
         
         // per instance transform matrix

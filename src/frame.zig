@@ -7,7 +7,13 @@ const m = @import("math.zig");
 const v = @import("vertex.zig");
 const addons = @import("addons.zig");
 
+pub const Navig = struct {
+    g: sht.GridSize,
+};
+
 pub const FrameState = struct {
+    pub const scan_preview = 6140;
+    pub const scan_layer_preview = 6142;
     alt_proj: bool,
     model_idx: u8,
     ok_slices_num: u8,
@@ -15,6 +21,7 @@ pub const FrameState = struct {
     layer_instance_num: u16,
     letters_inst_offset: u16,
     letters_inst_num: u16,
+    nav: *const Navig,
 };
 
 fn Dynamic(t: type) type {
@@ -140,7 +147,7 @@ pub fn recordFrame(
 
             const ubo_slot: u8 = if (state.alt_proj) 1 else 0;
             const geopush = gm.PushConstant.PCBlob{
-                .model = m.mat_translate(.{ 0, 0, 0 }).mat,
+                .model = m.matTrans(.{ 0, 0, 0 }).mat,
             };
 
             //triangle
@@ -158,7 +165,7 @@ pub fn recordFrame(
             if (state.layer_instance_num > 0) {
                 const cube_index = 1;
                 const layerpush = gm.PushConstant.PCBlob{
-                    .model = m.mat_translate(.{ 0, 0, 0 }).mat,
+                    .model = m.matTrans(.{ 0, 0, 0 }).mat,
                     .inst_base = state.layer_instance_offset,
                     .mode = 1,
                 };
@@ -179,7 +186,7 @@ pub fn recordFrame(
                 const tex_glyph_begin = 32 + state.ok_slices_num;
 
                 const okpush = gm.PushConstant.PCBlob{
-                    .model = m.mat_translate(.{ 0, 3, 0 }).mat,
+                    .model = m.matTrans(.{ 0, 3, 0 }).mat,
                     .inst_base = inst_ok_begin,
                     .tex_base = tex_ok_begin,
                 };
@@ -193,7 +200,7 @@ pub fn recordFrame(
                     0,
                 );
                 const glyphpush = gm.PushConstant.PCBlob{
-                    .model = m.mat_translate(.{ 0, 6, 0 }).mat,
+                    .model = m.matTrans(.{ 0, 6, 0 }).mat,
                     .inst_base = inst_glyph_begin,
                     .tex_base = tex_glyph_begin,
                 };
@@ -211,7 +218,7 @@ pub fn recordFrame(
             hl_cmds.dSetsBind(all_sets, 2);
             // _ = HEX_IDX;
             const guipush = gm.PushConstant.PCBlob{
-                .model = m.mat_translate(.{ 0, 0, 0 }).mat,
+                .model = m.matTrans(.{ 0, 0, 0 }).mat,
                 .inst_base = 0,
                 .mode = 2,
             };
@@ -227,13 +234,45 @@ pub fn recordFrame(
 
             // std.debug.print("+++ elo {d}\n", .{state.letters_inst_num});
             const letter_push = gm.PushConstant.PCBlob{
-                .model = m.mat_translate(.{ -6, 3, 0 }).mat,
+                .model = m.matTrans(.{ -6, 3, 0 }).mat,
                 .inst_base = state.letters_inst_offset,
                 .tex_base = 160,
                 .mode = 1,
             };
             hl_cmds.useSprite();
             hl_cmds.push(&letter_push);
+            gc.dev.cmdDraw(
+                cbufr,
+                models.sizes[BILBORD_IDX],
+                state.letters_inst_num,
+                models.offsets[BILBORD_IDX],
+                0,
+            );
+
+            const hscale = m.floaty(state.nav.g.h) / m.floaty(state.nav.g.w);
+            const model = m.matXmat(m.matTrans(.{ -4, 0, 0 }).mat, m.matScale(.{ 1, hscale, 1 }).mat);
+            const scan_push = gm.PushConstant.PCBlob{
+                .model = model.mat,
+                .inst_base = state.letters_inst_offset,
+                .mode = 2,
+            };
+            hl_cmds.useSprite();
+            hl_cmds.push(&scan_push);
+            gc.dev.cmdDraw(
+                cbufr,
+                models.sizes[BILBORD_IDX],
+                state.letters_inst_num,
+                models.offsets[BILBORD_IDX],
+                0,
+            );
+
+            const layer_push = gm.PushConstant.PCBlob{
+                .model = m.matXmat(m.matTrans(.{ 0, 0, -0.1 }).mat, model.mat).mat,
+                .inst_base = state.letters_inst_offset,
+                .mode = 3,
+            };
+            hl_cmds.useSprite();
+            hl_cmds.push(&layer_push);
             gc.dev.cmdDraw(
                 cbufr,
                 models.sizes[BILBORD_IDX],

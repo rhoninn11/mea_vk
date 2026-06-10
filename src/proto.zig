@@ -203,6 +203,19 @@ pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator) !meagen.Image {
 
     return protoImgRead(io, gpa, zip.file_paths[0]);
 }
+pub fn serdesLoad2(io: std.Io, gpa: std.mem.Allocator) !DualImageData {
+    const prefix = "./fs/serdes";
+    // const fake_prefix = "./fs/fake_serdes";
+
+    var zip = try files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" });
+    defer zip.deinit(gpa);
+
+    var scann = try protoImgRead(io, gpa, zip.file_sets[0][0]);
+    errdefer scann.deinit(gpa);
+
+    const layers = try protoImgRead(io, gpa, zip.file_sets[0][1]);
+    return DualImageData{ .raw_data = scann, .layer_data = layers };
+}
 
 pub const LookingGlass = struct {
     pos: @Vector(2, i32),
@@ -270,17 +283,23 @@ pub const LookingGlass = struct {
         return w * img_y + img_x;
     }
 
-    pub fn pixval(self: *LookingGlass, i: usize) u16 {
+    inline fn hdrVal(self: *const LookingGlass, lo_idx: usize) u16 {
         var hdr_val: uHdr = undefined;
-        const lo_idx = self.lookingIdx(i);
         hdr_val.byte[0] = self.scan_raw.pixels[lo_idx * 2];
         hdr_val.byte[1] = self.scan_raw.pixels[lo_idx * 2 + 1];
         return hdr_val.hdr;
     }
 
-    pub fn pixvalLayer(self: *LookingGlass, i: usize) u8 {
-        const lo_idx = self.lookingIdx(i);
+    inline fn stdval(self: *const LookingGlass, lo_idx: usize) u8 {
         return self.scan_lyr.pixels[lo_idx];
+    }
+
+    pub fn scanVal(self: *LookingGlass, i: usize) u16 {
+        return self.hdrVal(self.lookingIdx(i));
+    }
+
+    pub fn layerVal(self: *LookingGlass, i: usize) u8 {
+        return self.stdval(self.lookingIdx(i));
     }
 
     const U16max: f32 = 1 << 16;
@@ -303,7 +322,7 @@ pub const LookingGlass = struct {
 
         for (0..total) |i| {
             var prev_one: sht.PerInstance = scratchpad[i];
-            const h = @as(f32, @floatFromInt(self.pixval(i)));
+            const h = @as(f32, @floatFromInt(self.scanVal(i)));
 
             const level = h / U16max;
             const tresholded_h = @max(0, ((level - TRIM_FACTOR) / (1 - TRIM_FACTOR)));
@@ -348,12 +367,12 @@ pub const LookingGlass = struct {
 
         for (0..total_cells) |i| {
             var src_inst: sht.PerInstance = src_cells_data[i];
-            const h = @as(f32, @floatFromInt(self.pixval(i)));
+            const h = @as(f32, @floatFromInt(self.scanVal(i)));
 
             const level = h / U16max;
             const tresholded_h = @max(0, ((level - TRIM_FACTOR) / (1 - TRIM_FACTOR)));
 
-            const layer_val = self.pixvalLayer(i);
+            const layer_val = self.layerVal(i);
             if (layer_val == 0) continue;
 
             const spot = self.lookingSpot(i);
@@ -399,7 +418,79 @@ pub const LookingGlass = struct {
         };
         errdefer sample.deinit(sample);
 
-        sample.pix[0] = 0;
+        for (0..isz.h) |yy| {
+            for (0..isz.w) |x| {
+                const pix_idx = yy * isz.w + x;
+                const pix_mem = pix_idx * 4;
+                const inferno_idx = self.hdrVal(pix_idx) >> 6; // to match sample_sz
+                const inferne_mem = inferno_idx * 4;
+                const inferno_rgba = inferno[inferne_mem .. inferne_mem + 4];
+                @memmove(sample.pix[pix_mem .. pix_mem + 4], inferno_rgba);
+            }
+        }
+        return sample;
+    }
+
+    pub fn sampleLayers(self: *const LookingGlass, gpa: std.mem.Allocator) !LookingOk {
+        const isz = self.img_sz;
+
+        var depths = try gpa.alloc(u16, 8 * isz.h);
+        defer gpa.free(depths);
+        @memset(depths, 60000);
+
+        for (0..isz.h) |yy| {
+            for (0..isz.w) |x| {
+                const pix_idx = yy * isz.w + x;
+                const markers = self.stdval(pix_idx);
+
+                for (0..8) |i| {
+                    const marked = ((markers >> @intCast(i)) & 1) == 1;
+                    if (marked) {
+                        depths[yy * 8 + i] = @intCast(x);
+                    }
+                }
+            }
+        }
+
+        var sample = LookingOk{
+            .sz = isz,
+            .pix = try gpa.alloc(u8, isz.total * @sizeOf(u32)),
+        };
+        errdefer sample.deinit(sample);
+
+        const colors: []const [4]u8 = &.{
+            .{ 255, 0, 0, 255 },
+            .{ 0, 255, 0, 255 },
+            .{ 0, 0, 255, 255 },
+            .{ 255, 128, 0, 255 },
+            .{ 255, 0, 128, 255 },
+            .{ 255, 128, 128, 255 },
+            .{ 128, 255, 0, 255 },
+            .{ 0, 255, 128, 255 },
+            .{ 128, 255, 128, 255 },
+        };
+
+        const empty: [4]u8 = .{ 0, 0, 0, 0 };
+
+        for (0..isz.h) |yy| {
+            for (0..isz.w) |x| {
+                const pix_idx = yy * isz.w + x;
+                const pix_mem = pix_idx * 4;
+
+                var blanc = true;
+                for (0..8) |i| {
+                    const i_depth = depths[yy * 8 + i];
+                    for (0..16) |jj| {
+                        if (i_depth + jj == x) {
+                            @memmove(sample.pix[pix_mem .. pix_mem + 4], colors[i][0..]);
+                            blanc = false;
+                        }
+                    }
+                }
+                if (blanc) @memmove(sample.pix[pix_mem .. pix_mem + 4], empty[0..]);
+            }
+        }
+
         return sample;
     }
 };

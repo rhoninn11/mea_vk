@@ -153,7 +153,7 @@ pub fn matXvec(m: mat4, v: [4]f32) [4]f32 {
 
 test "|mat_mul_vec" {
     const v = vec3{ 8, -2, 1 };
-    const b = matXvec(mat_identity().mat, stack4(v, 1));
+    const b = matXvec(matIden().mat, stack4(v, 1));
 
     try std.testing.expect(len(v - trim3d(b)) < 0.001);
 }
@@ -183,8 +183,8 @@ test "|mat_mul_mat" {
     const b: vec3 = .{ -2, 12, -5 };
     const c = a + b;
 
-    const A = mat_translate(a);
-    const B = mat_translate(b);
+    const A = matTrans(a);
+    const B = matTrans(b);
     const C = matXmat(A.mat, B.mat);
 
     const x = vec4{ 0, 0, 0, 1 };
@@ -200,7 +200,7 @@ pub fn norm(v: vec3) vec3 {
     return v / @as(vec3, @splat(len(v)));
 }
 
-pub fn mat_identity() mat4u {
+pub fn matIden() mat4u {
     return mat4u{
         .mat = .{
             .{ 1, 0, 0, 0 }, //column-major
@@ -211,7 +211,7 @@ pub fn mat_identity() mat4u {
     };
 }
 
-pub fn mat_translate(t: vec3) mat4u {
+pub fn matTrans(t: vec3) mat4u {
     return mat4u{
         .mat = .{
             .{ 1, 0, 0, 0 }, //column-major
@@ -222,11 +222,22 @@ pub fn mat_translate(t: vec3) mat4u {
     };
 }
 
+pub fn matScale(s: vec3) mat4u {
+    return mat4u{
+        .mat = .{
+            .{ s[0], 0, 0, 0 }, //column-major
+            .{ 0, s[1], 0, 0 },
+            .{ 0, 0, s[2], 0 },
+            .{ 0, 0, 0, 1 },
+        },
+    };
+}
+
 test "|point_moved" {
     const a = vec3{ 1, 2, 3 };
     const b = vec3{ -1, 7, 18 };
     const assumed = a + b;
-    const mat = mat_translate(a);
+    const mat = matTrans(a);
     const t = matXvec(mat.mat, stack4(b, 1));
 
     std.debug.print("translate \n", .{});
@@ -361,7 +372,7 @@ pub fn abs(a: f32) f32 {
 const minus_vec3 = @as(vec3, @splat(-1));
 
 pub fn mat_look_at(pos: vec3, target: vec3, ref_up: vec3) !mat4u {
-    const trans = mat_translate(-pos);
+    const trans = matTrans(-pos);
     const rot = lookRotation(pos, target, ref_up);
     return matXmat(rot.mat, trans.mat);
 }

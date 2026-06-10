@@ -51,7 +51,7 @@ pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: bool) !MatPack {
     };
 
     const ref_up: m.vec3 = .{ 0, 1, 0 };
-    const trans = m.mat_translate(-pos);
+    const trans = m.matTrans(-pos);
     const rot = m.lookRotation(pos, targ, ref_up);
     const view_mat = m.matXmat(rot.mat, trans.mat);
 
@@ -73,8 +73,8 @@ pub fn guiVisor(x: f32, y: f32) MatPack {
     const _y = y * scale;
     const interm = MatPack{
         .proj = m.mat_ortho(_x * 0.5, -_x * 0.5, _y * 0.5, -_y * 0.5, 16, -16).arr,
-        .view = m.mat_identity().arr,
-        .model = m.mat_identity().arr,
+        .view = m.matIden().arr,
+        .model = m.matIden().arr,
         // .view = m.mat_translate(-pos).arr,
         // .view = m.lookRotation(.{ 0, 0, -1 }, pos).arr,
     };

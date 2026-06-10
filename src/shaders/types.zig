@@ -2,9 +2,9 @@ const m = @import("../math.zig");
 pub const shu = @import("utils.zig");
 
 pub const MatPack = extern struct {
-    model: [16]f32 = m.mat_identity().arr,
-    view: [16]f32 = m.mat_identity().arr,
-    proj: [16]f32 = m.mat_identity().arr,
+    model: [16]f32 = m.matIden().arr,
+    view: [16]f32 = m.matIden().arr,
+    proj: [16]f32 = m.matIden().arr,
 };
 
 //uniform struct
