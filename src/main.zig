@@ -62,6 +62,7 @@ const first_letter_instance = 4608;
 const first_layer_instance = 6144;
 var navig: frame.Navig = .{
     .g = sht.GridSize.g64,
+    .off = .{ 0, 0 },
 };
 
 var frame_state: frame.FrameState = .{
@@ -97,8 +98,8 @@ fn theDeepest(access: EasyAcces) !void {
     // const grid = sht.GridSize.g64;
     const grid = sht.GridSize.g64;
     const deeper_allocator = std.heap.page_allocator;
-    // var duald_img = try proto.serdesLoadBackup(access.io, deeper_allocator);
-    var duald_img = try proto.serdesLoad2(access.io, deeper_allocator);
+    var duald_img = try proto.serdesLoadBackup(access.io, deeper_allocator);
+    // var duald_img = try proto.serdesLoad2(access.io, deeper_allocator);
     defer duald_img.deinit(deeper_allocator);
 
     var mbfont: ?fonts.FontRendering = fonts.FontRendering.init(access.io, access.gpa, "fs/roboto.ttf") catch null;
@@ -384,6 +385,7 @@ fn theDeepest(access: EasyAcces) !void {
     //state
     var okphi: f32 = 0;
     var glyphphi: f32 = 0;
+    var scanphi: f32 = 0;
 
     // main loop
     while (!window.shoudClose()) {
@@ -408,7 +410,11 @@ fn theDeepest(access: EasyAcces) !void {
         const td1 = timeline1.deltaS();
         okphi += td1 * 0.1;
         glyphphi += td1 * 0.13;
+
         pamperek.control(&input.plr_input, td);
+
+        scanphi += td1 * 0.67;
+        navig.off = m.radial(scanphi, 1);
 
         try dbgmonit.clear(access.io);
         defer dbgmonit.update(

@@ -457,3 +457,7 @@ pub inline fn uinty(val: usize) u32 {
 pub inline fn floaty(usz: anytype) f32 {
     return @as(f32, @floatFromInt(usz));
 }
+
+pub inline fn radial(phi: f32, r: f32) vec2 {
+    return .{ @cos(phi) * r, @sin(phi) * r };
+}

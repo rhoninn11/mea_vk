@@ -9,6 +9,7 @@ const addons = @import("addons.zig");
 
 pub const Navig = struct {
     g: sht.GridSize,
+    off: m.vec2,
 };
 
 pub const FrameState = struct {
@@ -249,11 +250,17 @@ pub fn recordFrame(
                 0,
             );
 
-            const hscale = m.floaty(state.nav.g.h) / m.floaty(state.nav.g.w);
-            const model = m.matXmat(m.matTrans(.{ -4, 0, 0 }).mat, m.matScale(.{ 1, hscale, 1 }).mat);
-            const scan_push = gm.PushConstant.PCBlob{
+            const nav = state.nav;
+            const hscale = m.floaty(nav.g.h) / m.floaty(nav.g.w);
+
+            const aspect = m.matScale(.{ 1, hscale, 1 });
+            const nav_trans = m.matTrans(.{ nav.off[m.X], nav.off[m.Y], 0 });
+
+            const model = m.matXmat(nav_trans.mat, aspect.mat);
+            var scan_push = gm.PushConstant.PCBlob{
                 .model = model.mat,
                 .inst_base = state.letters_inst_offset,
+                .tex_base = 2,
                 .mode = 2,
             };
             hl_cmds.useSprite();
@@ -261,22 +268,19 @@ pub fn recordFrame(
             gc.dev.cmdDraw(
                 cbufr,
                 models.sizes[BILBORD_IDX],
-                state.letters_inst_num,
+                1,
                 models.offsets[BILBORD_IDX],
                 0,
             );
 
-            const layer_push = gm.PushConstant.PCBlob{
-                .model = m.matXmat(m.matTrans(.{ 0, 0, -0.1 }).mat, model.mat).mat,
-                .inst_base = state.letters_inst_offset,
-                .mode = 3,
-            };
-            hl_cmds.useSprite();
-            hl_cmds.push(&layer_push);
+            const closer = m.matTrans(.{ 0, 0, -0.1 });
+            scan_push.model = m.matXmat(closer.mat, model.mat).mat;
+            scan_push.tex_base = 3;
+            hl_cmds.push(&scan_push);
             gc.dev.cmdDraw(
                 cbufr,
                 models.sizes[BILBORD_IDX],
-                state.letters_inst_num,
+                1,
                 models.offsets[BILBORD_IDX],
                 0,
             );

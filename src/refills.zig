@@ -78,7 +78,7 @@ pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spac
 
         const delt = ((middle - g_idx) / m.splat3d(min_dim)) * m.splat3d(6 * wave_scale);
 
-        const dist = std.math.sqrt(delt[m.X] * delt[m.X] + delt[m.Z] * delt[m.Z]);
+        const dist = m.len(.{ delt[m.X], delt[m.Z], 0 });
 
         var fresh_one: sht.PerInstance = undefined;
         const pos_1 = (g_idx - middle) * m.splat3d(spacing);
