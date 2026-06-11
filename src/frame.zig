@@ -9,6 +9,7 @@ const addons = @import("addons.zig");
 
 pub const Navig = struct {
     g: sht.GridSize,
+    pos: m.vec2,
     scale: m.vec2,
 };
 
@@ -215,25 +216,26 @@ pub fn recordFrame(
                 );
             }
 
-            //gui
+            //gui - maybe would be nice to clear depth first
             hl_cmds.dSetsBind(all_sets, 2);
-            // _ = HEX_IDX;
+            // this was first attemp;
+            const cursor = state.nav.pos;
             const guipush = gm.PushConstant.PCBlob{
-                .model = m.matTrans(.{ 0, 0, 0 }).mat,
+                .model = m.matTrans(.{ cursor[m.X], cursor[m.Y], 0 }).mat,
                 .inst_base = 0,
-                .mode = 2,
+                .mode = 3,
             };
             hl_cmds.useTriangles();
             hl_cmds.push(&guipush);
             gc.dev.cmdDraw(
                 cbufr,
                 models.sizes[HEX_IDX],
-                256,
+                1,
                 models.offsets[HEX_IDX],
                 0,
             );
 
-            // std.debug.print("+++ elo {d}\n", .{state.letters_inst_num});
+            // text characters
             const letter_push = gm.PushConstant.PCBlob{
                 .model = m.matTrans(.{ -6, 3, 0 }).mat,
                 .inst_base = state.letters_inst_offset,

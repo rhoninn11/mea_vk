@@ -267,11 +267,11 @@ pub const Utils = struct {
 
         try triangles.appendSlice(gpa, &.{ tis[0], tis[2], Vertex{
             .pos = .{ 1, 0, 0 },
-            .color = .{ 1, 1, 0 },
+            .color = .{ 1, 0.5, 0 },
         } });
         try triangles.appendSlice(gpa, &.{ tis[5], tis[4], Vertex{
             .pos = .{ -1, 0, 0 },
-            .color = .{ 0, 0, 0 },
+            .color = .{ 0, 0.5, 0 },
         } });
 
         return triangles;

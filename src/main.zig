@@ -62,6 +62,7 @@ const first_letter_instance = 4608;
 const first_layer_instance = 6144;
 var navig: frame.Navig = .{
     .g = sht.GridSize.g64,
+    .pos = .{ 0, 0 },
     .scale = .{ 0, 0 },
 };
 
@@ -416,13 +417,16 @@ fn theDeepest(access: EasyAcces) !void {
         scanphi += td1 * 0.67;
         navig.scale[m.U] = m.trygZero1(@sin(scanphi)) * 0.7 + 0.3;
 
-        try dbgmonit.clear(access.io);
-        defer dbgmonit.update(
+        // navig.pos = input.
+        const cursor = sdl_wrap.peekPointer();
+        navig.pos = .{ cursor.x / 100, -cursor.y / 100 };
+
+        try dbgmonit.update(
             access.io,
             pamperek.p.phi,
             frame_state.layer_instance_num,
             pamperek.pos(),
-        ) catch @panic("tmp workaround is failing");
+        );
 
         if (input.alt_projection_trigger.fired()) {
             frame_state.alt_proj = !frame_state.alt_proj;

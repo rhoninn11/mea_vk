@@ -75,7 +75,6 @@ void main() {
     float gate = m_inst.depth_ctrl.x;
     float h = m_inst.depth_ctrl.y;
 
-    vec3 pose_on_surface = m_inst.offset_4d.xyz;
     vec3 pos_scaled = a_pos * vec3(_group.data.scale.x);
     
     vec3 pos_im = pos_scaled;
@@ -99,7 +98,14 @@ void main() {
         y_anim = h*2;
     }
 
-    vec3 base = pos_im + pose_on_surface + vec3(0, y_anim, 0);
+    vec3 base = vec3(0);
+    if (_pc.data.mode < 3) {
+        vec3 pose_on_surface = m_inst.offset_4d.xyz;
+        base = pos_im + pose_on_surface + vec3(0, y_anim, 0);
+    } else {
+        base = a_pos;
+    }
+
 
     vec4 before_transform = vec4(base, 1.0);
     gl_Position = ems.proj * ems.view * _pc.data.model * before_transform;

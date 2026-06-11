@@ -195,17 +195,11 @@ pub const DbgMonitor = struct {
     name: []const u8,
     val: f32,
 
-    pub fn clear(self: *DbgMonitor, io: std.Io) !void {
-        var buffer: [1024]u8 = undefined;
-        const stdout: std.Io.File = .stderr();
-        var w = stdout.writer(io, &buffer);
-        const iowriter: *std.Io.Writer = &w.interface;
-
+    pub fn clearPrev(self: *DbgMonitor, iowriter: *std.Io.Writer) !void {
         if (self.linecount != 0) for (0..self.linecount) |_| {
             try iowriter.print("\x1b[2K", .{}); // wyczyść linię
             try iowriter.print("\x1b[1A", .{}); // w górę
         };
-        try iowriter.flush();
     }
 
     pub fn update(
@@ -223,6 +217,8 @@ pub const DbgMonitor = struct {
 
         //const pointer to interface was the right way on windows
         const iowriter: *std.Io.Writer = &w.interface;
+
+        try self.clearPrev(iowriter);
 
         var lines: u8 = 7;
         try iowriter.print("---------------\n", .{});

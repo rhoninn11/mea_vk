@@ -424,10 +424,24 @@ pub const LookingGlass = struct {
         return sample;
     }
 
+    const colors: []const []const u8 = &.{
+        &.{ 255, 0, 0, 255 },
+        &.{ 0, 255, 0, 255 },
+        &.{ 0, 0, 255, 255 },
+        &.{ 255, 128, 0, 255 },
+        &.{ 255, 0, 128, 255 },
+        &.{ 255, 128, 128, 255 },
+        &.{ 128, 255, 0, 255 },
+        &.{ 0, 255, 128, 255 },
+        &.{ 128, 255, 128, 255 },
+    };
+    const discard: []const u8 = &.{ 0, 0, 0, 0 };
+
     pub fn sampleLayers(self: *const LookingGlass, gpa: std.mem.Allocator) !LookingOk {
         const isz = self.img_sz;
+        const layer_num = 8;
 
-        var depths = try gpa.alloc(u16, 8 * isz.h);
+        var depths = try gpa.alloc(u16, layer_num * isz.h);
         defer gpa.free(depths);
         @memset(depths, 60000);
 
@@ -451,36 +465,25 @@ pub const LookingGlass = struct {
         };
         errdefer sample.deinit(sample);
 
-        const colors: []const [4]u8 = &.{
-            .{ 255, 0, 0, 255 },
-            .{ 0, 255, 0, 255 },
-            .{ 0, 0, 255, 255 },
-            .{ 255, 128, 0, 255 },
-            .{ 255, 0, 128, 255 },
-            .{ 255, 128, 128, 255 },
-            .{ 128, 255, 0, 255 },
-            .{ 0, 255, 128, 255 },
-            .{ 128, 255, 128, 255 },
-        };
-
-        const empty: [4]u8 = .{ 0, 0, 0, 0 };
-
+        const line_depth = 4;
         for (0..isz.h) |yy| {
             for (0..isz.w) |x| {
                 const pix_idx = yy * isz.w + x;
                 const pix_mem = pix_idx * 4;
+                const write_slot = sample.pix[pix_mem .. pix_mem + 4];
 
                 var blanc = true;
-                for (0..8) |i| {
-                    const i_depth = depths[yy * 8 + i];
-                    for (0..16) |jj| {
-                        if (i_depth + jj == x) {
-                            @memmove(sample.pix[pix_mem .. pix_mem + 4], colors[i][0..]);
+                for (0..layer_num) |i| {
+                    const depth_at = yy * layer_num + i;
+                    const depth = depths[depth_at];
+                    inline for (0..line_depth) |margin| {
+                        if (depth + margin == x) {
+                            @memmove(write_slot, colors[i]);
                             blanc = false;
                         }
                     }
                 }
-                if (blanc) @memmove(sample.pix[pix_mem .. pix_mem + 4], empty[0..]);
+                if (blanc) @memmove(write_slot, discard);
             }
         }
 
