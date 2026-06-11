@@ -437,7 +437,9 @@ pub const PushConstant = struct {
         inst_base: u32 = 0,
         tex_base: u32 = 0,
         mode: u32 = 0,
-        _not_used: [13]u32 = .{0} ** 13,
+        _not_used_0: u32 = 0,
+        scale2D: [2]f32 = .{1} ** 2,
+        _not_used: [10]u32 = .{0} ** 10,
     };
 
     pub fn Ranges() []const vk.PushConstantRange {

@@ -187,8 +187,9 @@ pub const OkUnderstanding = struct {
 const LabSpot = struct { key: f32, lab: m.vec3 };
 pub fn sampleInfernoAlt(alloc: std.mem.Allocator, g: *const sht.GridSize) ![]u8 {
     const path: []const LabSpot = &.{
-        .{ .key = 0.0, .lab = .{ 0.6, 0.15, 0.0 } },
-        .{ .key = 0.7, .lab = .{ 0.8, 0.0, 0.15 } },
+        .{ .key = 0.0, .lab = .{ 0.5, -0.07, -0.03 } },
+        // .{ .key = 0.5, .lab = .{ 0.5, 0.0, -0.07 } },
+        .{ .key = 0.8, .lab = .{ 0.75, 0.07, 0.10 } },
         .{ .key = 0.85, .lab = .{ 0.85, -0.05, 0.0 } },
         .{ .key = 1.0, .lab = .{ 0.9, 0.0, -0.02 } },
     };

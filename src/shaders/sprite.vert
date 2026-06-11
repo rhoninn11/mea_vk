@@ -7,23 +7,20 @@
 layout(constant_id = 0) const int MAX_LIGHTS = 16;
 layout(constant_id = 1) const float INTENSITY = 1.0;
 
+struct MatPack {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+};
 struct PushData {
     mat4 model;
     uint inst_base;
     uint tex_base;
     uint mode;
+    uint _not_used_0;
+    vec2 scale2D;
     uint _not_used_1;
     uint _not_used_2;
-    uint _not_used_3;
-    uint _not_used_4;
-    uint _not_used_5;
-};
-layout(push_constant) uniform PC { PushData data; } _pc;
-
-struct MatPack {
-    mat4 model;
-    mat4 view;
-    mat4 proj;
 };
 struct UboData{
     vec2 osc_scale; 
@@ -33,8 +30,6 @@ struct UboData{
     vec4 not_used_4d_2;
     MatPack matrices;
 };
-layout(set = 0, binding = 0) uniform UBO { UboData data; } _ubo;
-
 
 // 80B
 struct Instance{
@@ -51,13 +46,11 @@ struct Instance{
 struct SmolInst{
     vec4 sizing;
 };
-layout(set = 1, binding = 0) buffer readonly InstanceData{ 
-    Instance per_instance[]; 
-} _storage;
 
-// layout(set = 1, binding = 1) buffer readonly InstanceSmall{ 
-//     SmolInst per_instance[]; 
-// } _storage_b;
+layout(push_constant) uniform PC { PushData data; } _pc;
+layout(set = 0, binding = 0) uniform UBO { UboData data; } _ubo;
+layout(set = 1, binding = 0) buffer readonly InstanceData{ Instance arr[]; } _storage;
+// layout(set = 2, binding = 0) uniform sampler2D tex_bindless[];
 
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_color;
@@ -73,7 +66,7 @@ vec3 unzip(vec2 zipped);
 void main() {
     uint inst_idx = _pc.data.inst_base + gl_InstanceIndex;
     MatPack mvp = _ubo.data.matrices;
-    Instance m_inst = _storage.per_instance[inst_idx];
+    Instance m_inst = _storage.arr[inst_idx];
 
     if (_pc.data.mode == 1) {
         
@@ -87,10 +80,13 @@ void main() {
         
         gl_Position = mvp.proj * mvp.view * _pc.data.model * (base + delta);
         v_tex_idx = _pc.data.tex_base + floatBitsToUint(m_inst.other_offsets.y);
+        v_uv = a_color.xy;
     }else if (_pc.data.mode == 2) {
         vec4 base = vec4(a_pos, 1);
         gl_Position = mvp.proj * mvp.view * _pc.data.model * base;
         v_tex_idx = _pc.data.tex_base;
+        float s = _pc.data.scale2D.x;
+        v_uv = a_color.xy * s;
     }else {
         
         // per instance transform matrix
@@ -104,6 +100,6 @@ void main() {
 
         gl_Position = mvp.proj * mvp.view * _pc.data.model * before_ems;
         v_tex_idx = _pc.data.tex_base + gl_InstanceIndex;
+        v_uv = a_color.xy;
     }
-    v_uv = a_color.xy;
 }

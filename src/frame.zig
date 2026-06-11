@@ -9,7 +9,7 @@ const addons = @import("addons.zig");
 
 pub const Navig = struct {
     g: sht.GridSize,
-    off: m.vec2,
+    scale: m.vec2,
 };
 
 pub const FrameState = struct {
@@ -250,19 +250,24 @@ pub fn recordFrame(
                 0,
             );
 
-            const nav = state.nav;
-            const hscale = m.floaty(nav.g.h) / m.floaty(nav.g.w);
+            const model_b = blk: {
+                const within = state.nav;
+                const hscale = m.floaty(within.g.h) / m.floaty(within.g.w);
 
-            const aspect = m.matScale(.{ 1, hscale, 1 });
-            const nav_trans = m.matTrans(.{ nav.off[m.X], nav.off[m.Y], 0 });
+                const aspect = m.matScale(.{ 1, hscale, 1 });
+                const m_place = m.matTrans(.{ -3, 0, 0 });
 
-            const model = m.matXmat(nav_trans.mat, aspect.mat);
+                break :blk m.matXmat(m_place.mat, aspect.mat);
+            };
+
             var scan_push = gm.PushConstant.PCBlob{
-                .model = model.mat,
+                .model = model_b.mat,
                 .inst_base = state.letters_inst_offset,
                 .tex_base = 2,
                 .mode = 2,
+                .scale2D = .{ state.nav.scale[m.U], 1 },
             };
+
             hl_cmds.useSprite();
             hl_cmds.push(&scan_push);
             gc.dev.cmdDraw(
@@ -274,7 +279,8 @@ pub fn recordFrame(
             );
 
             const closer = m.matTrans(.{ 0, 0, -0.1 });
-            scan_push.model = m.matXmat(closer.mat, model.mat).mat;
+
+            scan_push.model = m.matXmat(closer.mat, model_b.mat).mat;
             scan_push.tex_base = 3;
             hl_cmds.push(&scan_push);
             gc.dev.cmdDraw(

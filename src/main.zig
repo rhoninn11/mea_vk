@@ -62,7 +62,7 @@ const first_letter_instance = 4608;
 const first_layer_instance = 6144;
 var navig: frame.Navig = .{
     .g = sht.GridSize.g64,
-    .off = .{ 0, 0 },
+    .scale = .{ 0, 0 },
 };
 
 var frame_state: frame.FrameState = .{
@@ -414,7 +414,7 @@ fn theDeepest(access: EasyAcces) !void {
         pamperek.control(&input.plr_input, td);
 
         scanphi += td1 * 0.67;
-        navig.off = m.radial(scanphi, 1);
+        navig.scale[m.U] = m.trygZero1(@sin(scanphi)) * 0.7 + 0.3;
 
         try dbgmonit.clear(access.io);
         defer dbgmonit.update(

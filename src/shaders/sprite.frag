@@ -8,23 +8,20 @@ struct PushData {
     uint inst_base;
     uint tex_base;
     uint mode;
+    uint _not_used_0;
+    vec2 scale2D;
     uint _not_used_1;
     uint _not_used_2;
-    uint _not_used_3;
-    uint _not_used_4;
-    uint _not_used_5;
 };
+
 layout(push_constant) uniform PC { PushData data; } _pc;
-
-// whole data has is 16 x f32
-
+// layout(set = 0, binding = 0) uniform UBO { UboData data; } _ubo;
+// layout(set = 1, binding = 0) buffer readonly InstanceData{ Instance arr[]; } _storage;
 layout(set = 2, binding = 0) uniform sampler2D tex_bindless[];
 
 layout(location = 0) in vec2 v_uv;
 layout(location = 1) flat in uint v_tex_idx;
-
-layout(location = 0) out vec4 f_color;
-
+layout(location = 0) out vec4 f_color; //out
 
 void main() {
     vec4 tex_color = texture(tex_bindless[nonuniformEXT(v_tex_idx)], v_uv);

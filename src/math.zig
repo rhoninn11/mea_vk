@@ -1,6 +1,8 @@
 const std = @import("std");
 const rmath = @import("rmath");
 
+pub const tau = std.math.tau;
+
 pub const vec2 = @Vector(2, f32);
 pub const vec3 = @Vector(3, f32);
 pub const vec4 = @Vector(4, f32);
@@ -25,6 +27,20 @@ test "allignment explorer" {
     try std.testing.expectEqual(glsl_alignment, @alignOf(@TypeOf(uni)));
 }
 
+const sht = @import("shaders/types.zig");
+test "union behav" {
+    const m_I = matIden();
+
+    const mpa = sht.MatPack{
+        .model = m_I.arr,
+        .proj = m_I.arr,
+        .view = m_I.arr,
+    };
+
+    const like_glsl = @alignOf(mpa) == 16;
+    try std.testing.expect(like_glsl);
+}
+
 pub const mat4 = [4]vec4;
 pub const mat3 = [3]vec3;
 
@@ -32,6 +48,8 @@ const hmm_a: vec3 = .{ 1, 1, 1 };
 const hmm_b: vec3 = .{ 2, 2, 2 };
 const hmm_c = hmm_a + hmm_b;
 
+pub const U = 0;
+pub const V = 1;
 pub const X = 0;
 pub const Y = 1;
 pub const Z = 2;
@@ -383,7 +401,7 @@ test "is_matrix_looking" {
 
     const M = 0;
     const R = 1;
-    const U = 2;
+    const _U = 2;
     const point_m = vec3{ 1, 0, 1 };
     const point_r = vec3{ 1.1, 0, 1 };
     const point_u = vec3{ 1, 0.1, 1 };
@@ -398,7 +416,7 @@ test "is_matrix_looking" {
     std.debug.print("---\n", .{});
     std.debug.print("middle one {}\n", .{outs[M]});
     std.debug.print("right one  {}\n", .{outs[R]});
-    std.debug.print("left one   {}\n", .{outs[U]});
+    std.debug.print("left one   {}\n", .{outs[_U]});
     try std.testing.expect(abs(outs[M][X]) < 0.001);
     try std.testing.expect(abs(outs[M][Y]) < 0.001);
 
@@ -460,4 +478,12 @@ pub inline fn floaty(usz: anytype) f32 {
 
 pub inline fn radial(phi: f32, r: f32) vec2 {
     return .{ @cos(phi) * r, @sin(phi) * r };
+}
+
+pub inline fn trygZero1(val: f32) f32 {
+    return (val + 1) * 0.5;
+}
+
+pub inline fn tryg2u16f(val: f32) f32 {
+    return ((val + 1) * 0.5 * ((1 << 16) - 3) + 1);
 }

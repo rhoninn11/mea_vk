@@ -47,14 +47,6 @@ const uHdr = extern union {
     hdr: u16,
 };
 
-pub inline fn trygZero1(val: f32) f32 {
-    return (val + 1) * 0.5;
-}
-
-pub inline fn tryg2u16f(val: f32) f32 {
-    return ((val + 1) * 0.5 * ((1 << 16) - 3) + 1);
-}
-
 pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     var pixels = try alloc.alloc(u8, g.total * @sizeOf(u16));
     const fy: f32 = 0.6;
@@ -63,15 +55,15 @@ pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     for (0..g.h) |yy| {
         const y_phase = m.floaty(yy) / 16; // give him some samples per cycle
         const y_sin = @sin(y_phase * std.math.tau * fy);
-        const y_ufit = tryg2u16f(y_sin);
+        const y_ufit = m.tryg2u16f(y_sin);
 
-        const yl = trygZero1(@sin(y_phase * std.math.tau * f1y));
+        const yl = m.trygZero1(@sin(y_phase * std.math.tau * f1y));
         // _ = yl_sin;
 
         for (0..g.w) |x| {
             const x_phase = m.floaty(x) / 16;
             const x_sin = @sin(x_phase * std.math.tau * fx);
-            const x_ufit = tryg2u16f(x_sin);
+            const x_ufit = m.tryg2u16f(x_sin);
 
             const combined = x_ufit * 0.5 + y_ufit * 0.5 * yl;
             const hdrval: uHdr = .{ .hdr = @as(u16, @intFromFloat(combined)) };
@@ -134,7 +126,30 @@ pub const DualImageData = struct {
 
         for (0..y_dim) |yy| {
             const idx = yy * x_dim + (yy / slope);
-            fresh_data[idx] = 1;
+            const cell = fresh_data[idx];
+            fresh_data[idx] = cell | 1;
+        }
+
+        const width = 35.0;
+        const cycles = 4.0;
+
+        const y_scale = m.floaty(y_dim) / (cycles * m.tau);
+        const mid = m.floaty(x_dim) / 2;
+        for (0..y_dim) |yy| {
+            var placed = false;
+            const sin = @sin(m.floaty(yy) / y_scale);
+            for (0..x_dim) |x| {
+                const pos = m.floaty(x);
+                const pixval = (mid - pos) / width;
+
+                const delta = @abs(sin - pixval);
+                if (delta < 0.05 and !placed) {
+                    const idx = yy * x_dim + x;
+                    const cell = fresh_data[idx];
+                    fresh_data[idx] = cell | 2;
+                    placed = true;
+                }
+            }
         }
 
         return meagen.Image{
