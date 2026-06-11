@@ -55,7 +55,10 @@ pub fn testInit(b: *std.Build, o: *const Options, libs_from_c: *const LibsFromC)
                 .{ .name = "rmath", .module = libs_from_c.raymath_module },
             },
         }),
-        .use_llvm = true,
+        .use_llvm = switch (builtin.os.tag) {
+            .windows => true,
+            else => false,
+        },
     });
 }
 
@@ -127,13 +130,6 @@ pub fn build(b: *std.Build) !void {
 
     // try cmdsBuild(b, o);
 
-    const zglfw = b.dependency("zglfw", .{
-        .target = o.target,
-        .optimize = o.optimize,
-        .shared = true,
-    });
-    const zglfw_lib = zglfw.artifact("glfw");
-
     const libs_from_c = libsFromC(b, &o);
 
     const vk_registry_path = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
@@ -153,14 +149,16 @@ pub fn build(b: *std.Build) !void {
                 .{ .name = "vulkan-zig", .module = vulkan_bind },
             },
         }),
-        .use_llvm = true,
+        .use_llvm = switch (builtin.os.tag) {
+            .windows => true,
+            else => false,
+        },
     });
 
     triangle_exe.root_module.addIncludePath(b.path("src/third_party/"));
     triangle_exe.root_module.linkLibrary(libs_from_c.compile);
 
     b.installArtifact(triangle_exe);
-    b.installArtifact(zglfw_lib);
     b.installArtifact(libs_from_c.compile);
 
     const sdl3_lib = b.dependency("sdl", .{
@@ -181,24 +179,6 @@ pub fn build(b: *std.Build) !void {
     const sdl_artifact = sdl3_lib.artifact("SDL3");
     triangle_exe.root_module.linkLibrary(sdl_artifact);
     b.installArtifact(sdl_artifact);
-
-    // { // if it can be swaped, zls will be working fully again, and some files will in project can be erased
-    //     const glfw_lib_fmt: []const u8 = if (builtin.target.os.tag == .windows) "{s}/bin" else "{s}/lib";
-    //     const glfw_name: []const u8 = if (builtin.target.os.tag == .windows) "glfw3" else "glfw";
-
-    //     var lib_path_mem: [1024]u8 = undefined;
-    //     var include_path_mem: [1024]u8 = undefined;
-    //     const glfw_path = b.graph.environ_map.get("GLFW_LIB").?;
-    //     // const glfw_path = try std.process.getEnvVarOwned(b.allocator, "GLFW_LIB");
-    //     const include_path = try std.fmt.bufPrint(&include_path_mem, "{s}/include", .{glfw_path});
-    //     const lib_path = try std.fmt.bufPrint(&lib_path_mem, glfw_lib_fmt, .{glfw_path});
-
-    //     // triangle_exe.lib
-    //     triangle_exe.root_module.addIncludePath(.{ .cwd_relative = include_path });
-    //     triangle_exe.root_module.addLibraryPath(.{ .cwd_relative = lib_path });
-    //     triangle_exe.root_module.linkSystemLibrary(glfw_name, .{ .needed = true });
-    // }
-    triangle_exe.root_module.linkLibrary(zglfw_lib);
 
     if (use_zig_shaders) {
         zig2spirv(b, triangle_exe);

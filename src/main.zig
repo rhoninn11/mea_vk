@@ -421,12 +421,12 @@ fn theDeepest(access: EasyAcces) !void {
         const cursor = sdl_wrap.peekPointer();
         navig.pos = .{ cursor.x / 100, -cursor.y / 100 };
 
-        try dbgmonit.update(
-            access.io,
-            pamperek.p.phi,
-            frame_state.layer_instance_num,
-            pamperek.pos(),
-        );
+        // try dbgmonit.update(
+        //     access.io,
+        //     pamperek.p.phi,
+        //     frame_state.layer_instance_num,
+        //     pamperek.pos(),
+        // );
 
         if (input.alt_projection_trigger.fired()) {
             frame_state.alt_proj = !frame_state.alt_proj;
