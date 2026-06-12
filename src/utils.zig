@@ -24,33 +24,26 @@ pub fn strcompL(_: void, lhs: []const u8, rhs: []const u8) bool {
     return std.mem.order(u8, lhs, rhs) == .gt;
 }
 
-pub fn Slider(vecTpy: type) type {
-    return struct {
-        const Self = @This();
-        hmm: *const []const vecTpy,
-        len: u8,
-        idx: u8,
-        pub fn init(point: *const []const vecTpy) Self {
-            std.debug.assert(point.len < std.math.maxInt(u8));
-            return .{
-                .hmm = point,
-                .len = @intCast(point.len),
-                .idx = 0,
-            };
-        }
-        pub fn curr(self: *Self) vecTpy {
-            return self.hmm.ptr[self.idx];
-        }
-        pub fn next(self: *Self) vecTpy {
-            self.idx = @mod(self.idx + 1, self.len);
-            return self.hmm.ptr[self.idx];
-        }
-        pub fn prev(self: *Self) vecTpy {
-            self.idx = if (self.idx == 0) self.len - 1 else self.idx - 1;
-            return self.hmm.ptr[self.idx];
-        }
-    };
-}
+pub const Slider = struct {
+    const Self = Slider;
+    _min: u16,
+    _max: u16,
+    curr: u16,
+
+    pub fn init(min: u16, max: u16) Slider {
+        return .{
+            ._min = min,
+            ._max = max,
+            .curr = (min + max) / 2,
+        };
+    }
+    pub fn inc(self: *Self) void {
+        self.curr = @min(self.curr + 1, self._max);
+    }
+    pub fn dec(self: *Self) void {
+        self.curr = if (self.curr == self._min) self._min else self.curr - 1;
+    }
+};
 
 pub const Caped = struct {
     min: f32,

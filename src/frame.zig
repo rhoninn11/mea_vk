@@ -11,6 +11,7 @@ pub const Navig = struct {
     g: sht.GridSize,
     pos: m.vec2,
     scale: m.vec2,
+    tex: u16,
 };
 
 pub const FrameState = struct {
@@ -223,6 +224,7 @@ pub fn recordFrame(
             const guipush = gm.PushConstant.PCBlob{
                 .model = m.matTrans(.{ cursor[m.X], cursor[m.Y], 0 }).mat,
                 .inst_base = 0,
+                .tex_base = state.nav.tex,
                 .mode = 3,
             };
             hl_cmds.useTriangles();

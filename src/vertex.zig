@@ -258,11 +258,12 @@ pub const Utils = struct {
 
         try blitQuad(gpa, &triangles);
         const tis = triangles.items;
+        const factor = @sqrt(3.0) / 3.0;
         Math.matApply(triangles.items, Math.xrot90);
-        Math.scaleApply(triangles.items, .{ @sqrt(3.0) / 3.0, 1, 1 });
+        Math.scaleApply(triangles.items, .{ factor, 1, 1 });
         for (0..6) |i| {
             const val = &triangles.items[i].color[0];
-            val.* = 0.5 * val.* + 0.5;
+            val.* = factor * val.* + (1 - factor) / 2.0;
         }
 
         try triangles.appendSlice(gpa, &.{ tis[0], tis[2], Vertex{

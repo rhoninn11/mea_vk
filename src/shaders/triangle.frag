@@ -86,6 +86,8 @@ void main() {
         f_color = vec4(0.1, 0.3, 0.7, 1.0);
     } else if (_pc.data.mode == 2) {
         f_color = vec4(0.5, 0.1, 0.6, 1.0);
+    } else if (_pc.data.mode == 3) {
+        f_color = texture(tex_bindless[nonuniformEXT(_pc.data.tex_base)], uv);
     }
     
     // } else {

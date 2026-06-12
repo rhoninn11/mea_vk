@@ -64,6 +64,7 @@ var navig: frame.Navig = .{
     .g = sht.GridSize.g64,
     .pos = .{ 0, 0 },
     .scale = .{ 0, 0 },
+    .tex = 0,
 };
 
 var frame_state: frame.FrameState = .{
@@ -261,7 +262,8 @@ fn theDeepest(access: EasyAcces) !void {
     }
 
     var L: f32 = 0.0;
-    var ok_atlas_idx: u8 = 32;
+    const ok_attlas_base: u8 = 32;
+    var ok_atlas_idx: u8 = ok_attlas_base;
 
     const L_delt: f32 = 1.0 / @as(f32, @floatFromInt(OK_SWEEP - 1));
     const ok_g = sht.GridSize.g128;
@@ -382,6 +384,10 @@ fn theDeepest(access: EasyAcces) !void {
     var glyphphi: f32 = 0;
     var scanphi: f32 = 0;
     var base_shading: bool = true;
+    var ok_slider: u.Slider = .init(0, OK_SWEEP);
+
+    sdl_wrap.wheel.up = .{ .a = &ok_slider, .f = u.Slider.inc };
+    sdl_wrap.wheel.down = .{ .a = &ok_slider, .f = u.Slider.dec };
 
     // main loop
     while (!window.shoudClose()) {
@@ -410,6 +416,7 @@ fn theDeepest(access: EasyAcces) !void {
         // navig.pos = input.
         const cursor = sdl_wrap.peekPointer();
         navig.pos = .{ cursor.x / 100, -cursor.y / 100 };
+        navig.tex = ok_attlas_base + ok_slider.curr;
 
         // try dbgmonit.update(
         //     access.io,

@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const u = @import("utils.zig");
+
 const escChar = @import("escapeChar.zig");
 const input = @import("input.zig");
 
@@ -108,8 +110,8 @@ const Pointer = struct {
 
     const default: Pointer = .{ .x = 0, .y = 0, .xr = 0, .yr = 0 };
 
-    pub fn fetch(mm: *const sdl3.events.MouseMotion) Pointer {
-        return .{ .x = mm.x, .y = mm.y, .xr = mm.x_rel, .yr = mm.y_rel };
+    pub fn update(self: *Pointer, mm: *const sdl3.events.MouseMotion) void {
+        self.* = .{ .x = mm.x, .y = mm.y, .xr = mm.x_rel, .yr = mm.y_rel };
     }
 
     pub fn info(self: *const Pointer, prefix: []const u8, iowriter: *std.Io.Writer) !u8 {
@@ -121,7 +123,26 @@ const Pointer = struct {
     }
 };
 
+const SimpleFn = *const fn (*u.Slider) void;
+const SimpleWrap = struct { a: *u.Slider, f: SimpleFn };
+const Wheel = struct {
+    up: ?SimpleWrap = null,
+    down: ?SimpleWrap = null,
+
+    pub fn update(self: *Wheel, mw: *const sdl3.events.MouseWheel) void {
+        const delta = mw.scroll_y;
+        if (delta > 0) {
+            if (self.up) |up| up.f(up.a);
+        } else {
+            if (self.down) |down| down.f(down.a);
+        }
+    }
+
+    const default: Wheel = .{};
+};
+
 var pointer: Pointer = .default;
+pub var wheel: Wheel = .default;
 pub fn peekPointer() *const Pointer {
     return &pointer;
 }
@@ -162,7 +183,8 @@ pub const SdlContext = struct {
 
             switch (ev) {
                 .key_up, .key_down => |kb| key = kb.key.?,
-                .mouse_motion => |*mm| pointer = Pointer.fetch(mm),
+                .mouse_motion => |*mm| pointer.update(mm),
+                .mouse_wheel => |*mw| wheel.update(mw),
                 else => {},
             }
 
