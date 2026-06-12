@@ -9,9 +9,14 @@ const addons = @import("addons.zig");
 
 pub const Navig = struct {
     g: sht.GridSize,
-    pos: m.vec2,
+    cursor: m.vec2,
     scale: m.vec2,
     tex: u16,
+
+    pub fn aspectScale(self: *const Navig) m.vec3 {
+        const hscale = m.floaty(self.g.h) / m.floaty(self.g.w);
+        return .{ 1, hscale, 1 };
+    }
 };
 
 pub const FrameState = struct {
@@ -51,7 +56,7 @@ const CmdHelper = struct {
             push_blob,
         );
     }
-    pub fn dSetsBind(self: *const CmdHelper, sets: []const vk.DescriptorSet, ubo_slot: u8) void {
+    pub fn dynUboDsets(self: *const CmdHelper, sets: []const vk.DescriptorSet, ubo_slot: u8) void {
         const UBODyn = Dynamic(sht.GroupData);
         const ubo_dynamic_offset: []const u32 = &.{UBODyn.offset(ubo_slot)};
         self.gc.dev.cmdBindDescriptorSets(
@@ -155,7 +160,7 @@ pub fn recordFrame(
 
             //triangle
             hl_cmds.useTriangles();
-            hl_cmds.dSetsBind(all_sets, ubo_slot);
+            hl_cmds.dynUboDsets(all_sets, ubo_slot);
             hl_cmds.push(&geopush);
             gc.dev.cmdDraw(
                 cbufr,
@@ -218,9 +223,10 @@ pub fn recordFrame(
             }
 
             //gui - maybe would be nice to clear depth first
-            hl_cmds.dSetsBind(all_sets, 2);
+
+            hl_cmds.dynUboDsets(all_sets, 2);
             // this was first attemp;
-            const cursor = state.nav.pos;
+            const cursor = state.nav.cursor;
             const guipush = gm.PushConstant.PCBlob{
                 .model = m.matTrans(.{ cursor[m.X], cursor[m.Y], 0 }).mat,
                 .inst_base = 0,
@@ -255,10 +261,7 @@ pub fn recordFrame(
             );
 
             const model_b = blk: {
-                const within = state.nav;
-                const hscale = m.floaty(within.g.h) / m.floaty(within.g.w);
-
-                const aspect = m.matScale(.{ 1, hscale, 1 });
+                const aspect = m.matScale(state.nav.aspectScale());
                 const m_place = m.matTrans(.{ -3, 0, 0 });
 
                 break :blk m.matXmat(m_place.mat, aspect.mat);

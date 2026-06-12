@@ -43,10 +43,10 @@ pub const DualHostWin = union(Hosts) {
         }
     }
 
-    pub fn setShoudClose(self: DualHostWin, val: bool) void {
+    pub fn closeWindow(self: DualHostWin) void {
         switch (self) {
             .sdl_h => {
-                _ = val;
+                self.sdl_h.should_close = true;
             },
         }
     }

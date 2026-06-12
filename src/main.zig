@@ -62,7 +62,7 @@ const first_letter_instance = 4608;
 const first_layer_instance = 6144;
 var navig: frame.Navig = .{
     .g = sht.GridSize.g64,
-    .pos = .{ 0, 0 },
+    .cursor = .{ 0, 0 },
     .scale = .{ 0, 0 },
     .tex = 0,
 };
@@ -392,6 +392,11 @@ fn theDeepest(access: EasyAcces) !void {
     // main loop
     while (!window.shoudClose()) {
         const img_idx = swapchain.image_index;
+        const win_size = try window.extent();
+        if (!addons.visible(win_size)) {
+            access.host.pollEvents();
+            continue;
+        }
 
         input.glass_input.update();
         input.plr_input.update();
@@ -400,7 +405,7 @@ fn theDeepest(access: EasyAcces) !void {
         timeline.update(access.io);
         timeline1.update(access.io);
 
-        if (input.exit_trig.fired()) window.setShoudClose(true);
+        if (input.exit_trig.fired()) window.closeWindow();
         if (input.time_stop_trig.fired()) timeline1.passageToggle();
 
         const td = timeline.deltaS();
@@ -414,12 +419,11 @@ fn theDeepest(access: EasyAcces) !void {
         navig.scale[m.U] = m.trygZero1(@sin(scanphi)) * 0.7 + 0.3;
 
         // navig.pos = input.
-        const cursor = sdl_wrap.peekPointer();
-        navig.pos = .{ cursor.x / 100, -cursor.y / 100 };
+        navig.cursor = sdl_wrap.peekPointer(win_size);
         navig.tex = ok_attlas_base + ok_slider.curr;
 
         // try dbgmonit.update(
-        //     access.io,
+        //    cursorcess.io,
         //     pamperek.p.phi,
         //     frame_state.layer_instance_num,
         //     pamperek.pos(),
@@ -440,11 +444,6 @@ fn theDeepest(access: EasyAcces) !void {
         }
 
         //minimalized
-        const win_size = try window.extent();
-        if (!addons.visible(win_size)) {
-            access.host.pollEvents();
-            continue;
-        }
         try swapchain.waitCurrentFrame();
         const storage_mapping = storage.buff_arr.items[img_idx].?.mapping.?;
         const uniform_mapping = dset_uniform.buff_arr.items[img_idx].?.mapping.?;

@@ -68,12 +68,22 @@ pub const Moduler = struct {
             .Triangle => .{ vert_triangle[0..], frag_triangle[0..] },
             .Sprite => .{ vert_sprite[0..], frag_sprite[0..] },
         };
+        const depth_test = switch (pt) {
+            .Triangle => true,
+            .Sprite => false,
+        };
 
         const mods = try self.initModuls(src);
         defer self.destroyModules(mods);
 
         const pssci = shaderStages(mods);
-        return restOfPipeline(pssci[0..], self.gc, self.layout, render_pass);
+        return restOfPipeline(
+            pssci[0..],
+            self.gc,
+            self.layout,
+            render_pass,
+            depth_test,
+        );
     }
 
     pub fn destroyPipelin(self: *const Moduler, pipe: vk.Pipeline) void {
@@ -86,6 +96,7 @@ fn restOfPipeline(
     gc: *const gm.GraphicsContext,
     layout: vk.PipelineLayout,
     render_pass: vk.RenderPass,
+    depth_test: bool,
 ) !vk.Pipeline {
     const pvisci = vk.PipelineVertexInputStateCreateInfo{
         .vertex_binding_description_count = 1,
@@ -153,9 +164,10 @@ fn restOfPipeline(
         .p_dynamic_states = &dynstate,
     };
 
+    const alt: vk.Bool32 = .false;
     const depth_stencil_state = vk.PipelineDepthStencilStateCreateInfo{
-        .depth_test_enable = .true,
-        .depth_write_enable = .true,
+        .depth_test_enable = if (depth_test) .true else alt,
+        .depth_write_enable = if (depth_test) .true else alt,
         .depth_compare_op = .less,
         .depth_bounds_test_enable = .false,
 

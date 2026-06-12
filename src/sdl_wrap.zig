@@ -1,4 +1,6 @@
 const std = @import("std");
+const vk = @import("vulkan-zig");
+const m = @import("math.zig");
 
 const u = @import("utils.zig");
 
@@ -143,8 +145,12 @@ const Wheel = struct {
 
 var pointer: Pointer = .default;
 pub var wheel: Wheel = .default;
-pub fn peekPointer() *const Pointer {
-    return &pointer;
+pub fn peekPointer(extent: vk.Extent2D) m.vec2 {
+    _ = extent;
+    return .{
+        (pointer.x / 100) - 3,
+        -(pointer.y / 100) + 3,
+    };
 }
 
 pub const SdlContext = struct {
