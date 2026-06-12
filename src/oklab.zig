@@ -53,7 +53,7 @@ const U16max: f32 = 1 << 16;
 pub const OkUnderstanding = struct {
     grid: sht.GridSize,
 
-    pub fn labSpliced(storage_dset: dset.DescriptorPrep, instance_offset: u32, slice_num: u8, phi: f32) !void {
+    pub fn labSpliced(instances: [*]sht.PerInstance, instance_offset: u32, slice_num: u8, phi: f32) !void {
         const lim_num = 8096;
         std.debug.assert(slice_num <= lim_num);
 
@@ -64,36 +64,30 @@ pub const OkUnderstanding = struct {
         const local_a = provider.allocator();
 
         var scratchpad: []sht.PerInstance = try local_a.alloc(sht.PerInstance, slice_num);
-        for (storage_dset.buff_arr.items) |possible_buffer| {
-            const denominator = @as(f32, @floatFromInt(scratchpad.len - 1));
-            const r = 2.5;
-            for (0..scratchpad.len) |i| {
-                var edit: sht.PerInstance = scratchpad[i];
-                const i_f: f32 = @as(f32, @floatFromInt(i));
-                const progress = i_f / denominator;
+        const denominator = @as(f32, @floatFromInt(scratchpad.len - 1));
+        const r = 2.5;
+        for (0..scratchpad.len) |i| {
+            var edit: sht.PerInstance = scratchpad[i];
+            const i_f: f32 = @as(f32, @floatFromInt(i));
+            const progress = i_f / denominator;
 
-                const amp = 0.2;
-                const phi0 = (progress + phi) * 5;
-                const r0 = r + @sin(phi0 * 4) * amp;
-                const p0: m.vec3 = .{ r0 * @cos(phi0), 0, r0 * @sin(phi0) };
-                edit.offset_4d = m.stack4(p0, i_f);
+            const amp = 0.2;
+            const phi0 = (progress + phi) * 5;
+            const r0 = r + @sin(phi0 * 4) * amp;
+            const p0: m.vec3 = .{ r0 * @cos(phi0), 0, r0 * @sin(phi0) };
+            edit.offset_4d = m.stack4(p0, i_f);
 
-                const phi1 = phi0 + 0.05;
-                const p1: m.vec3 = .{ r0 * @cos(phi1), 0, r0 * @sin(phi1) };
+            const phi1 = phi0 + 0.05;
+            const p1: m.vec3 = .{ r0 * @cos(phi1), 0, r0 * @sin(phi1) };
 
-                const front: m.vec3 = m.norm(p1 - p0);
-                const up: m.vec3 = .{ 0, 1, 0 };
-                edit.new_usage = m.stack4(front, 0);
-                edit.depth_ctrl = m.stack4(up, 0);
+            const front: m.vec3 = m.norm(p1 - p0);
+            const up: m.vec3 = .{ 0, 1, 0 };
+            edit.new_usage = m.stack4(front, 0);
+            edit.depth_ctrl = m.stack4(up, 0);
 
-                scratchpad[i] = edit;
-            }
-
-            const storage = possible_buffer.?;
-            const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
-
-            @memcpy(mapping + instance_offset, scratchpad);
+            scratchpad[i] = edit;
         }
+        @memcpy(instances + instance_offset, scratchpad);
     }
 
     pub fn labAtInfinitum(self: *const OkUnderstanding, storage_dset: dset.DescriptorPrep) !void {

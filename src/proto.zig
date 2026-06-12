@@ -298,7 +298,7 @@ pub const LookingGlass = struct {
     const U16max: f32 = 1 << 16;
     const TRIM_FACTOR = 0.4;
     const INST_LIM = 8096 + 4096;
-    pub fn updateStorage(self: *LookingGlass, storage_dset: dset.DescriptorPrep, enabled: bool) !void {
+    pub fn updateStorage(self: *LookingGlass, instances: [*]sht.PerInstance, enabled: bool) !void {
         const total = self.win_sz.total;
 
         std.debug.assert(total <= INST_LIM);
@@ -309,8 +309,6 @@ pub const LookingGlass = struct {
         const local_a = provider.allocator();
 
         var scratchpad = try local_a.alloc(sht.PerInstance, total);
-        const src_mapping = storage_dset.buff_arr.items[0].?.mapping.?;
-        const instances: [*]sht.PerInstance = @ptrCast(@alignCast(src_mapping));
         @memcpy(scratchpad, instances);
 
         for (0..total) |i| {
@@ -326,16 +324,12 @@ pub const LookingGlass = struct {
             scratchpad[i] = prev_one;
         }
 
-        for (storage_dset.buff_arr.items) |possible_buffer| {
-            const storage = possible_buffer.?;
-            const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
-            @memcpy(mapping, scratchpad);
-        }
+        @memcpy(instances, scratchpad);
     }
 
     pub fn updateLayerStorage(
         self: *LookingGlass,
-        storage_dset: dset.DescriptorPrep,
+        instances: [*]sht.PerInstance,
         first_layer_instance: u32,
         debug_info: bool,
     ) !u16 {
@@ -353,8 +347,6 @@ pub const LookingGlass = struct {
         var dbg_info: std.ArrayList(u8) = try .initCapacity(fba, 4096);
         defer dbg_info.deinit(fba);
 
-        const data_mapping = storage_dset.buff_arr.items[0].?.mapping.?;
-        const instances: [*]sht.PerInstance = @ptrCast(@alignCast(data_mapping));
         @memcpy(src_cells_data, instances);
         var inst_idx: u16 = 0;
 
@@ -380,11 +372,7 @@ pub const LookingGlass = struct {
         if (debug_info) std.debug.print("+++ layer debug | \n{s}\n+++ layer debug\n", .{dbg_info.items});
 
         if (inst_idx > 0) {
-            for (storage_dset.buff_arr.items) |possible_buffer| {
-                const storage = possible_buffer.?;
-                const storage_mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
-                @memcpy(storage_mapping + first_layer_instance, scratchpad[0..inst_idx]);
-            }
+            @memcpy(instances + first_layer_instance, scratchpad[0..inst_idx]);
         }
 
         return inst_idx;

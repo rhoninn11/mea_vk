@@ -13,7 +13,7 @@ pub const GroupData = extern struct {
     osc_scale: [2]f32 = undefined,
     scale: [2]f32 = undefined,
     not_used_4d_0: [4]f32 = undefined,
-    termoral: [4]f32 = undefined,
+    temporal: [4]f32 = undefined,
     not_used_4d_1: [4]f32 = undefined,
     // 16B alignment
     matrices: MatPack = undefined,

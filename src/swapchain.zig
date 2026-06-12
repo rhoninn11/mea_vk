@@ -246,7 +246,7 @@ pub const Swapchain = struct {
         };
     }
 
-    pub fn currentWaitG(self: *Swapchain) !void {
+    pub fn waitCurrentFrame(self: *Swapchain) !void {
         return try self.currentSwapImage().waitForFence(self.gc);
     }
 };
