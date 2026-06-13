@@ -163,7 +163,7 @@ const sdl_inputs: []const Tied = &.{
     .{ .key = sdl.keycode.Keycode.left_alt, .trig = &alt_projection_trigger },
     .{ .key = sdl.keycode.Keycode.v, .trig = &slide_l_trig },
     .{ .key = sdl.keycode.Keycode.b, .trig = &slide_r_trig },
-    .{ .key = sdl.keycode.Keycode.p, .trig = &dbg_trig },
+    .{ .key = sdl.keycode.Keycode.two, .trig = &dbg_trig },
 };
 
 const axesCheck = [_]*DulaHoldsAxis{ &glass_input, &plr_input };

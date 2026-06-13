@@ -45,6 +45,7 @@ const CmdHelper = struct {
     gc: *const gm.GraphicsContext,
     draw: *const gm.DrawInfo,
     command: vk.CommandBuffer,
+    models: *const v.VertRepo,
 
     pub fn push(self: *const CmdHelper, push_blob: *const gm.PushConstant.PCBlob) void {
         self.gc.dev.cmdPushConstants(
@@ -66,6 +67,16 @@ const CmdHelper = struct {
             0,
             sets,
             ubo_dynamic_offset,
+        );
+    }
+
+    pub fn drawInsances(self: *const CmdHelper, mdl_idx: u16, num: u32) void {
+        self.gc.dev.cmdDraw(
+            self.command,
+            self.models.sizes[mdl_idx],
+            num,
+            self.models.offsets[mdl_idx],
+            0,
         );
     }
 
@@ -120,6 +131,7 @@ pub fn recordFrame(
         .gc = gc,
         .draw = draw,
         .command = cbufr,
+        .models = models,
     };
     const all_sets: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
         draw.uniform_dsets.items[rec.id],
@@ -162,13 +174,7 @@ pub fn recordFrame(
             hl_cmds.useTriangles();
             hl_cmds.dynUboDsets(all_sets, ubo_slot);
             hl_cmds.push(&geopush);
-            gc.dev.cmdDraw(
-                cbufr,
-                models.sizes[state.model_idx],
-                draw.instance_count,
-                models.offsets[state.model_idx],
-                0,
-            );
+            hl_cmds.drawInsances(state.model_idx, draw.instance_count);
 
             if (state.layer_instance_num > 0) {
                 const cube_index = 1;
@@ -178,13 +184,7 @@ pub fn recordFrame(
                     .mode = 1,
                 };
                 hl_cmds.push(&layerpush);
-                gc.dev.cmdDraw(
-                    cbufr,
-                    models.sizes[cube_index],
-                    state.layer_instance_num,
-                    models.offsets[cube_index],
-                    0,
-                );
+                hl_cmds.drawInsances(cube_index, state.layer_instance_num);
             }
 
             if (state.alt_proj) {
@@ -200,32 +200,20 @@ pub fn recordFrame(
                 };
                 hl_cmds.useSprite();
                 hl_cmds.push(&okpush);
-                gc.dev.cmdDraw(
-                    cbufr,
-                    models.sizes[BILBORD_IDX],
-                    state.ok_slices_num,
-                    models.offsets[BILBORD_IDX],
-                    0,
-                );
+                hl_cmds.drawInsances(BILBORD_IDX, state.ok_slices_num);
                 const glyphpush = gm.PushConstant.PCBlob{
                     .model = m.matTrans(.{ 0, 6, 0 }).mat,
                     .inst_base = inst_glyph_begin,
                     .tex_base = tex_glyph_begin,
                 };
                 hl_cmds.push(&glyphpush);
-                gc.dev.cmdDraw(
-                    cbufr,
-                    models.sizes[BILBORD_IDX],
-                    state.ok_slices_num,
-                    models.offsets[BILBORD_IDX],
-                    0,
-                );
+                hl_cmds.drawInsances(BILBORD_IDX, state.ok_slices_num);
             }
 
             //gui - maybe would be nice to clear depth first
 
             hl_cmds.dynUboDsets(all_sets, 2);
-            // this was first attemp;
+            // >>> cursor <<<
             const cursor = state.nav.cursor;
             const guipush = gm.PushConstant.PCBlob{
                 .model = m.matTrans(.{ cursor[m.X], cursor[m.Y], 0 }).mat,
@@ -235,13 +223,20 @@ pub fn recordFrame(
             };
             hl_cmds.useTriangles();
             hl_cmds.push(&guipush);
-            gc.dev.cmdDraw(
-                cbufr,
-                models.sizes[HEX_IDX],
-                1,
-                models.offsets[HEX_IDX],
-                0,
-            );
+            hl_cmds.drawInsances(HEX_IDX, 1);
+            // <<< cursor >>>
+            const okpush = gm.PushConstant.PCBlob{
+                .model = m.matXmat(
+                    m.matTrans(.{ 12, -6, 0 }).mat,
+                    m.matScale(.{ 9, 9, 1 }).mat,
+                ).mat,
+                .inst_base = 0,
+                .tex_base = state.nav.tex,
+                .mode = 2,
+            };
+            hl_cmds.useSprite();
+            hl_cmds.push(&okpush);
+            hl_cmds.drawInsances(HEX_IDX, 1);
 
             // >>> scann_layers <<<
             const scan_m_model = blk: {
@@ -258,29 +253,15 @@ pub fn recordFrame(
                 .mode = 2,
                 .scale2D = .{ state.nav.scale[m.U], 1 },
             };
-
             hl_cmds.useSprite();
             hl_cmds.push(&scan_push);
-            gc.dev.cmdDraw(
-                cbufr,
-                models.sizes[BILBORD_IDX],
-                1,
-                models.offsets[BILBORD_IDX],
-                0,
-            );
+            hl_cmds.drawInsances(BILBORD_IDX, 1);
 
             const closer = m.matTrans(.{ 0, 0, -0.1 });
-
             scan_push.model = m.matXmat(closer.mat, scan_m_model.mat).mat;
             scan_push.tex_base = 3;
             hl_cmds.push(&scan_push);
-            gc.dev.cmdDraw(
-                cbufr,
-                models.sizes[BILBORD_IDX],
-                1,
-                models.offsets[BILBORD_IDX],
-                0,
-            );
+            hl_cmds.drawInsances(BILBORD_IDX, 1);
             // <<< scann_layers >>>
 
             // >>> font_rending <<<
@@ -292,13 +273,7 @@ pub fn recordFrame(
             };
             hl_cmds.useSprite();
             hl_cmds.push(&letter_push);
-            gc.dev.cmdDraw(
-                cbufr,
-                models.sizes[BILBORD_IDX],
-                state.letters_inst_num,
-                models.offsets[BILBORD_IDX],
-                0,
-            );
+            hl_cmds.drawInsances(BILBORD_IDX, state.letters_inst_num);
             // <<< font_rending >>>
         }
         try gc.dev.endCommandBuffer(cbufr);
