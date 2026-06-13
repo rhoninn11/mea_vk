@@ -243,32 +243,16 @@ pub fn recordFrame(
                 0,
             );
 
-            // text characters
-            const letter_push = gm.PushConstant.PCBlob{
-                .model = m.matTrans(.{ -6, 3, 0 }).mat,
-                .inst_base = state.letters_inst_offset,
-                .tex_base = 160,
-                .mode = 1,
-            };
-            hl_cmds.useSprite();
-            hl_cmds.push(&letter_push);
-            gc.dev.cmdDraw(
-                cbufr,
-                models.sizes[BILBORD_IDX],
-                state.letters_inst_num,
-                models.offsets[BILBORD_IDX],
-                0,
-            );
-
-            const model_b = blk: {
+            // >>> scann_layers <<<
+            const scan_m_model = blk: {
                 const aspect = m.matScale(state.nav.aspectScale());
-                const m_place = m.matTrans(.{ -3, 0, 0 });
+                const display_here = m.matTrans(.{ 0, -6, 0 });
 
-                break :blk m.matXmat(m_place.mat, aspect.mat);
+                break :blk m.matXmat(display_here.mat, aspect.mat);
             };
 
             var scan_push = gm.PushConstant.PCBlob{
-                .model = model_b.mat,
+                .model = scan_m_model.mat,
                 .inst_base = state.letters_inst_offset,
                 .tex_base = 2,
                 .mode = 2,
@@ -287,7 +271,7 @@ pub fn recordFrame(
 
             const closer = m.matTrans(.{ 0, 0, -0.1 });
 
-            scan_push.model = m.matXmat(closer.mat, model_b.mat).mat;
+            scan_push.model = m.matXmat(closer.mat, scan_m_model.mat).mat;
             scan_push.tex_base = 3;
             hl_cmds.push(&scan_push);
             gc.dev.cmdDraw(
@@ -297,6 +281,25 @@ pub fn recordFrame(
                 models.offsets[BILBORD_IDX],
                 0,
             );
+            // <<< scann_layers >>>
+
+            // >>> font_rending <<<
+            const letter_push = gm.PushConstant.PCBlob{
+                .model = m.matTrans(.{ 0, 0, 0 }).mat,
+                .inst_base = state.letters_inst_offset,
+                .tex_base = 160,
+                .mode = 1,
+            };
+            hl_cmds.useSprite();
+            hl_cmds.push(&letter_push);
+            gc.dev.cmdDraw(
+                cbufr,
+                models.sizes[BILBORD_IDX],
+                state.letters_inst_num,
+                models.offsets[BILBORD_IDX],
+                0,
+            );
+            // <<< font_rending >>>
         }
         try gc.dev.endCommandBuffer(cbufr);
     }

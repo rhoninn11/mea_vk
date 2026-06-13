@@ -41,8 +41,7 @@ const BasicErrs = error{
     NoCtx,
 };
 
-const sdl_wrap = @import("sdl_wrap.zig");
-const sdl = @import("sdl3");
+const sdlh = @import("sdlh.zig");
 
 const input = @import("input.zig");
 const host = @import("host.zig");
@@ -129,7 +128,7 @@ fn theDeepest(access: EasyAcces) !void {
     const gc = access.vkctx;
     var window = access.host;
 
-    var resolution_extent = try window.extent();
+    var resolution_extent = try window.winExtent();
 
     var swapchain = try Swapchain.init(gc, gpa, resolution_extent);
     defer swapchain.deinit() catch std.debug.print("... well swapchaing deinit failed\n", .{});
@@ -343,14 +342,10 @@ fn theDeepest(access: EasyAcces) !void {
     var inertia = IVec3.Inertia.init(.{ pamperek.phi_raw, 0, 0 });
     inertia.phx = .default;
 
-    var dbgmonit = u.DbgMonitor{
-        .name = "phi val",
-        .val = 0,
-    };
-    dbgmonit.val = 0;
+    var dbgmonit = u.DbgMonitor{};
 
     { // Frame recording
-        const frame_sz = try window.extent();
+        const frame_sz = try window.winExtent();
         for (0..swapchain_len) |i| {
             const uniform_mapping = dset_uniform.buff_arr.items[i].?.mapping.?;
             const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
@@ -386,17 +381,19 @@ fn theDeepest(access: EasyAcces) !void {
     var base_shading: bool = true;
     var ok_slider: u.Slider = .init(0, OK_SWEEP);
 
-    sdl_wrap.wheel.up = .{ .a = &ok_slider, .f = u.Slider.inc };
-    sdl_wrap.wheel.down = .{ .a = &ok_slider, .f = u.Slider.dec };
+    sdlh.wheel.up = .{ .a = &ok_slider, .f = u.Slider.inc };
+    sdlh.wheel.down = .{ .a = &ok_slider, .f = u.Slider.dec };
 
     // main loop
     while (!window.shoudClose()) {
-        const img_idx = swapchain.image_index;
-        const win_size = try window.extent();
+        access.host.pollEvents();
+        const win_size = try access.host.winExtent();
         if (!addons.visible(win_size)) {
-            access.host.pollEvents();
+            try access.io.sleep(.fromMilliseconds(50), .real);
             continue;
         }
+
+        const img_idx = swapchain.image_index;
 
         input.glass_input.update();
         input.plr_input.update();
@@ -419,15 +416,17 @@ fn theDeepest(access: EasyAcces) !void {
         navig.scale[m.U] = m.trygZero1(@sin(scanphi)) * 0.7 + 0.3;
 
         // navig.pos = input.
-        navig.cursor = sdl_wrap.peekPointer(win_size);
+        navig.cursor = sdlh.peekPointer(win_size);
         navig.tex = ok_attlas_base + ok_slider.curr;
 
-        // try dbgmonit.update(
-        //    cursorcess.io,
-        //     pamperek.p.phi,
-        //     frame_state.layer_instance_num,
-        //     pamperek.pos(),
-        // );
+        const dbg_data = u.DbgMonitor.DbgVals{
+            .phi = pamperek.p.phi,
+            .inst_num = frame_state.layer_instance_num,
+            .observer_pos = pamperek.pos(),
+            .win_size = win_size,
+        };
+
+        try dbgmonit.update(access.io, &dbg_data);
 
         if (input.alt_projection_trigger.fired()) {
             frame_state.alt_proj = !frame_state.alt_proj;
@@ -441,6 +440,10 @@ fn theDeepest(access: EasyAcces) !void {
         if (input.slide_l_trig.fired()) {
             const first = frame_state.model_idx == 0;
             frame_state.model_idx = if (first) repo.head - 1 else frame_state.model_idx - 1;
+        }
+
+        if (input.dbg_trig.fired()) {
+            dbgmonit.enabled = !dbgmonit.enabled;
         }
 
         //minimalized
@@ -466,7 +469,7 @@ fn theDeepest(access: EasyAcces) !void {
                 try glass.updateStorage(instances, true);
                 const first = frame_state.layer_instance_offset;
                 const lnum = try glass.updateLayerStorage( //
-                    instances, first, input.dbg_trig.fired());
+                    instances, first, false);
                 frame_state.layer_instance_num = lnum;
             }
 
@@ -517,7 +520,16 @@ fn theDeepest(access: EasyAcces) !void {
             // std.debug.assert(false); //cuz it will throw error due to bad depth_img resolution
             resolution_extent = win_size;
             try gc.dev.deviceWaitIdle();
-            try swapchain.recreate(resolution_extent);
+            swapchain.recreate(resolution_extent) catch |err| {
+                std.debug.print("!!! hit error at recreate |> {s}\n", .{@errorName(err)});
+                std.debug.print("!!! prev win_size w:{d} h:{d}\n", .{ win_size.width, win_size.height });
+                try access.io.sleep(std.Io.Duration.fromMilliseconds(2000), .real);
+                access.host.pollEvents();
+                const new_win_size = try access.host.winExtent();
+
+                std.debug.print("!!! new win_size w:{d} h:{d}\n", .{ new_win_size.width, new_win_size.height });
+                return;
+            };
 
             destroyFramebuffers(gc, gpa, framebuffers);
             framebuffers = try createFramebuffers(
@@ -547,8 +559,6 @@ fn theDeepest(access: EasyAcces) !void {
                 return narrow;
             },
         };
-
-        access.host.pollEvents();
     }
 
     try swapchain.waitForAllFences();

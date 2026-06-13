@@ -1,4 +1,5 @@
 const std = @import("std");
+const vk = @import("vulkan-zig");
 const t = @import("types.zig");
 const m = @import("math.zig");
 const motion = @import("motion.zig");
@@ -6,7 +7,7 @@ const phys = @import("phys.zig");
 
 const in = @import("input.zig");
 
-const sdl = @import("sdl_wrap.zig");
+const sdlh = @import("sdlh.zig");
 
 pub fn trimSufix(str: []const u8, sufix: []const u8) []const u8 {
     const ends = std.mem.endsWith(u8, str, sufix);
@@ -185,8 +186,7 @@ pub inline fn DefaultRng() !std.Random {
 
 pub const DbgMonitor = struct {
     linecount: u8 = 0,
-    name: []const u8,
-    val: f32,
+    enabled: bool = false,
 
     pub fn clearPrev(self: *DbgMonitor, iowriter: *std.Io.Writer) !void {
         if (self.linecount != 0) for (0..self.linecount) |_| {
@@ -194,15 +194,18 @@ pub const DbgMonitor = struct {
             try iowriter.print("\x1b[1A", .{}); // w górę
         };
     }
-
+    pub const DbgVals = struct {
+        phi: f32,
+        inst_num: u16,
+        observer_pos: m.vec3,
+        win_size: vk.Extent2D,
+    };
     pub fn update(
         self: *DbgMonitor,
         io: std.Io,
-        new_val: f32,
-        cell_num: u16,
-        camera_pos: m.vec3,
+        current: *const DbgVals,
     ) !void {
-        self.val = new_val;
+        if (!self.enabled) return;
 
         var buffer: [1024]u8 = undefined;
         const stdout: std.Io.File = .stderr();
@@ -213,15 +216,17 @@ pub const DbgMonitor = struct {
 
         try self.clearPrev(iowriter);
 
-        var lines: u8 = 7;
+        var lines: u8 = 9;
         try iowriter.print("---------------\n", .{});
-        try iowriter.print("--- {s: <12}: \x1b[31m{d}\x1b[0m\n", .{ self.name, self.val });
-        try iowriter.print("--- {s: <12}: \x1b[32m{d}\x1b[0m\n", .{ "cell_num", cell_num });
-        try iowriter.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "camera_pos", camera_pos });
+        try iowriter.print("--- {s: <12}: \x1b[31m{d}\x1b[0m\n", .{ "phi", current.phi });
+        try iowriter.print("--- {s: <12}: \x1b[32m{d}\x1b[0m\n", .{ "inst_num", current.inst_num });
+        try iowriter.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "observer", current.observer_pos });
+        try iowriter.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "window w", current.win_size.width });
+        try iowriter.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "window h", current.win_size.height });
         try iowriter.print("---------------\n", .{});
-        lines += try sdl.peekPointer().info("---", iowriter);
+        lines += try sdlh.pointerInfo("---", iowriter);
         try iowriter.print("---------------\n", .{});
-        lines += try sdl.getEvCounter().info("--- ", iowriter);
+        lines += try sdlh.getEvCounter().info("--- ", iowriter);
         try iowriter.print("---------------\n", .{});
         try iowriter.flush();
 

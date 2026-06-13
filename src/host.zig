@@ -4,7 +4,7 @@ const gm = @import("graphics_context.zig");
 const glfw = @import("third_party/glfw.zig");
 const vk = @import("vulkan-zig");
 const input = @import("input.zig");
-const sdl_wrap = @import("sdl_wrap.zig");
+const sdlh = @import("sdlh.zig");
 
 pub const EasyAcces = struct {
     io: std.Io,
@@ -24,9 +24,9 @@ const Hosts = enum(u8) {
     sdl_h,
 };
 pub const DualHostWin = union(Hosts) {
-    sdl_h: *sdl_wrap.SdlContext,
+    sdl_h: *sdlh.SdlContext,
 
-    pub fn extent(self: DualHostWin) !vk.Extent2D {
+    pub fn winExtent(self: DualHostWin) !vk.Extent2D {
         switch (self) {
             .sdl_h => |ctx| {
                 const w, const h = try ctx.window.?.getSize();
@@ -62,14 +62,13 @@ const glfw_name = "glfw app name form host function";
 const sdl_name = "sld app name form host function";
 
 pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
-    try sdl_wrap.initSDL();
-    defer sdl_wrap.exitSDL();
-
-    sdl_wrap.vulkanSupported() catch {
-        std.log.err("!!! SDL could not find libvulkan", .{});
-        return OnHostErrors.libVulkanProblem;
+    sdlh.initSDL() catch |err| {
+        std.debug.print("!!! sdl init failed with |> {s}\n", .{@errorName(err)});
+        return err;
     };
-    const sdl_ctx = sdl_wrap.getContext();
+    defer sdlh.exitSDL();
+
+    const sdl_ctx = sdlh.getContext();
     const vkctx_sdl = try gm.GraphicsContext.initUnderSdl(init.gpa, sdl_name, sdl_ctx.window.?);
     defer vkctx_sdl.deinit();
 

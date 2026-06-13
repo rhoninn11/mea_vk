@@ -99,11 +99,6 @@ const EvCapture = struct {
     }
 };
 
-const system: sdl3.InitFlags = .{
-    .video = true,
-    .gamepad = true,
-};
-
 const Pointer = struct {
     x: f32,
     y: f32,
@@ -125,13 +120,14 @@ const Pointer = struct {
     }
 };
 
-const SimpleFn = *const fn (*u.Slider) void;
-const SimpleWrap = struct { a: *u.Slider, f: SimpleFn };
-const Wheel = struct {
-    up: ?SimpleWrap = null,
-    down: ?SimpleWrap = null,
+const Scroll = struct {
+    const Self = Scroll;
+    const ActFn = *const fn (*u.Slider) void;
+    const Resonse = struct { a: *u.Slider, f: ActFn };
+    up: ?Resonse = null,
+    down: ?Resonse = null,
 
-    pub fn update(self: *Wheel, mw: *const sdl3.events.MouseWheel) void {
+    pub fn update(self: *Self, mw: *const sdl3.events.MouseWheel) void {
         const delta = mw.scroll_y;
         if (delta > 0) {
             if (self.up) |up| up.f(up.a);
@@ -140,20 +136,28 @@ const Wheel = struct {
         }
     }
 
-    const default: Wheel = .{};
+    const default: Self = .{};
 };
 
 var pointer: Pointer = .default;
-pub var wheel: Wheel = .default;
+pub var wheel: Scroll = .default;
 pub fn peekPointer(extent: vk.Extent2D) m.vec2 {
     _ = extent;
     return .{
-        (pointer.x / 100) - 3,
-        -(pointer.y / 100) + 3,
+        (pointer.x / 64.0),
+        -(pointer.y / 64.0),
     };
+}
+pub fn pointerInfo(prefix: []const u8, iowriter: *std.Io.Writer) !u8 {
+    return pointer.info(prefix, iowriter);
 }
 
 pub const SdlContext = struct {
+    const system: sdl3.InitFlags = .{
+        .video = true,
+        .gamepad = true,
+    };
+
     window: ?sdl3.video.Window = null,
     ev_capture: EvCapture = .init(),
     should_close: bool = false,
@@ -164,8 +168,12 @@ pub const SdlContext = struct {
 
     fn init(name: [:0]const u8) !SdlContext {
         var self: SdlContext = .{};
+
         try sdl3.init(system);
         errdefer self.deinit();
+
+        sdl3.vulkan.loadLibrary(null) catch return error.vkloadfailed;
+
         self.window = try sdl3.video.Window.init(name, 1600, 900, .{
             .vulkan = true,
             .resizable = true,
@@ -195,18 +203,46 @@ pub const SdlContext = struct {
             }
 
             switch (ev) {
-                .quit => self.should_close = true,
                 .key_up => {
                     self.ev_capture.key_u_action(key);
                     input.sdlKeyUp(key);
                 },
                 .key_down => {
                     if (key == .escape) self.should_close = true;
+                    if (key == .one) {
+                        self._gamepadProbe() catch |err| {
+                            std.debug.print("!!! gamepad probe failed |> {s}\n", .{@errorName(err)});
+                        };
+                    }
                     self.ev_capture.key_d_action(key);
                     input.sdlKeyDown(key);
                 },
                 else => {},
             }
+
+            switch (ev) {
+                .quit => self.should_close = true,
+                else => {},
+            }
+        }
+    }
+    const Me = SdlContext;
+    fn _gamepadProbe(self: *Me) !void {
+        _ = self;
+        const gamepads: []sdl3.joystick.Id = try sdl3.gamepad.getGamepads();
+        defer sdl3.free(gamepads);
+
+        std.debug.print("+++ SDL | gamepads found ({d})\n", .{gamepads.len});
+        for (gamepads, 0..) |jid, i| {
+            const name = try jid.getName();
+            // const char *type_str = SDL_GetGamepadStringForType(type);
+            // Uint16 vendor = SDL_GetGamepadVendorForID(id);
+            // Uint16 product = SDL_GetGamepadProductForID(id);
+
+            std.debug.print("|   Pad Id: +++ pad({d}) name: {s}\n", .{ i + 1, name });
+            // std.debug.print("|      typ: +++ {s}\n", .{@tagName(g_type)});
+            // printf("       vendor:  0x%04X\n", vendor);
+            // printf("       product: 0x%04X\n\n", product);
         }
     }
 };
@@ -229,34 +265,4 @@ pub fn exitSDL() void {
 
 pub fn vulkanSupported() !void {
     return sdl3.vulkan.loadLibrary(null);
-}
-
-pub fn sdlDemoDeeper(io: std.Io) !void {
-    try sdl3.init(system);
-    defer sdl3.quit(system);
-    std.debug.print("| inited\n", .{});
-
-    const gamepads: []sdl3.joystick.Id = try sdl3.gamepad.getGamepads();
-    defer sdl3.free(gamepads);
-    std.debug.print("| counted {d} gamepads\n", .{gamepads.len});
-
-    for (gamepads, 0..) |jid, i| {
-        const name = try jid.getName();
-        // const char *type_str = SDL_GetGamepadStringForType(type);
-        // Uint16 vendor = SDL_GetGamepadVendorForID(id);
-        // Uint16 product = SDL_GetGamepadProductForID(id);
-
-        std.debug.print("|   Pad Id: +++ pad({d}) name: {s}\n", .{ i + 1, name });
-        // std.debug.print("|      typ: +++ {s}\n", .{@tagName(g_type)});
-        // printf("       vendor:  0x%04X\n", vendor);
-        // printf("       product: 0x%04X\n\n", product);
-    }
-
-    const Timestamp = std.Io.Timestamp;
-    const t0 = Timestamp.now(io, .real);
-    while (t0.untilNow(io, .real).toSeconds() < 1) {
-        while (sdl3.events.poll()) |ev| {
-            std.debug.print("!+!+ sdl event type {s}\n", .{@tagName(ev)});
-        }
-    }
 }
