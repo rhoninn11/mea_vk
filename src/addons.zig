@@ -106,3 +106,62 @@ const EasyAcces = struct {
     window: ?*c_long,
     vkctx: ?*const gftx.GraphicsContext = null,
 };
+
+pub const Coords = struct {
+    const Self = @This();
+    sz_scr: m.vec2,
+    sz_area: m.vec2,
+    offset: m.vec2,
+    pub fn init(screan: vk.Extent2D) Coords {
+        var base: Self = .{
+            .sz_scr = .{
+                m.floaty(@abs(screan.width)),
+                m.floaty(@abs(screan.height)),
+            },
+            .sz_area = undefined,
+            .offset = undefined,
+        };
+        base.calcArea(0.5);
+        return base;
+    }
+
+    fn calcArea(self: *Coords, fill: f32) void {
+        const scr: [2]f32 = self.sz_scr;
+        const major: u8 = if (scr[m.X] > scr[m.Y]) m.X else m.Y;
+        const minor: u8 = if (major == m.X) m.Y else m.X;
+
+        const sz_min = scr[minor] * fill;
+        const off_min = (scr[minor] - sz_min) / 2.0;
+
+        const sz_maj = sz_min;
+        const off_maj = (scr[major] - sz_maj) / 2.0;
+        var scratch: [2]f32 = undefined;
+        scratch[minor] = sz_min;
+        scratch[major] = sz_maj;
+        self.sz_area = scratch;
+
+        scratch[minor] = off_min;
+        scratch[major] = off_maj;
+        self.offset = scratch;
+    }
+
+    pub fn pointer(self: *const Self, cursor: m.vec2) m.vec3 {
+        const axnum = 2;
+        const axes: [axnum]u8 = .{ m.X, m.Y };
+        var in_num: u8 = 0;
+        var r: [axnum]f32 = .{ 0, 0 };
+        const c: [axnum]f32 = cursor;
+        const o: [axnum]f32 = self.offset;
+        const a: [axnum]f32 = self.sz_area;
+        for (axes) |ax| {
+            const pos = @abs(c[ax]) - o[ax];
+            if (pos <= a[ax]) {
+                r[ax] = pos / a[ax];
+                in_num += 1;
+            }
+        }
+
+        const test_val: f32 = if (in_num == axnum) 1.0 else 0.0;
+        return .{ r[m.X], r[m.Y], test_val };
+    }
+};

@@ -392,6 +392,18 @@ fn theDeepest(access: EasyAcces) !void {
             try access.io.sleep(.fromMilliseconds(50), .real);
             continue;
         }
+        // navig.pos = input.
+        navig.cursor = sdlh.peekPointer(win_size);
+        navig.tex = ok_attlas_base + ok_slider.curr;
+
+        const coords: addons.Coords = .init(win_size);
+        const on_area = coords.pointer(navig.cursor);
+        if (on_area[m.Z] == 1.0) {
+            std.debug.print("+++ cursor in area {d} {d}\n", .{
+                on_area[m.X],
+                on_area[m.Y],
+            });
+        }
 
         const img_idx = swapchain.image_index;
 
@@ -414,10 +426,6 @@ fn theDeepest(access: EasyAcces) !void {
 
         scanphi += td1 * 0.67;
         navig.scale[m.U] = m.trygZero1(@sin(scanphi)) * 0.7 + 0.3;
-
-        // navig.pos = input.
-        navig.cursor = sdlh.peekPointer(win_size);
-        navig.tex = ok_attlas_base + ok_slider.curr;
 
         const dbg_data = u.DbgMonitor.DbgVals{
             .phi = pamperek.p.phi,
