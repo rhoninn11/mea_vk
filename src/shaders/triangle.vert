@@ -14,9 +14,8 @@ struct PushData {
     uint tex_base;
     uint mode;
     uint _not_used_0;
+    vec2 point2D;
     vec2 scale2D;
-    uint _not_used_1;
-    uint _not_used_2;
 };
 layout(push_constant) uniform PC { PushData data; } _pc;
 

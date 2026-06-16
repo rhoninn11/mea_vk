@@ -21,6 +21,7 @@ const stlen: u8 = slots.len;
 const PipeType = enum(u8) {
     Triangle,
     Sprite,
+    SpriteWDepth,
 }; //
 
 const PSSCI = vk.PipelineShaderStageCreateInfo;
@@ -67,10 +68,12 @@ pub const Moduler = struct {
         const src: [stlen]EmbedSpirv = switch (pt) {
             .Triangle => .{ vert_triangle[0..], frag_triangle[0..] },
             .Sprite => .{ vert_sprite[0..], frag_sprite[0..] },
+            .SpriteWDepth => .{ vert_sprite[0..], frag_sprite[0..] },
         };
         const depth_test = switch (pt) {
             .Triangle => true,
             .Sprite => false,
+            .SpriteWDepth => true,
         };
 
         const mods = try self.initModuls(src);
@@ -209,4 +212,84 @@ fn restOfPipeline(
     );
     _ = result;
     return pipeline;
+}
+
+pub fn createRenderPass(gc: *const gm.GraphicsContext, color_format: vk.Format, depth_format: vk.Format) !vk.RenderPass {
+    const color_attachment = vk.AttachmentDescription{
+        .format = color_format,
+        .samples = .{ .@"1_bit" = true },
+        .load_op = .clear,
+        .store_op = .store,
+        .stencil_load_op = .dont_care,
+        .stencil_store_op = .dont_care,
+        .initial_layout = .undefined,
+        .final_layout = .present_src_khr,
+    };
+    // const depth_attachment = vk.AttachmentDescription{};
+    const depth_attachment = vk.AttachmentDescription{
+        .format = depth_format,
+        .samples = .{ .@"1_bit" = true },
+        .load_op = .clear,
+        .store_op = .dont_care,
+        .stencil_load_op = .dont_care,
+        .stencil_store_op = .dont_care,
+        .initial_layout = .undefined,
+        .final_layout = .depth_stencil_attachment_optimal,
+    };
+
+    const color_attachment_ref = vk.AttachmentReference{
+        .attachment = 0,
+        .layout = .color_attachment_optimal,
+    };
+    const depth_attachment_ref = vk.AttachmentReference{
+        .attachment = 1,
+        .layout = .depth_stencil_attachment_optimal,
+    };
+
+    const subpass = vk.SubpassDescription{
+        .pipeline_bind_point = .graphics,
+        .color_attachment_count = 1,
+        .p_color_attachments = @ptrCast(&color_attachment_ref),
+        .p_depth_stencil_attachment = &depth_attachment_ref,
+    };
+
+    const subpass_dependency = vk.SubpassDependency{
+        .dst_subpass = 0,
+        .src_subpass = vk.SUBPASS_EXTERNAL,
+        .src_stage_mask = .{
+            .color_attachment_output_bit = true,
+            .late_fragment_tests_bit = true,
+        },
+        .src_access_mask = .{
+            .depth_stencil_attachment_write_bit = true,
+        },
+        .dst_stage_mask = .{
+            .color_attachment_output_bit = true,
+            .early_fragment_tests_bit = true,
+        },
+        .dst_access_mask = .{
+            .color_attachment_write_bit = true,
+            .depth_stencil_attachment_write_bit = true,
+        },
+    };
+
+    const att_arr: []const vk.AttachmentDescription = &.{ color_attachment, depth_attachment };
+
+    const rpmvci: vk.RenderPassMultiviewCreateInfo = .{
+        .subpass_count = 1,
+    };
+    _ = rpmvci;
+
+    const render_pass_create_info: vk.RenderPassCreateInfo = .{
+        .attachment_count = @intCast(att_arr.len),
+        .p_attachments = att_arr.ptr,
+        .subpass_count = 1,
+        .p_subpasses = @ptrCast(&subpass),
+        .dependency_count = 1,
+        .p_dependencies = @ptrCast(&subpass_dependency),
+        // here we will pass multiview config
+        .p_next = null,
+    };
+
+    return try gc.dev.createRenderPass(&render_pass_create_info, null);
 }

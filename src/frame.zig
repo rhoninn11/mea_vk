@@ -108,11 +108,13 @@ const CmdHelper = struct {
     pub fn useSprite(self: *const CmdHelper) void {
         self.gc.dev.cmdBindPipeline(self.command, .graphics, self.draw.pipeline[1]);
     }
+    pub fn useDSprite(self: *const CmdHelper) void {
+        self.gc.dev.cmdBindPipeline(self.command, .graphics, self.draw.pipeline[2]);
+    }
 };
 
 pub fn recordFrame(
     rec: *const gm.FrameRecorder,
-    models: *const v.VertRepo,
     extent: vk.Extent2D,
     render_pass: vk.RenderPass,
     framebuffers: []const vk.Framebuffer,
@@ -136,8 +138,8 @@ pub fn recordFrame(
     const viewport = &.{vk.Viewport{
         .x = 0,
         .y = 0,
-        .width = @floatFromInt(extent.width),
-        .height = @floatFromInt(extent.height),
+        .width = m.floaty(extent.width),
+        .height = m.floaty(extent.height),
         .min_depth = 0,
         .max_depth = 1,
     }};
@@ -153,7 +155,7 @@ pub fn recordFrame(
         .gc = gc,
         .draw = draw,
         .command = cbufr,
-        .models = models,
+        .models = draw.models,
     };
     const all_sets: []const vk.DescriptorSet = &[_]vk.DescriptorSet{
         draw.uniform_dsets.items[rec.id],
@@ -183,7 +185,7 @@ pub fn recordFrame(
             gc.dev.cmdBindVertexBuffers(
                 cbufr,
                 0,
-                &.{models.vbo.?.dvk_bfr},
+                &.{draw.models.vbo.?.dvk_bfr},
                 &.{0},
             );
 
@@ -211,24 +213,15 @@ pub fn recordFrame(
 
             if (state.alt_proj) {
                 const inst_ok_begin = sht.GridSize.g64.total;
-                const inst_glyph_begin = sht.GridSize.g64.total + state.ok_slices_num;
                 const tex_ok_begin = 32;
-                const tex_glyph_begin = 32 + state.ok_slices_num;
 
                 const okpush = gm.PushConstant.PCBlob{
-                    .model = m.matTrans(.{ 0, 3, 0 }).mat,
+                    .model = m.matTrans(.{ 0, -3, 0 }).mat,
                     .inst_base = inst_ok_begin,
                     .tex_base = tex_ok_begin,
                 };
-                hl_cmds.useSprite();
+                hl_cmds.useDSprite();
                 hl_cmds.push(&okpush);
-                hl_cmds.drawInsances(BILBORD_IDX, state.ok_slices_num);
-                const glyphpush = gm.PushConstant.PCBlob{
-                    .model = m.matTrans(.{ 0, 6, 0 }).mat,
-                    .inst_base = inst_glyph_begin,
-                    .tex_base = tex_glyph_begin,
-                };
-                hl_cmds.push(&glyphpush);
                 hl_cmds.drawInsances(BILBORD_IDX, state.ok_slices_num);
             }
 
@@ -258,7 +251,8 @@ pub fn recordFrame(
                 .model = scann_mat,
                 .tex_base = 2,
                 .mode = 2,
-                .scale2D = .{ state.nav.inner_scale[m.U], 1 },
+                .scale2D = state.nav.inner_scale,
+                .point2D = state.nav.inner_offset,
             };
             hl_cmds.useSprite();
             hl_cmds.push(&scan_push);
@@ -273,7 +267,10 @@ pub fn recordFrame(
 
             // >>> font_rending <<<
             const letter_push = gm.PushConstant.PCBlob{
-                .model = gui_scale_match.mat,
+                .model = m.matXmat(
+                    m.matTrans(.{ 25, -25, 0 }).mat,
+                    gui_scale_match.mat,
+                ).mat,
                 .inst_base = state.letters_inst_offset,
                 .tex_base = 160,
                 .mode = 1,

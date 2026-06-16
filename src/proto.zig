@@ -102,10 +102,13 @@ pub const DualImageData = struct {
     raw_data: meagen.Image,
     layer_data: meagen.Image,
 
-    pub fn initDummy(gpa: std.mem.Allocator, raw: meagen.Image) !DualImageData {
+    pub fn initDummy(gpa: std.mem.Allocator) !DualImageData {
+        var raw_synth = try xyTrygHdr(gpa, shu.xyGrid(256, 880));
+        errdefer raw_synth.deinit(gpa);
+
         return .{
-            .raw_data = raw,
-            .layer_data = try genLayers(gpa, &raw.info.?),
+            .raw_data = raw_synth,
+            .layer_data = try genLayers(gpa, &raw_synth.info.?),
         };
     }
 
@@ -166,11 +169,8 @@ pub const DualImageData = struct {
 
 pub fn serdesLoadBackup(io: std.Io, gpa: std.mem.Allocator) !DualImageData {
     const raw_img = serdesLoad(io, gpa) catch |err| {
-        std.debug.print("!!! synth data | {s}\n", .{@errorName(err)});
-        var raw_synth = try xyTrygHdr(gpa, shu.xyGrid(256, 880));
-        errdefer raw_synth.deinit(gpa);
-
-        return DualImageData.initDummy(gpa, raw_synth);
+        std.debug.print("+++ dummy synthesis | {s}\n", .{@errorName(err)});
+        return DualImageData.initDummy(gpa);
     };
     return raw_img;
 }
@@ -188,17 +188,6 @@ pub fn protoImgRead(io: std.Io, gpa: std.mem.Allocator, filepath: []const u8) !m
 
 pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator) !DualImageData {
     const prefix = "./fs/serdes";
-    var zip = try files.zipSearch(io, gpa, prefix, &.{".serdes"});
-    defer zip.deinit(gpa);
-
-    var proto = try protoImgRead(io, gpa, zip.file_paths[0]);
-    errdefer proto.deinit(gpa);
-
-    return DualImageData.initDummy(gpa, proto);
-}
-pub fn serdesLoad2(io: std.Io, gpa: std.mem.Allocator) !DualImageData {
-    const prefix = "./fs/serdes";
-    // const fake_prefix = "./fs/fake_serdes";
 
     var zip = try files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" });
     defer zip.deinit(gpa);
@@ -380,21 +369,23 @@ pub const LookingGlass = struct {
 
     // TODO: making some space
     const LookingOk = struct {
-        sz: sht.GridSize,
+        grid: sht.GridSize,
+        size: m.vec2,
         pix: []u8,
 
         pub fn deinit(self: *LookingOk, gpa: std.mem.Allocator) void {
             gpa.free(self.pix);
         }
     };
-    pub fn sampleOkGradient(self: *const LookingGlass, gpa: std.mem.Allocator) !LookingOk {
+    pub fn sampleVolData(self: *const LookingGlass, gpa: std.mem.Allocator) !LookingOk {
         const sample_sz = sht.shu.xyGrid(1024, 16);
         const inferno = try oklab.sampleInfernoAlt(gpa, &sample_sz);
         defer gpa.free(inferno);
 
         const isz = self.img_sz;
         var sample = LookingOk{
-            .sz = isz,
+            .grid = isz,
+            .size = .{ isz.w, isz.h },
             .pix = try gpa.alloc(u8, isz.total * @sizeOf(u32)),
         };
         errdefer sample.deinit(sample);
@@ -448,7 +439,8 @@ pub const LookingGlass = struct {
         }
 
         var sample = LookingOk{
-            .sz = isz,
+            .grid = isz,
+            .size = .{ m.floaty(isz.w), m.floaty(isz.h) },
             .pix = try gpa.alloc(u8, isz.total * @sizeOf(u32)),
         };
         errdefer sample.deinit(sample);

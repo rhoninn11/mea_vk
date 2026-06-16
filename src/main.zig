@@ -100,15 +100,10 @@ fn deeper(access: EasyAcces) host.OnHostErrors!void {
 }
 
 fn theDeepest(access: EasyAcces) !void {
-    // const grid = sht.GridSize.g64;
-    const grid = sht.GridSize.g64;
-    const deeper_allocator = std.heap.page_allocator;
-    var duald_img = try proto.serdesLoadBackup(access.io, deeper_allocator);
-    // var duald_img = try proto.serdesLoad2(access.io, deeper_allocator);
-    defer duald_img.deinit(deeper_allocator);
-
-    var mbfont: ?fonts.FontRendering = fonts.FontRendering.init(access.io, access.gpa, "fs/roboto.ttf") catch null;
-    defer if (mbfont) |font| font.deinit(access.gpa);
+    const pages = std.heap.page_allocator;
+    // font
+    var mbfont: ?fonts.FontRendering = fonts.FontRendering.init(access.io, pages, "fs/roboto.ttf") catch null;
+    defer if (mbfont) |font| font.deinit(pages);
 
     var mbalphabet: ?fonts.Alphabet = null;
     defer if (mbalphabet) |*alphabet| alphabet.deinit(access.gpa);
@@ -117,15 +112,21 @@ fn theDeepest(access: EasyAcces) !void {
         mbalphabet = try fonts.Alphabet.init(access.gpa, font);
     }
 
-    var glass = proto.LookingGlass.init(&duald_img, grid);
+    // vol data
+    var dual_img = try proto.serdesLoadBackup(access.io, pages);
+    defer dual_img.deinit(pages);
 
-    var proto_ok = try glass.sampleOkGradient(access.gpa);
-    defer proto_ok.deinit(access.gpa);
-    var proto_lay = try glass.sampleLayers(access.gpa);
-    defer proto_lay.deinit(access.gpa);
+    const grid = sht.GridSize.g64;
+    var glass = proto.LookingGlass.init(&dual_img, grid);
 
-    navig.scann_sz = m.vec2{ proto_ok.sz.w, proto_ok.sz.h };
+    var looking_vol = try glass.sampleVolData(access.gpa);
+    defer looking_vol.deinit(access.gpa);
+    var looking_lyr = try glass.sampleLayers(access.gpa);
+    defer looking_lyr.deinit(access.gpa);
 
+    navig.scann_sz = looking_vol.size;
+
+    //vk related
     var swapchain_len: u8 = undefined;
 
     const gpa = access.gpa;
@@ -144,14 +145,18 @@ fn theDeepest(access: EasyAcces) !void {
     defer gc.dev.destroyCommandPool(general_cpool, null);
     const pic = gm.PoolInCtx{ .gc = gc, .pool = general_cpool };
 
-    const _64kb = 1 << 16;
-    var stack_dset: [_64kb]u8 = undefined;
-    var stalloc: std.heap.FixedBufferAllocator = .init(stack_dset[0..]);
-    const dsa = stalloc.allocator();
-    var arean: std.heap.ArenaAllocator = .init(gpa);
-    defer arean.deinit();
-    const aa = arean.allocator();
-    _ = dsa;
+    //descriptor sets
+    {
+        const _64kb = 1 << 16;
+        var stack_dset: [_64kb]u8 = undefined;
+        var stalloc: std.heap.FixedBufferAllocator = .init(stack_dset[0..]);
+        const dsa = stalloc.allocator();
+        _ = dsa;
+    }
+
+    var desets_arena: std.heap.ArenaAllocator = .init(gpa);
+    defer desets_arena.deinit();
+    const aa = desets_arena.allocator();
 
     const hl_dset = dset.HLDSetPrep{
         .gc = gc,
@@ -198,20 +203,25 @@ fn theDeepest(access: EasyAcces) !void {
     );
     defer hl_dset.deinit(&dset_atlas);
 
-    // rendering & pipelines
-    const render_pass = try createRenderPass(gc, swapchain);
-    defer gc.dev.destroyRenderPass(render_pass, null);
-
-    const dsets = [_]vk.DescriptorSetLayout{
+    const desc_sets = [_]vk.DescriptorSetLayout{
         dset_uniform._d_set_layout.?,
         storage._d_set_layout.?,
         dset_atlas._d_set_layout.?,
     };
+
+    // rendering & pipelines
+    const render_pass = try pipe.createRenderPass(
+        gc,
+        swapchain.surface_format.format,
+        swapchain.depth_image.vk_format,
+    );
+    defer gc.dev.destroyRenderPass(render_pass, null);
+
     const push_const_ranges = gm.PushConstant.Ranges();
     const pipeline_layout = try gc.dev.createPipelineLayout(&.{
         .flags = .{},
-        .p_set_layouts = &dsets,
-        .set_layout_count = dsets.len,
+        .p_set_layouts = &desc_sets,
+        .set_layout_count = desc_sets.len,
         .p_push_constant_ranges = push_const_ranges.ptr,
         .push_constant_range_count = @intCast(push_const_ranges.len),
     }, null);
@@ -225,6 +235,8 @@ fn theDeepest(access: EasyAcces) !void {
     defer pipe_mod.destroyPipelin(pipeline);
     const pipeline_2nd = try pipe_mod.createPipeline(render_pass, .Sprite);
     defer pipe_mod.destroyPipelin(pipeline_2nd);
+    const pipeline_3rd = try pipe_mod.createPipeline(render_pass, .SpriteWDepth);
+    defer pipe_mod.destroyPipelin(pipeline_3rd);
 
     var repo = try vertex.repoSpawn(gpa, &pic);
     defer repo.deinit(gc);
@@ -232,11 +244,12 @@ fn theDeepest(access: EasyAcces) !void {
 
     const draw_instanced_attempt: gm.DrawInfo = .{
         .instance_count = grid.total, // TODO: something like "InstanceMapping"...
-        .pipeline = [4]vk.Pipeline{ pipeline, pipeline_2nd, undefined, undefined },
+        .pipeline = [4]vk.Pipeline{ pipeline, pipeline_2nd, pipeline_3rd, undefined },
         .pipeline_layout = pipeline_layout,
         .uniform_dsets = dset_uniform.d_set_arr,
         .storage_dsets = storage.d_set_arr,
         .texture_dset = dset_atlas.d_set_arr.items[0],
+        .models = &repo,
     };
 
     // fill storage and textures
@@ -252,8 +265,8 @@ fn theDeepest(access: EasyAcces) !void {
     const basic_tex_set: [4]anyerror!imgs.RGBImage = .{
         imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb),
         imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_r),
-        imgs.vulkanTexture(&pic, proto_ok.sz, proto_ok.pix),
-        imgs.vulkanTexture(&pic, proto_lay.sz, proto_lay.pix),
+        imgs.vulkanTexture(&pic, looking_vol.grid, looking_vol.pix),
+        imgs.vulkanTexture(&pic, looking_lyr.grid, looking_lyr.pix),
     };
     {
         const base_idx = 0;
@@ -368,7 +381,6 @@ fn theDeepest(access: EasyAcces) !void {
             );
             try frame.recordFrame(
                 &recorders[i],
-                &repo,
                 swapchain.extent,
                 render_pass,
                 framebuffers,
@@ -428,8 +440,11 @@ fn theDeepest(access: EasyAcces) !void {
         pamperek.control(&input.plr_input, td);
 
         scanphi += td1 * 0.67;
-        const scan_scale = m.trygZero1(@sin(scanphi)) * 0.7 + 0.3;
+
+        const tryg_val = m.trygZero1(@sin(scanphi));
+        const scan_scale = tryg_val * 0.7 + 0.3;
         navig.inner_scale = @splat(scan_scale);
+        navig.inner_offset = @splat((1 - tryg_val) * 0.3);
 
         const dbg_data = u.DbgMonitor.DbgVals{
             .phi = pamperek.p.phi,
@@ -529,18 +544,16 @@ fn theDeepest(access: EasyAcces) !void {
                     dyn_text.items,
                 );
             }
-
-            try frame.recordFrame(
-                &recorders[img_idx],
-                &repo,
-                swapchain.extent,
-                render_pass,
-                framebuffers,
-                &draw_instanced_attempt,
-                &frame_state,
-            );
         }
 
+        try frame.recordFrame(
+            &recorders[img_idx],
+            swapchain.extent,
+            render_pass,
+            framebuffers,
+            &draw_instanced_attempt,
+            &frame_state,
+        );
         if (state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {
             // std.debug.assert(false); //cuz it will throw error due to bad depth_img resolution
             resolution_extent = win_size;
@@ -549,9 +562,9 @@ fn theDeepest(access: EasyAcces) !void {
                 std.debug.print("!!! hit error at recreate |> {s}\n", .{@errorName(err)});
                 std.debug.print("!!! prev win_size w:{d} h:{d}\n", .{ win_size.width, win_size.height });
                 try access.io.sleep(std.Io.Duration.fromMilliseconds(2000), .real);
+
                 access.host.pollEvents();
                 const new_win_size = try access.host.winExtent();
-
                 std.debug.print("!!! new win_size w:{d} h:{d}\n", .{ new_win_size.width, new_win_size.height });
                 return;
             };
@@ -564,10 +577,10 @@ fn theDeepest(access: EasyAcces) !void {
                 swapchain,
             );
 
+            // TODO: do need to record all?
             for (recorders) |*recorder| {
                 try frame.recordFrame(
                     recorder,
-                    &repo,
                     swapchain.extent,
                     render_pass,
                     framebuffers,
@@ -576,6 +589,7 @@ fn theDeepest(access: EasyAcces) !void {
                 );
             }
         }
+
         const cmdbuf = cmdbufs[swapchain.image_index];
         state = swapchain.present(cmdbuf) catch |err| switch (err) {
             error.OutOfDateKHR => Swapchain.PresentState.suboptimal,
@@ -620,86 +634,6 @@ fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_p
 fn destroyFramebuffers(gc: *const GraphicsContext, allocator: Allocator, framebuffers: []const vk.Framebuffer) void {
     for (framebuffers) |fb| gc.dev.destroyFramebuffer(fb, null);
     allocator.free(framebuffers);
-}
-
-fn createRenderPass(gc: *const GraphicsContext, swapchain: Swapchain) !vk.RenderPass {
-    const color_attachment = vk.AttachmentDescription{
-        .format = swapchain.surface_format.format,
-        .samples = .{ .@"1_bit" = true },
-        .load_op = .clear,
-        .store_op = .store,
-        .stencil_load_op = .dont_care,
-        .stencil_store_op = .dont_care,
-        .initial_layout = .undefined,
-        .final_layout = .present_src_khr,
-    };
-    // const depth_attachment = vk.AttachmentDescription{};
-    const depth_attachment = vk.AttachmentDescription{
-        .format = swapchain.depth_image.vk_format,
-        .samples = .{ .@"1_bit" = true },
-        .load_op = .clear,
-        .store_op = .dont_care,
-        .stencil_load_op = .dont_care,
-        .stencil_store_op = .dont_care,
-        .initial_layout = .undefined,
-        .final_layout = .depth_stencil_attachment_optimal,
-    };
-
-    const color_attachment_ref = vk.AttachmentReference{
-        .attachment = 0,
-        .layout = .color_attachment_optimal,
-    };
-    const depth_attachment_ref = vk.AttachmentReference{
-        .attachment = 1,
-        .layout = .depth_stencil_attachment_optimal,
-    };
-
-    const subpass = vk.SubpassDescription{
-        .pipeline_bind_point = .graphics,
-        .color_attachment_count = 1,
-        .p_color_attachments = @ptrCast(&color_attachment_ref),
-        .p_depth_stencil_attachment = &depth_attachment_ref,
-    };
-
-    const subpass_dependency = vk.SubpassDependency{
-        .dst_subpass = 0,
-        .src_subpass = vk.SUBPASS_EXTERNAL,
-        .src_stage_mask = .{
-            .color_attachment_output_bit = true,
-            .late_fragment_tests_bit = true,
-        },
-        .src_access_mask = .{
-            .depth_stencil_attachment_write_bit = true,
-        },
-        .dst_stage_mask = .{
-            .color_attachment_output_bit = true,
-            .early_fragment_tests_bit = true,
-        },
-        .dst_access_mask = .{
-            .color_attachment_write_bit = true,
-            .depth_stencil_attachment_write_bit = true,
-        },
-    };
-
-    const att_arr: []const vk.AttachmentDescription = &.{ color_attachment, depth_attachment };
-
-    const rpmvci: vk.RenderPassMultiviewCreateInfo = .{
-        .subpass_count = 1,
-    };
-    _ = rpmvci;
-
-    const render_pass_create_info: vk.RenderPassCreateInfo = .{
-        .attachment_count = @intCast(att_arr.len),
-        .p_attachments = att_arr.ptr,
-        .subpass_count = 1,
-        .p_subpasses = @ptrCast(&subpass),
-        .dependency_count = 1,
-        .p_dependencies = @ptrCast(&subpass_dependency),
-        // here we will pass multiview config
-        .p_next = null,
-    };
-
-    return try gc.dev.createRenderPass(&render_pass_create_info, null);
 }
 
 test "do it even testing" {
