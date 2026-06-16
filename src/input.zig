@@ -70,6 +70,7 @@ pub var alt_projection_trigger: Trigger = .{};
 pub var slide_l_trig: Trigger = .{};
 pub var slide_r_trig: Trigger = .{};
 pub var dbg_trig: Trigger = .{};
+pub var sample_tirg: Trigger = .{};
 
 pub var ok_vis: KeyAction = .{ .key = glfw.KeyY, .action = glfw.KeyDown };
 pub var shader_reset: KeyAction = .{ .key = glfw.KeyQ, .action = glfw.KeyDown };

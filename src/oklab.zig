@@ -51,7 +51,14 @@ pub fn oklab_to_srgb(lab: m.vec3) m.vec3 {
 
 const U16max: f32 = 1 << 16;
 pub const OkUnderstanding = struct {
+    const chroma_base: f32 = 0.2;
     grid: sht.GridSize,
+
+    pub fn abVal(zeroOne: m.vec2) m.vec2 {
+        var val = zeroOne - m.vec2{ 0.5, 0.5 };
+        val *= @splat(2.0 * chroma_base);
+        return val;
+    }
 
     pub fn labSpliced(instances: [*]sht.PerInstance, instance_offset: u32, slice_num: u8, phi: f32) !void {
         const lim_num = 8096;
@@ -148,14 +155,13 @@ pub const OkUnderstanding = struct {
         const texture_mem = try alloc.alloc(u8, g.total * @sizeOf(u32));
         const g_mid = addons.GridOps.middle(g);
 
-        const chroma = 0.4;
         var invalid_pixels: u32 = 0;
         for (0..g.h) |yy| {
             for (0..g.w) |x| {
-                const idx: m.vec2 = .{ @as(f32, @floatFromInt(x)), @as(f32, @floatFromInt(yy)) };
+                const idx: m.vec2 = .{ m.floaty(x), m.floaty(yy) };
                 var ab = idx - g_mid;
-                ab /= m.splat2d(g_mid[0]);
-                ab *= m.splat2d(chroma);
+                ab /= m.splat2d(g_mid[0]); // (-1 ; 1)
+                ab *= m.splat2d(chroma_base); // (-chroma ; chroma)
                 const s_rgb: [3]f32 = oklab_to_srgb(.{ L, ab[0], ab[1] });
                 var valid = true;
                 for (0..3) |i| valid = valid and (s_rgb[i] > 0) and (s_rgb[i] <= 1);
@@ -181,11 +187,11 @@ pub const OkUnderstanding = struct {
 const LabSpot = struct { key: f32, lab: m.vec3 };
 pub fn sampleInfernoAlt(alloc: std.mem.Allocator, g: *const sht.GridSize) ![]u8 {
     const path: []const LabSpot = &.{
-        .{ .key = 0.0, .lab = .{ 0.5, -0.07, -0.03 } },
-        // .{ .key = 0.5, .lab = .{ 0.5, 0.0, -0.07 } },
-        .{ .key = 0.8, .lab = .{ 0.75, 0.07, 0.10 } },
-        .{ .key = 0.85, .lab = .{ 0.85, -0.05, 0.0 } },
-        .{ .key = 1.0, .lab = .{ 0.9, 0.0, -0.02 } },
+        .{ .key = 0.0, .lab = .{ 0.35, -0.03, 0.03 } },
+        .{ .key = 0.15, .lab = .{ 0.54, 0.14, -0.15 } },
+        .{ .key = 0.45, .lab = .{ 0.76, -0.07, -0.09 } },
+        .{ .key = 0.6, .lab = .{ 0.83, 0.00, 0.14 } },
+        .{ .key = 1.0, .lab = .{ 0.94, 0.03, -0.02 } },
     };
 
     const texture_mem = try alloc.alloc(u8, g.total * @sizeOf(u32));

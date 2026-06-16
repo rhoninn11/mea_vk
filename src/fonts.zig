@@ -211,7 +211,7 @@ pub const Alphabet = struct {
         const ascii_chars: []const u8 = //
             "abcdefghijklmnoprstuvwxyz" ++ //
             "ABCDEFGHIJKLMNOPRSTUVWXYZ" ++ //
-            " _.,;:0123456789()<>{}[]+-?!";
+            " _.,;:|0123456789()<>{}[]+-?!";
         const ascii_len = ascii_chars.len;
 
         var char_map: CharLocMap = .init(gpa);
@@ -294,7 +294,7 @@ pub const Alphabet = struct {
             }
 
             const x_off: f32 = m.floaty(cursor) * 0.3;
-            const yf32: f32 = m.floaty(line);
+            const yf32: f32 = m.floaty(line) * 0.6;
             const charw = gly_sz.w;
             const xfrac = m.floaty(charw) / 128;
             if (Alphabet.show_first_blit) if (self.first)

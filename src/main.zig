@@ -60,10 +60,15 @@ const last_half_of_last_q = sht.GridSize.g64.total + sht.GridSize.g64.total / 2;
 const first_letter_instance = 4608;
 const first_layer_instance = 6144;
 var navig: frame.Navig = .{
-    .g = sht.GridSize.g64,
+    .screan = .{ 128, 128 },
     .cursor = .{ 0, 0 },
-    .scale = .{ 0, 0 },
-    .tex = 0,
+
+    .scann_sz = .{ 1, 1 },
+
+    .inner_scale = .{ 1, 1 },
+    .inner_offset = .{ 0, 0 },
+
+    .ok_tex_off = 0,
 };
 
 var frame_state: frame.FrameState = .{
@@ -87,7 +92,6 @@ pub fn gpCommandQueue(gc: *const gm.GraphicsContext) !vk.CommandPool {
     };
     return gc.dev.createCommandPool(&pool_cinfo, null);
 }
-
 fn deeper(access: EasyAcces) host.OnHostErrors!void {
     theDeepest(access) catch |err| {
         std.debug.print("passenger error, converting to one of MainErrors src {}\n", .{err});
@@ -120,7 +124,7 @@ fn theDeepest(access: EasyAcces) !void {
     var proto_lay = try glass.sampleLayers(access.gpa);
     defer proto_lay.deinit(access.gpa);
 
-    navig.g = proto_ok.sz;
+    navig.scann_sz = m.vec2{ proto_ok.sz.w, proto_ok.sz.h };
 
     var swapchain_len: u8 = undefined;
 
@@ -379,13 +383,17 @@ fn theDeepest(access: EasyAcces) !void {
     var glyphphi: f32 = 0;
     var scanphi: f32 = 0;
     var base_shading: bool = true;
-    var ok_slider: u.Slider = .init(0, OK_SWEEP);
+    var ok_slider: u.Slider = .init(0, OK_SWEEP - 1);
 
     sdlh.wheel.up = .{ .a = &ok_slider, .f = u.Slider.inc };
     sdlh.wheel.down = .{ .a = &ok_slider, .f = u.Slider.dec };
 
     // main loop
+    var text_stack: [1024]u8 = undefined;
     while (!window.shoudClose()) {
+        var fba: std.heap.FixedBufferAllocator = .init(text_stack[0..]);
+        const txta = fba.allocator();
+
         access.host.pollEvents();
         const win_size = try access.host.winExtent();
         if (!addons.visible(win_size)) {
@@ -394,16 +402,11 @@ fn theDeepest(access: EasyAcces) !void {
         }
         // navig.pos = input.
         navig.cursor = sdlh.peekPointer(win_size);
-        navig.tex = ok_attlas_base + ok_slider.curr;
+        navig.ok_tex_off = ok_attlas_base + ok_slider.curr;
 
         const coords: addons.Coords = .init(win_size);
         const on_area = coords.pointer(navig.cursor);
-        if (on_area[m.Z] == 1.0) {
-            std.debug.print("+++ cursor in area {d} {d}\n", .{
-                on_area[m.X],
-                on_area[m.Y],
-            });
-        }
+        navig.screan = coords.sz_scr;
 
         const img_idx = swapchain.image_index;
 
@@ -425,7 +428,8 @@ fn theDeepest(access: EasyAcces) !void {
         pamperek.control(&input.plr_input, td);
 
         scanphi += td1 * 0.67;
-        navig.scale[m.U] = m.trygZero1(@sin(scanphi)) * 0.7 + 0.3;
+        const scan_scale = m.trygZero1(@sin(scanphi)) * 0.7 + 0.3;
+        navig.inner_scale = @splat(scan_scale);
 
         const dbg_data = u.DbgMonitor.DbgVals{
             .phi = pamperek.p.phi,
@@ -505,11 +509,24 @@ fn theDeepest(access: EasyAcces) !void {
                 glyphphi,
             );
 
+            var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 960);
+            try dyn_text.print(txta, "Some sample text to blit on a screan\n", .{});
+            if (on_area[m.Z] == 1.0) {
+                const x, const y, _ = on_area;
+                const a, const b = oklab.OkUnderstanding.abVal(.{ x, y });
+                try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
+                try dyn_text.print(txta, "{s:<16} | a:{d:>6.2} b:{d:>6.2}\n", .{ "pointing to", a, b });
+                if (input.sample_tirg.fired()) {
+                    std.debug.print(".{{{d:.2},{d:.2},{d:.2}}}\n", .{ ok_slider.frac(), a, b });
+                }
+            } else {
+                _ = input.sample_tirg.fired();
+            }
             if (mbalphabet) |*alphabet| {
                 frame_state.letters_inst_num = try alphabet.BlitText(
                     instances,
                     frame_state.letters_inst_offset,
-                    "Some sample text to blit on a screan\n -> To test line spacing",
+                    dyn_text.items,
                 );
             }
 

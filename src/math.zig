@@ -340,7 +340,6 @@ pub fn mat_persp(width: f32, height: f32, fov: f32, near: f32, far: f32) mat4u {
     const aspect = width / height;
     const tan_val = std.math.tan(fov / 2);
     const depth = far - near;
-    // std.debug.print("hmm {}\n", .{tan_val});
     return mat4u{
         .mat = .{
             .{ 1 / (aspect * tan_val), 0, 0, 0 }, //column-major

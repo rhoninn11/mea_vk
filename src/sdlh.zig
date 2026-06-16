@@ -144,8 +144,8 @@ pub var wheel: Scroll = .default;
 pub fn peekPointer(extent: vk.Extent2D) m.vec2 {
     _ = extent;
     return .{
-        (pointer.x / 64.0),
-        -(pointer.y / 64.0),
+        pointer.x,
+        -pointer.y,
     };
 }
 pub fn pointerInfo(prefix: []const u8, iowriter: *std.Io.Writer) !u8 {
@@ -197,6 +197,9 @@ pub const SdlContext = struct {
 
             switch (ev) {
                 .key_up, .key_down => |kb| key = kb.key.?,
+                .mouse_button_down => {
+                    input.sample_tirg.activated = true;
+                },
                 .mouse_motion => |*mm| pointer.update(mm),
                 .mouse_wheel => |*mw| wheel.update(mw),
                 else => {},

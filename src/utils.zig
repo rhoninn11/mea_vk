@@ -44,6 +44,10 @@ pub const Slider = struct {
     pub fn dec(self: *Self) void {
         self.curr = if (self.curr == self._min) self._min else self.curr - 1;
     }
+
+    pub fn frac(self: *const Self) f32 {
+        return m.floaty(self.curr) / m.floaty(self._max);
+    }
 };
 
 pub const Caped = struct {

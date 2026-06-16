@@ -68,11 +68,8 @@ pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: bool) !MatPack {
 }
 
 pub fn guiVisor(x: f32, y: f32) MatPack {
-    const scale: f32 = 1.0 / 64.0;
-    const _x = x * scale;
-    const _y = y * scale;
     const interm = MatPack{
-        .proj = m.mat_ortho(_x, 0, 0, -_y, 16, -16).arr,
+        .proj = m.mat_ortho(x, 0, 0, -y, 16, -16).arr,
         .view = m.matIden().arr,
         .model = m.matIden().arr,
         // .view = m.mat_translate(-pos).arr,
@@ -155,12 +152,11 @@ pub const Coords = struct {
         const a: [axnum]f32 = self.sz_area;
         for (axes) |ax| {
             const pos = @abs(c[ax]) - o[ax];
-            if (pos <= a[ax]) {
+            if (pos >= 0 and pos <= a[ax]) {
                 r[ax] = pos / a[ax];
                 in_num += 1;
             }
         }
-
         const test_val: f32 = if (in_num == axnum) 1.0 else 0.0;
         return .{ r[m.X], r[m.Y], test_val };
     }

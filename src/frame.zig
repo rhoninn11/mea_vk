@@ -8,14 +8,36 @@ const v = @import("vertex.zig");
 const addons = @import("addons.zig");
 
 pub const Navig = struct {
-    g: sht.GridSize,
+    screan: m.vec2,
     cursor: m.vec2,
-    scale: m.vec2,
-    tex: u16,
+
+    scann_sz: m.vec2,
+
+    inner_scale: m.vec2,
+    inner_offset: m.vec2,
+
+    ok_tex_off: u16,
 
     pub fn aspectScale(self: *const Navig) m.vec3 {
-        const hscale = m.floaty(self.g.h) / m.floaty(self.g.w);
+        const w, const h = self.scann_sz;
+        const hscale = h / w;
         return .{ 1, hscale, 1 };
+    }
+
+    pub fn scanPlacement(self: *const Navig) m.mat4 {
+        const x, const y, _ = self.aspectScale();
+        _, const hs = self.screan;
+
+        const mult = (hs / y) * 0.4;
+        const scale: m.vec3 = .{ x * mult, y * mult, 1 };
+
+        const sx, _, _ = scale;
+        const offset: m.vec3 = .{ sx, -hs * 0.5, 0 };
+
+        return m.matXmat(
+            m.matTrans(offset).mat,
+            m.matScale(scale).mat,
+        ).mat;
     }
 };
 
@@ -211,54 +233,39 @@ pub fn recordFrame(
             }
 
             //gui - maybe would be nice to clear depth first
+            const gui_scale_match = m.matScale(.{ 128, 128, 1 });
 
             hl_cmds.dynUboDsets(all_sets, 2);
             // >>> cursor <<<
             const cursor = state.nav.cursor;
             const guipush = gm.PushConstant.PCBlob{
-                .model = m.matTrans(.{ cursor[m.X], cursor[m.Y], 0 }).mat,
+                .model = m.matXmat(
+                    m.matTrans(.{ cursor[m.X], cursor[m.Y], 0 }).mat,
+                    m.matScale(.{ 25, 25, 1 }).mat,
+                ).mat,
                 .inst_base = 0,
-                .tex_base = state.nav.tex,
+                .tex_base = state.nav.ok_tex_off,
                 .mode = 3,
             };
             hl_cmds.useTriangles();
             hl_cmds.push(&guipush);
             hl_cmds.drawInsances(HEX_IDX, 1);
             // <<< cursor >>>
-            const okpush = gm.PushConstant.PCBlob{
-                .model = m.matXmat(
-                    m.matTrans(.{ 12, -6, 0 }).mat,
-                    m.matScale(.{ 9, 9, 1 }).mat,
-                ).mat,
-                .inst_base = 0,
-                .tex_base = state.nav.tex,
-                .mode = 2,
-            };
-            hl_cmds.useSprite();
-            hl_cmds.push(&okpush);
-            hl_cmds.drawInsances(HEX_IDX, 1);
 
-            // >>> scann_layers <<<
-            const scan_m_model = blk: {
-                const aspect = m.matScale(state.nav.aspectScale());
-                const display_here = m.matTrans(.{ 0, -6, 0 });
-
-                break :blk m.matXmat(display_here.mat, aspect.mat);
-            };
-
+            // <<< scann_layers >>>
+            const scann_mat = state.nav.scanPlacement();
             var scan_push = gm.PushConstant.PCBlob{
-                .model = scan_m_model.mat,
-                .inst_base = state.letters_inst_offset,
+                .model = scann_mat,
                 .tex_base = 2,
                 .mode = 2,
-                .scale2D = .{ state.nav.scale[m.U], 1 },
+                .scale2D = .{ state.nav.inner_scale[m.U], 1 },
             };
             hl_cmds.useSprite();
             hl_cmds.push(&scan_push);
             hl_cmds.drawInsances(BILBORD_IDX, 1);
 
             const closer = m.matTrans(.{ 0, 0, -0.1 });
-            scan_push.model = m.matXmat(closer.mat, scan_m_model.mat).mat;
+            scan_push.model = m.matXmat(closer.mat, scann_mat).mat;
             scan_push.tex_base = 3;
             hl_cmds.push(&scan_push);
             hl_cmds.drawInsances(BILBORD_IDX, 1);
@@ -266,7 +273,7 @@ pub fn recordFrame(
 
             // >>> font_rending <<<
             const letter_push = gm.PushConstant.PCBlob{
-                .model = m.matTrans(.{ 0, 0, 0 }).mat,
+                .model = gui_scale_match.mat,
                 .inst_base = state.letters_inst_offset,
                 .tex_base = 160,
                 .mode = 1,
