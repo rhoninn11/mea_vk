@@ -76,6 +76,13 @@ pub const Math = struct {
             tris[i].pos = newpos.arr;
         }
     }
+    pub fn matApply4(tris: []Vertex, mat: m.mat4) void {
+        const len = tris.len;
+        for (0..len) |i| {
+            tris[i].pos = m.matXvec(mat, //
+                m.stack4(tris[i].pos, 1))[0..3].*;
+        }
+    }
     pub fn scaleApply(verts: []Vertex, scale: m.vec3) void {
         const len = verts.len;
         for (0..len) |i| {
@@ -102,7 +109,7 @@ pub const Math = struct {
 };
 
 pub const Utils = struct {
-    pub fn Ring(alloc: Allocator, param: RingParams) !TriangleArray {
+    pub fn Ring(alloc: Allocator, param: RingParams) error{OutOfMemory}!TriangleArray {
         const vert_num: usize = @as(usize, param.len) * 2;
 
         var pair_arr: PairArray = .empty;
@@ -113,7 +120,7 @@ pub const Utils = struct {
         return try triangulateSegments(alloc, pair_arr.items);
     }
 
-    pub fn Cube(alloc: Allocator) !TriangleArray {
+    pub fn Cube(alloc: Allocator) error{OutOfMemory}!TriangleArray {
         var triangles: TriangleArray = try .initCapacity(alloc, 30);
         errdefer triangles.deinit(alloc);
 
@@ -137,7 +144,7 @@ pub const Utils = struct {
         return triangles;
     }
 
-    pub fn Pierced(gpa: Allocator) !TriangleArray {
+    pub fn Pierced(gpa: Allocator) error{OutOfMemory}!TriangleArray {
         var out_tris: TriangleArray = try .initCapacity(gpa, 48);
         errdefer out_tris.deinit(gpa);
 
@@ -166,7 +173,7 @@ pub const Utils = struct {
         return out_tris;
     }
 
-    pub fn Hollow(gpa: Allocator) !TriangleArray {
+    pub fn Hollow(gpa: Allocator) error{OutOfMemory}!TriangleArray {
         const square_blits = 4;
         const border = 0.125;
 
@@ -249,6 +256,15 @@ pub const Utils = struct {
 
         try blitQuad(alloc, &triangles);
         Math.matApply(triangles.items, Math.xrot90);
+        return triangles;
+    }
+    pub fn GuiBilboard(alloc: Allocator) !TriangleArray {
+        const triangles = try Bilboard(alloc);
+
+        Math.matApply4(triangles.items, m.matXmat(
+            m.matScale(m.splat3d(0.5)).mat,
+            m.matTrans(.{ 1, -1, 0 }).mat,
+        ).mat);
         return triangles;
     }
 
@@ -437,24 +453,17 @@ pub fn populateModels(gpa: std.mem.Allocator, here: *TriangleArray, as: *VertRep
     var shape: TriangleArray = undefined;
 
     // const HOLLOW_CUBE = 0;
-    param.len = 5;
-    param.flat = true;
-    shape = try Utils.Hollow(gpa);
-    try here.appendSlice(gpa, shape.items);
-    as.register(shape.items);
-    shape.deinit(gpa);
-
     // const CUBE = 1;
-    shape = try Utils.Cube(gpa);
-    try here.appendSlice(gpa, shape.items);
-    as.register(shape.items);
-    shape.deinit(gpa);
-
     // const PIERCERD = 2;
-    shape = try Utils.Pierced(gpa);
-    try here.appendSlice(gpa, shape.items);
-    as.register(shape.items);
-    shape.deinit(gpa);
+    const TriGen = *const fn (Allocator) error{OutOfMemory}!TriangleArray;
+    const gen1: []const TriGen = &.{ &Utils.Hollow, &Utils.Cube, &Utils.Pierced };
+    for (gen1) |generator| {
+        shape = try generator(gpa);
+        defer shape.deinit(gpa);
+
+        try here.appendSlice(gpa, shape.items);
+        as.register(shape.items);
+    }
 
     // const RING = 3;
     //--- First
@@ -467,16 +476,16 @@ pub fn populateModels(gpa: std.mem.Allocator, here: *TriangleArray, as: *VertRep
     //----
 
     // const BILBO = 4;
-    shape = try Utils.Bilboard(gpa);
-    try here.appendSlice(gpa, shape.items);
-    as.register(shape.items);
-    shape.deinit(gpa);
-
     // const BILBO_HEX = 5;
-    shape = try Utils.Hexy(gpa);
-    try here.appendSlice(gpa, shape.items);
-    as.register(shape.items);
-    shape.deinit(gpa);
+    // const BILBO_GUI = 6
+    const gen2: []const TriGen = &.{ &Utils.Bilboard, &Utils.Hexy, &Utils.GuiBilboard };
+    for (gen2) |generator| {
+        shape = try generator(gpa);
+        defer shape.deinit(gpa);
+
+        try here.appendSlice(gpa, shape.items);
+        as.register(shape.items);
+    }
 }
 
 const BBox = struct {

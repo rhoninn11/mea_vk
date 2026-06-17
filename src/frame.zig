@@ -28,16 +28,12 @@ pub const Navig = struct {
         const x, const y, _ = self.aspectScale();
         _, const hs = self.screan;
 
-        const mult = (hs / y) * 0.4;
+        const mult = (hs / y);
         const scale: m.vec3 = .{ x * mult, y * mult, 1 };
+        const scale2: m.vec3 = .{ 512, 512, 1 };
 
-        const sx, _, _ = scale;
-        const offset: m.vec3 = .{ sx, -hs * 0.5, 0 };
-
-        return m.matXmat(
-            m.matTrans(offset).mat,
-            m.matScale(scale).mat,
-        ).mat;
+        _ = scale;
+        return m.matScale(scale2).mat;
     }
 };
 
@@ -168,6 +164,7 @@ pub fn recordFrame(
     {
         const BILBORD_IDX = 4;
         const HEX_IDX = 5;
+        const GUI_BILBO_IDX = 6;
         try gc.dev.beginCommandBuffer(cbufr, &.{});
 
         gc.dev.cmdSetViewport(cbufr, 0, viewport);
@@ -256,13 +253,13 @@ pub fn recordFrame(
             };
             hl_cmds.useSprite();
             hl_cmds.push(&scan_push);
-            hl_cmds.drawInsances(BILBORD_IDX, 1);
+            hl_cmds.drawInsances(GUI_BILBO_IDX, 1);
 
             const closer = m.matTrans(.{ 0, 0, -0.1 });
             scan_push.model = m.matXmat(closer.mat, scann_mat).mat;
             scan_push.tex_base = 3;
             hl_cmds.push(&scan_push);
-            hl_cmds.drawInsances(BILBORD_IDX, 1);
+            hl_cmds.drawInsances(GUI_BILBO_IDX, 1);
             // <<< scann_layers >>>
 
             // >>> font_rending <<<

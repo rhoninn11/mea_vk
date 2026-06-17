@@ -443,6 +443,7 @@ fn theDeepest(access: EasyAcces) !void {
 
         const tryg_val = m.trygZero1(@sin(scanphi));
         const scan_scale = ok_slider.frac() * 0.95 + 0.05;
+
         navig.inner_scale = @splat(scan_scale);
         navig.inner_offset = @splat((1 - tryg_val) * 0.3);
 
