@@ -27,26 +27,26 @@ pub fn strcompL(_: void, lhs: []const u8, rhs: []const u8) bool {
 
 pub const Slider = struct {
     const Self = Slider;
-    _min: u16,
-    _max: u16,
+    min: u16,
+    max: u16,
     curr: u16,
 
-    pub fn init(min: u16, max: u16) Slider {
+    pub fn init(_min: u16, _max: u16) Slider {
         return .{
-            ._min = min,
-            ._max = max,
-            .curr = (min + max) / 2,
+            .min = _min,
+            .max = _max,
+            .curr = (_min + _max) / 2,
         };
     }
     pub fn inc(self: *Self) void {
-        self.curr = @min(self.curr + 1, self._max);
+        self.curr = @min(self.curr + 1, self.max);
     }
     pub fn dec(self: *Self) void {
-        self.curr = if (self.curr == self._min) self._min else self.curr - 1;
+        self.curr = if (self.curr == self.min) self.min else self.curr - 1;
     }
 
     pub fn frac(self: *const Self) f32 {
-        return m.floaty(self.curr) / m.floaty(self._max);
+        return m.floaty(self.curr) / m.floaty(self.max);
     }
 };
 
