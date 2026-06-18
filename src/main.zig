@@ -18,12 +18,15 @@ const vertex = @import("vertex.zig");
 const m = @import("math.zig");
 const t = @import("types.zig");
 const u = @import("utils.zig");
-const phx = @import("phys.zig");
+const phys = @import("phys.zig");
 const imgs = @import("imgs.zig");
 const refils = @import("refills.zig");
 const oklab = @import("oklab.zig");
 
-const InertiaVec2 = phx.InertiaPack(m.vec3);
+const oct = @import("oct");
+const well = oct.f32_arr_3d_t;
+
+const InertiaVec2 = phys.InertiaPack(m.vec3);
 const Vertex = vertex.Vertex;
 
 const Allocator = std.mem.Allocator;
@@ -65,8 +68,8 @@ var navig: frame.Navig = .{
 
     .scann_sz = .{ 1, 1 },
 
-    .inner_scale = .{ 1, 1 },
-    .inner_offset = .{ 0, 0 },
+    .uv_mult = .{ 1, 1 },
+    .uv_offset = .{ 0, 0 },
 
     .ok_tex_off = 0,
 };
@@ -263,10 +266,10 @@ fn theDeepest(access: EasyAcces) !void {
     defer all_imgs.deinit();
 
     const basic_tex_set: [4]anyerror!imgs.RGBImage = .{
-        imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb),
-        imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_r),
-        imgs.vulkanTexture(&pic, looking_vol.grid, looking_vol.pix),
-        imgs.vulkanTexture(&pic, looking_lyr.grid, looking_lyr.pix),
+        imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb, false),
+        imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_r, false),
+        imgs.vulkanTexture(&pic, looking_vol.grid, looking_vol.pix, true),
+        imgs.vulkanTexture(&pic, looking_lyr.grid, looking_lyr.pix, true),
     };
     {
         const base_idx = 0;
@@ -291,7 +294,7 @@ fn theDeepest(access: EasyAcces) !void {
         };
         defer gpa.free(pixels);
 
-        const rgba = try imgs.vulkanTexture(&pic, ok_g, pixels);
+        const rgba = try imgs.vulkanTexture(&pic, ok_g, pixels, false);
         dset_atlas.updateTexture(0, &rgba, ok_atlas_idx);
         try all_imgs.appen(&rgba);
 
@@ -305,7 +308,7 @@ fn theDeepest(access: EasyAcces) !void {
         const pixels = abc.char_texd_arr[i];
         const gly_sz = abc.char_sz_arr[i];
         if (!gly_sz.empty()) {
-            const rgba = try imgs.vulkanTexture(&pic, gly_sz.gSize(), pixels);
+            const rgba = try imgs.vulkanTexture(&pic, gly_sz.gSize(), pixels, false);
             dset_atlas.updateTexture(0, &rgba, glyph_atlas_idx);
             try all_imgs.appen(&rgba);
         }
@@ -355,7 +358,7 @@ fn theDeepest(access: EasyAcces) !void {
     var pamperek: u.CappedPlayer = .default;
     pamperek.inertia.phx = .default;
 
-    const IVec3 = phx.InertiaPack(m.vec3);
+    const IVec3 = phys.InertiaPack(m.vec3);
     var inertia = IVec3.Inertia.init(.{ pamperek.phi_raw, 0, 0 });
     inertia.phx = .default;
 
@@ -393,12 +396,12 @@ fn theDeepest(access: EasyAcces) !void {
     //state
     var okphi: f32 = 0;
     var glyphphi: f32 = 0;
-    var scanphi: f32 = 0;
     var base_shading: bool = true;
     var ok_slider: u.Slider = .init(0, OK_SWEEP - 1);
 
     sdlh.wheel.up = .{ .a = &ok_slider, .f = u.Slider.inc };
     sdlh.wheel.down = .{ .a = &ok_slider, .f = u.Slider.dec };
+    var smooth_scale: u.Smooth = .{};
 
     // main loop
     var text_stack: [1024]u8 = undefined;
@@ -422,8 +425,7 @@ fn theDeepest(access: EasyAcces) !void {
 
         const img_idx = swapchain.image_index;
 
-        input.glass_input.update();
-        input.plr_input.update();
+        input.updateAxes();
 
         perf_stats.messure(access.io);
         timeline.update(access.io);
@@ -437,15 +439,13 @@ fn theDeepest(access: EasyAcces) !void {
         okphi += td1 * 0.1;
         glyphphi += td1 * 0.13;
 
-        pamperek.control(&input.plr_input, td);
+        pamperek.update(&input.plr_input, td);
+        smooth_scale.update(td, ok_slider.frac());
 
-        scanphi += td1 * 0.67;
+        const scan_scale = smooth_scale.out() * 0.95 + 0.05;
 
-        const tryg_val = m.trygZero1(@sin(scanphi));
-        const scan_scale = ok_slider.frac() * 0.95 + 0.05;
-
-        navig.inner_scale = @splat(scan_scale);
-        navig.inner_offset = @splat((1 - tryg_val) * 0.3);
+        navig.uv_mult = @splat(scan_scale);
+        navig.uv_offset = @splat(0);
 
         const dbg_data = u.DbgMonitor.DbgVals{
             .phi = pamperek.p.phi,
@@ -534,6 +534,10 @@ fn theDeepest(access: EasyAcces) !void {
                 try dyn_text.print(txta, "{s:<16} | a:{d:>6.2} b:{d:>6.2}\n", .{ "pointing to", a, b });
                 if (input.sample_tirg.fired()) {
                     std.debug.print(".{{{d:.2},{d:.2},{d:.2}}}\n", .{ ok_slider.frac(), a, b });
+                }
+                const pan_ax = input.pan_input.value()[0];
+                if (pan_ax.active()) {
+                    try dyn_text.print(txta, "blooop\n", .{});
                 }
             } else {
                 _ = input.sample_tirg.fired();

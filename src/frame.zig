@@ -13,8 +13,8 @@ pub const Navig = struct {
 
     scann_sz: m.vec2,
 
-    inner_scale: m.vec2,
-    inner_offset: m.vec2,
+    uv_mult: m.vec2,
+    uv_offset: m.vec2,
 
     ok_tex_off: u16,
 
@@ -30,10 +30,7 @@ pub const Navig = struct {
 
         const mult = (hs / y);
         const scale: m.vec3 = .{ x * mult, y * mult, 1 };
-        const scale2: m.vec3 = .{ 512, 512, 1 };
-
-        _ = scale;
-        return m.matScale(scale2).mat;
+        return m.matScale(scale).mat;
     }
 };
 
@@ -248,8 +245,8 @@ pub fn recordFrame(
                 .model = scann_mat,
                 .tex_base = 2,
                 .mode = 2,
-                .scale2D = state.nav.inner_scale,
-                .point2D = state.nav.inner_offset,
+                .scale2D = state.nav.uv_mult,
+                .point2D = state.nav.uv_offset,
             };
             hl_cmds.useSprite();
             hl_cmds.push(&scan_push);

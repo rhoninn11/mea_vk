@@ -138,7 +138,7 @@ pub const CappedPlayer = struct {
         return -phi_moved; //why minus
     }
 
-    pub fn control(self: *CappedPlayer, input: *const in.DulaHoldsAxis, td: f32) void {
+    pub fn update(self: *CappedPlayer, input: *const in.DulaHoldsAxis, td: f32) void {
         const phi_spead: f32 = 1;
         const phi_delt = aroundAxis(input.value()[0]) * td * std.math.tau * phi_spead;
         self.phi_raw += phi_delt;
@@ -247,3 +247,18 @@ pub fn MemCalc(Base: type) type {
         }
     };
 }
+pub const Smooth = struct {
+    const Pvec3 = phys.InertiaPack(m.vec3);
+
+    inertia: Pvec3.Inertia = .init(.{ 0, 0, 0 }),
+
+    pub fn update(self: *@This(), td: f32, target: f32) void {
+        self.inertia.in(.{ target, 0, 0 });
+        self.inertia.simulate(td);
+    }
+
+    pub fn out(self: *@This()) f32 {
+        const val, _, _ = self.inertia.out();
+        return val;
+    }
+};

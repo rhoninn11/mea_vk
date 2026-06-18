@@ -11,6 +11,10 @@ pub const Axis = enum(i8) {
     none = 0,
     positive = 1,
     negative = -1,
+
+    pub fn active(a: Axis) bool {
+        return a == .positive or a == .negative;
+    }
 };
 
 const MoveErrs = error{

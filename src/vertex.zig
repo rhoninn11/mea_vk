@@ -456,7 +456,7 @@ pub fn populateModels(gpa: std.mem.Allocator, here: *TriangleArray, as: *VertRep
     // const CUBE = 1;
     // const PIERCERD = 2;
     const TriGen = *const fn (Allocator) error{OutOfMemory}!TriangleArray;
-    const gen1: []const TriGen = &.{ &Utils.Hollow, &Utils.Cube, &Utils.Pierced };
+    const gen1: []const TriGen = &.{ &Utils.Pierced, &Utils.Cube, &Utils.Hollow };
     for (gen1) |generator| {
         shape = try generator(gpa);
         defer shape.deinit(gpa);

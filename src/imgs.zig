@@ -204,11 +204,12 @@ pub const RGBImage = struct {
 
         self.vk_img_view = try devk.createImageView(&image_view_create_info, null);
     }
-    pub fn createSampler(self: *Self, gc: *const GraphicsContext) !void {
+    pub fn createSampler(self: *Self, gc: *const GraphicsContext, near: bool) !void {
         const props = gc.instance.getPhysicalDeviceProperties(gc.pdev);
+        const filter: vk.Filter = if (near) .nearest else .linear;
         const sample_create_info: vk.SamplerCreateInfo = .{
-            .mag_filter = .linear,
-            .min_filter = .linear,
+            .mag_filter = filter,
+            .min_filter = filter,
             .address_mode_u = .repeat,
             .address_mode_v = .repeat,
             .address_mode_w = .repeat,
@@ -240,7 +241,7 @@ pub const RGBImage = struct {
     }
 };
 
-pub fn vulkanTexture(pic: *const gm.PoolInCtx, g64: sht.GridSize, pixdata: []const u8) !gm.RGBImage {
+pub fn vulkanTexture(pic: *const gm.PoolInCtx, g64: sht.GridSize, pixdata: []const u8, near: bool) !gm.RGBImage {
     var test_img = try gm.RGBImage.init(pic.gc, g64);
 
     const buff_size = test_img.dvk_size;
@@ -279,7 +280,7 @@ pub fn vulkanTexture(pic: *const gm.PoolInCtx, g64: sht.GridSize, pixdata: []con
     });
 
     try test_img.createImageView(pic.gc);
-    try test_img.createSampler(pic.gc);
+    try test_img.createSampler(pic.gc, near);
 
     return test_img;
 }

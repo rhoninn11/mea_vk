@@ -12,8 +12,8 @@ pub fn InertiaPack(VecTpy: type) type {
 
         pub const InertiaCfg: type = struct {
             const Self = @This();
+            pub const default = config(2, 1, 2);
 
-            pub const default = new(2, 1, 2);
             f: VecTpy,
             z: VecTpy,
             r: VecTpy,
@@ -22,7 +22,7 @@ pub fn InertiaPack(VecTpy: type) type {
             k2: VecTpy = undefined,
             k3: VecTpy = undefined,
 
-            // transform parameters from config config space to equation space
+            // transform parameters from config space to equation space
             pub inline fn reecalc(self: *Self) void {
                 const intermed = vpi * self.f;
                 self.k1 = self.z / (intermed);
@@ -30,7 +30,7 @@ pub fn InertiaPack(VecTpy: type) type {
                 self.k3 = (self.r * self.k1) / vtwo;
             }
 
-            pub fn new(f: f32, z: f32, r: f32) Self {
+            pub fn config(f: f32, z: f32, r: f32) Self {
                 var inst = Self{
                     .f = asVec(f),
                     .z = asVec(z),
@@ -46,7 +46,7 @@ pub fn InertiaPack(VecTpy: type) type {
             x: VecTpy,
             y: VecTpy,
             yd: VecTpy = asVec(0),
-            phx: ?InertiaCfg = null,
+            phx: InertiaCfg = .default,
             const smaller_timestep_s = 0.01;
 
             pub fn init(spot: VecTpy) Self {
@@ -75,11 +75,11 @@ pub fn InertiaPack(VecTpy: type) type {
             inline fn simVariableStep(self: *Self, td: f32) void {
                 const tdv: VecTpy = asVec(td);
                 const xd: VecTpy = asVec(0);
-                if (self.phx) |phx| {
-                    const ydd = (self.x + phx.k3 * xd - self.y - phx.k1 * self.yd) / phx.k2;
-                    self.y = self.y + tdv * self.yd;
-                    self.yd = self.yd + tdv * ydd;
-                }
+                const phx = &self.phx;
+
+                const ydd = (self.x + phx.k3 * xd - self.y - phx.k1 * self.yd) / phx.k2;
+                self.y = self.y + tdv * self.yd;
+                self.yd = self.yd + tdv * ydd;
             }
 
             pub fn in(self: *Self, new_target: VecTpy) void {

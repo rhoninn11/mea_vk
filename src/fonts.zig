@@ -1,6 +1,8 @@
 const std = @import("std");
 const tt = @import("stbtt");
 
+const hmm = @import("oct");
+
 const files = @import("files.zig");
 const sht = @import("shaders/types.zig");
 const dset = @import("dset.zig");

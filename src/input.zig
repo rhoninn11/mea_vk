@@ -26,36 +26,27 @@ pub const DulaHoldsAxis = union(SysLayer) {
     const SAxis = motion.msdl.HoldsAxis;
     layerG: GAxis,
     layerS: SAxis,
-    // pub fn update(self: *DulaHoldsAxis) void {
-    //     switch (self.*) {
-    //         .layerS => |axis| axis.update(),
-    //         .layerG => |axis| axis.update(),
-    //     }
-    // }
 
-    pub fn initG(hmm: []const []const GAxis.BasedOn) !DulaHoldsAxis {
-        return .{ .layerG = try GAxis.init(hmm) };
-    }
     pub fn initS(hmm: []const []const SAxis.BasedOn) !DulaHoldsAxis {
         return .{ .layerS = try SAxis.init(hmm) };
     }
     pub fn reciveInput(self: *DulaHoldsAxis, duka: DulaKeyAction) void {
         switch (self.*) {
             .layerS => self.layerS.reciveInput(duka.layerS),
-            .layerG => self.layerG.reciveInput(duka.layerG),
+            else => {},
         }
     }
     pub fn update(self: *DulaHoldsAxis) void {
         switch (self.*) {
             .layerS => self.layerS.update(),
-            .layerG => self.layerG.update(),
+            else => {},
         }
     }
 
     pub fn value(self: *const DulaHoldsAxis) []const motion.Axis {
         return switch (self.*) {
             .layerS => &self.layerS.axes,
-            .layerG => &self.layerG.axes,
+            else => &.{.none},
         };
     }
 };
@@ -63,6 +54,7 @@ pub const DulaHoldsAxis = union(SysLayer) {
 const HoldsAxis = motion.mglfw.HoldsAxis;
 pub var glass_input: DulaHoldsAxis = undefined;
 pub var plr_input: DulaHoldsAxis = undefined;
+pub var pan_input: DulaHoldsAxis = undefined;
 
 pub var ok_vis_trigger: Trigger = .{};
 pub var shader_reset_trigger: Trigger = .{};
@@ -71,65 +63,6 @@ pub var slide_l_trig: Trigger = .{};
 pub var slide_r_trig: Trigger = .{};
 pub var dbg_trig: Trigger = .{};
 pub var sample_tirg: Trigger = .{};
-
-pub var ok_vis: KeyAction = .{ .key = glfw.KeyY, .action = glfw.KeyDown };
-pub var shader_reset: KeyAction = .{ .key = glfw.KeyQ, .action = glfw.KeyDown };
-pub var alt_proj: KeyAction = .{ .key = glfw.KeyE, .action = glfw.KeyDown };
-pub var slide_l: KeyAction = .{ .key = glfw.KeyV, .action = glfw.KeyDown };
-pub var slide_r: KeyAction = .{ .key = glfw.KeyB, .action = glfw.KeyDown };
-
-pub fn initG() !void {
-    glass_input = try DulaHoldsAxis.initG(&.{
-        &.{
-            glfw.KeyJ, glfw.KeyK, //
-            glfw.KeyH, glfw.KeyL,
-        },
-    });
-    plr_input = try DulaHoldsAxis.initG(&.{
-        &.{
-            glfw.KeyA, glfw.KeyD, //
-            glfw.KeyS, glfw.KeyW,
-            glfw.KeyF, glfw.KeyR,
-        },
-    });
-}
-
-pub fn key_callback(win: ?*glfw.Window, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
-    _ = scancode;
-    _ = mods;
-    _ = win;
-    const x: KeyAction = .{
-        .action = action,
-        .key = key,
-    };
-    if (x.down(glfw.KeyEscape)) {
-        std.debug.print("exititng\n", .{});
-        exit_trig.activated = true;
-    }
-    if (x.down(glfw.KeySpace)) {
-        time_stop_trig.activated = true;
-    }
-
-    if (x.down(shader_reset.key)) {
-        shader_reset_trigger.activated = true;
-    }
-
-    if (x.down(alt_proj.key)) {
-        alt_projection_trigger.activated = true;
-    }
-    if (x.down(slide_l.key)) {
-        slide_l_trig.activated = true;
-    }
-    if (x.down(slide_r.key)) {
-        slide_r_trig.activated = true;
-    }
-    if (x.down(ok_vis.key)) {
-        ok_vis_trigger.activated = true;
-    }
-
-    glass_input.reciveInput(.{ .layerG = &x });
-    plr_input.reciveInput(.{ .layerG = &x });
-}
 
 const KeyActionSdl = motion.msdl.KeyAction;
 const Tied = struct {
@@ -156,6 +89,9 @@ pub fn initS() !void {
             sdl.keycode.Keycode.f,    sdl.keycode.Keycode.r,
         },
     });
+    pan_input = try DulaHoldsAxis.initS(&.{
+        &.{ sdl.keycode.Keycode.space, sdl.keycode.Keycode.tab },
+    });
 }
 
 const sdl_inputs: []const Tied = &.{
@@ -165,17 +101,22 @@ const sdl_inputs: []const Tied = &.{
     .{ .key = sdl.keycode.Keycode.v, .trig = &slide_l_trig },
     .{ .key = sdl.keycode.Keycode.b, .trig = &slide_r_trig },
     .{ .key = sdl.keycode.Keycode.two, .trig = &dbg_trig },
+    .{ .key = sdl.keycode.Keycode.three, .trig = &time_stop_trig },
 };
 
-const axesCheck = [_]*DulaHoldsAxis{ &glass_input, &plr_input };
+const axesCheck = [_]*DulaHoldsAxis{
+    &glass_input,
+    &plr_input,
+    &pan_input,
+};
+pub fn updateAxes() void {
+    for (axesCheck) |ax| ax.update();
+}
+
 pub fn sdlKeyDown(key: sdl.keycode.Keycode) void {
     const x: KeyActionSdl = .{ .key = key, .action = glfw.Press };
     for (sdl_inputs) |bind| {
         if (x.down(bind.key)) bind.trig.activated = true;
-    }
-
-    if (x.down(sdl.keycode.Keycode.space)) {
-        time_stop_trig.activated = true;
     }
 
     for (axesCheck) |hmm| hmm.reciveInput(.{ .layerS = &x });

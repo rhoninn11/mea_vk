@@ -65,6 +65,7 @@ pub fn testInit(b: *std.Build, o: *const Options, libs_from_c: *const LibsFromC)
 const LibsFromC = struct {
     stb_tt_module: *std.Build.Module,
     raymath_module: *std.Build.Module,
+    api_module: *std.Build.Module,
     compile: *std.Build.Step.Compile,
 };
 pub fn libsFromC(b: *std.Build, o: *const Options) LibsFromC {
@@ -89,6 +90,7 @@ pub fn libsFromC(b: *std.Build, o: *const Options) LibsFromC {
 
     const tt_header = b.path("src/third_party/stb_truetype.h");
     const raymath_header = b.path("src/third_party/raymath.h");
+    const api = b.path("src/third_party/api/array.h");
 
     const main = b.path("src/third_party/main.c");
 
@@ -112,9 +114,15 @@ pub fn libsFromC(b: *std.Build, o: *const Options) LibsFromC {
         .optimize = o.optimize,
         .root_source_file = raymath_header,
     });
+    const api_translate = b.addTranslateC(.{
+        .target = o.target,
+        .optimize = o.optimize,
+        .root_source_file = api,
+    });
     return .{
         .stb_tt_module = tt_translate.createModule(),
         .raymath_module = rm_translate.createModule(),
+        .api_module = api_translate.createModule(),
         .compile = stb_truetype_build,
     };
 }
@@ -122,6 +130,8 @@ pub fn libsFromC(b: *std.Build, o: *const Options) LibsFromC {
 pub fn build(b: *std.Build) !void {
     const o = Options.read(b);
     //zig to spirv is not finished IMO -> TODO: remove this option
+    // TODO: EEE yooo, in 0.17 bedą dostępne samplery, co prawda, użyteczność może tak być oganiczona
+    // ale, ale na przykład do np. prostych compute shaderów wystarczająca:)
     const use_zig_shaders = b.option(
         bool,
         "zig-shader",
@@ -129,7 +139,6 @@ pub fn build(b: *std.Build) !void {
     ) orelse false;
 
     // try cmdsBuild(b, o);
-
     const libs_from_c = libsFromC(b, &o);
 
     const vk_registry_path = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
@@ -146,6 +155,7 @@ pub fn build(b: *std.Build) !void {
             .imports = &.{
                 .{ .name = "stbtt", .module = libs_from_c.stb_tt_module },
                 .{ .name = "rmath", .module = libs_from_c.raymath_module },
+                .{ .name = "oct", .module = libs_from_c.api_module },
                 .{ .name = "vulkan-zig", .module = vulkan_bind },
             },
         }),

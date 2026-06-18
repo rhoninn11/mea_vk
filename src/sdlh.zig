@@ -130,7 +130,6 @@ const Scroll = struct {
     pub fn update(self: *Self, mw: *const sdl3.events.MouseWheel) void {
         const delta = mw.scroll_y;
 
-        std.debug.print("+++ well {d}\n", .{delta});
         if (delta > 0) {
             if (self.up) |up| up.f(up.a);
         } else {
