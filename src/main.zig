@@ -433,6 +433,7 @@ fn theDeepest(access: EasyAcces) !void {
 
         if (input.exit_trig.fired()) window.closeWindow();
         if (input.time_stop_trig.fired()) timeline1.passageToggle();
+        if (input.shader_reset_trigger.fired()) base_shading = true;
 
         const td = timeline.deltaS();
         const td1 = timeline1.deltaS();
@@ -441,11 +442,21 @@ fn theDeepest(access: EasyAcces) !void {
 
         pamperek.update(&input.plr_input, td);
         smooth_scale.update(td, ok_slider.frac());
+        if (glass.update(&input.glass_input)) base_shading = false;
 
         const scan_scale = smooth_scale.out() * 0.95 + 0.05;
+        const xoff, const yoff = glass.frac();
+        const scann_xoff = switch (xoff + scan_scale > 1) {
+            true => 1.0 - scan_scale,
+            false => xoff,
+        };
+        const scann_yoff = switch (yoff + scan_scale > 1) {
+            true => 1.0 - scan_scale,
+            false => yoff,
+        };
 
         navig.uv_mult = @splat(scan_scale);
-        navig.uv_offset = @splat(0);
+        navig.uv_offset = .{ scann_xoff, scann_yoff };
 
         const dbg_data = u.DbgMonitor.DbgVals{
             .phi = pamperek.p.phi,
@@ -487,9 +498,6 @@ fn theDeepest(access: EasyAcces) !void {
             // glyphs 4224-4247
             // text 4608-?
             // layers 6144-?
-
-            if (glass.update(&input.glass_input)) base_shading = false;
-            if (input.shader_reset_trigger.fired()) base_shading = true;
 
             if (base_shading) {
                 try glass.updateStorage(instances, false);
@@ -538,6 +546,8 @@ fn theDeepest(access: EasyAcces) !void {
                 const pan_ax = input.pan_input.value()[0];
                 if (pan_ax.active()) {
                     try dyn_text.print(txta, "blooop\n", .{});
+                    const gx, const gy = glass.frac();
+                    try dyn_text.print(txta, "{s:<14} | gx:{d:>6.2} gy:{d:>6.2}\n", .{ "glass cord", gx, gy });
                 }
             } else {
                 _ = input.sample_tirg.fired();

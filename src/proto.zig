@@ -243,6 +243,12 @@ pub const LookingGlass = struct {
         const is_moveing = x_axis != motion.Axis.none or y_axis != motion.Axis.none;
         return is_moveing;
     }
+    pub fn frac(self: *const LookingGlass) m.vec2 {
+        return .{
+            m.floaty(self.pos[m.X]) / m.floaty(self.img_sz.w),
+            m.floaty(self.pos[m.Y]) / m.floaty(self.img_sz.h),
+        };
+    }
 
     const LookingSpot = struct { x: u16, y: u16 };
 
