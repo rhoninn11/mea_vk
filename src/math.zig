@@ -50,9 +50,15 @@ const hmm_c = hmm_a + hmm_b;
 
 pub const U = 0;
 pub const V = 1;
+
 pub const X = 0;
 pub const Y = 1;
 pub const Z = 2;
+
+pub const R = 0;
+pub const G = 1;
+pub const B = 2;
+pub const A = 3;
 
 pub fn sum(a: [2]f32) f32 {
     return a[0] + a[1];
@@ -176,22 +182,22 @@ test "|mat_mul_vec" {
     try std.testing.expect(len(v - trim3d(b)) < 0.001);
 }
 
-pub fn matXmat3(A: mat3, B: mat3) mat3u {
+pub fn matXmat3(m_a: mat3, m_b: mat3) mat3u {
     return .{
         .mat = .{
-            matXvec3(A, B[0]), //column-major
-            matXvec3(A, B[1]),
-            matXvec3(A, B[2]),
+            matXvec3(m_a, m_b[0]), //column-major
+            matXvec3(m_a, m_b[1]),
+            matXvec3(m_a, m_b[2]),
         },
     };
 }
-pub fn matXmat(A: mat4, B: mat4) mat4u {
+pub fn matXmat(m_a: mat4, m_b: mat4) mat4u {
     return .{
         .mat = .{
-            matXvec(A, B[0]), //column-major
-            matXvec(A, B[1]),
-            matXvec(A, B[2]),
-            matXvec(A, B[3]),
+            matXvec(m_a, m_b[0]), //column-major
+            matXvec(m_a, m_b[1]),
+            matXvec(m_a, m_b[2]),
+            matXvec(m_a, m_b[3]),
         },
     };
 }
@@ -201,9 +207,9 @@ test "|mat_mul_mat" {
     const b: vec3 = .{ -2, 12, -5 };
     const c = a + b;
 
-    const A = matTrans(a);
-    const B = matTrans(b);
-    const C = matXmat(A.mat, B.mat);
+    const m_a = matTrans(a);
+    const m_b = matTrans(b);
+    const C = matXmat(m_a.mat, m_b.mat);
 
     const x = vec4{ 0, 0, 0, 1 };
     const y = matXvec(C.mat, x);
@@ -399,7 +405,7 @@ test "is_matrix_looking" {
     const observ = vec3{ -1, 1, -1 };
 
     const M = 0;
-    const R = 1;
+    const Ri = 1;
     const _U = 2;
     const point_m = vec3{ 1, 0, 1 };
     const point_r = vec3{ 1.1, 0, 1 };
@@ -414,12 +420,12 @@ test "is_matrix_looking" {
 
     std.debug.print("---\n", .{});
     std.debug.print("middle one {}\n", .{outs[M]});
-    std.debug.print("right one  {}\n", .{outs[R]});
+    std.debug.print("right one  {}\n", .{outs[Ri]});
     std.debug.print("left one   {}\n", .{outs[_U]});
     try std.testing.expect(abs(outs[M][X]) < 0.001);
     try std.testing.expect(abs(outs[M][Y]) < 0.001);
 
-    try std.testing.expect(outs[M][X] < outs[R][X]); //should be on right
+    try std.testing.expect(outs[M][X] < outs[Ri][X]); //should be on right
     try std.testing.expect(outs[M][Y] < outs[U][Y]); //should be higher
 }
 

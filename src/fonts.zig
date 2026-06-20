@@ -104,18 +104,17 @@ pub const FontRendering = struct {
 
         for (0..g.h) |yy| {
             for (0..g.w) |x| {
-                const indice = yy * g.w + x;
+                const i = yy * g.w + x;
+                const iq = i * 4;
 
-                const val: u8 = bitmap[indice];
+                const val: u8 = bitmap[i];
 
                 if (val == 0) {
-                    texture[indice * 4 + 3] = 0;
+                    texture[iq + m.A] = 0;
                     continue;
                 }
-                texture[indice * 4] = val;
-                texture[indice * 4 + 1] = val;
-                texture[indice * 4 + 2] = val;
-                texture[indice * 4 + 3] = 255;
+                const pixval: []const u8 = &.{ val, val, val, 255 };
+                @memmove(texture[iq .. iq + 4], pixval);
             }
         }
         return texture;
@@ -192,13 +191,16 @@ pub fn lettersSpliced(
 
 pub const Alphabet = struct {
     const show_first_blit: bool = false;
+    const ascii_chars: []const u8 = //
+        "abcdefghijklmnoprstuvwxyz" ++ //
+        "ABCDEFGHIJKLMNOPRSTUVWXYZ" ++ //
+        " _.,;:|0123456789()<>{}[]+-?\"!";
+
     const CharLocMap = std.AutoHashMap(u8, u16);
     num: u16,
     char_map: CharLocMap,
     char_sz_arr: []GlyphSz,
     char_texd_arr: [][]u8,
-
-    first: bool = true,
 
     pub fn deinit(self: *Alphabet, gpa: std.mem.Allocator) void {
         for (0..self.num + 1) |i| {
@@ -210,10 +212,6 @@ pub const Alphabet = struct {
     }
 
     pub fn init(gpa: std.mem.Allocator, src: *const FontRendering) !Alphabet {
-        const ascii_chars: []const u8 = //
-            "abcdefghijklmnoprstuvwxyz" ++ //
-            "ABCDEFGHIJKLMNOPRSTUVWXYZ" ++ //
-            " _.,;:|0123456789()<>{}[]+-?!";
         const ascii_len = ascii_chars.len;
 
         var char_map: CharLocMap = .init(gpa);
@@ -237,13 +235,6 @@ pub const Alphabet = struct {
             tex_data_arr[next_pos] = try src.sampleCodepoint(gpa, char, &gly_sz);
             how_big[next_pos] = gly_sz;
             pos = next_pos;
-            // std.debug.print("+++ {c} size {d}x{d} + {d}x{d}\n", .{
-            //     char,
-            //     gly_sz.w,
-            //     gly_sz.h,
-            //     gly_sz.x_off,
-            //     gly_sz.y_off,
-            // });
         }
 
         return .{
@@ -252,6 +243,15 @@ pub const Alphabet = struct {
             .char_texd_arr = tex_data_arr,
             .num = pos,
         };
+    }
+
+    pub fn charInfo(self: *const Alphabet, gpa: std.mem.Allocator, write_to: *std.ArrayList(u8), idx: u16) !void {
+        const valid_idx = if (idx >= self.num) self.num - 1 else idx;
+        const char = ascii_chars[valid_idx];
+        const sz = self.char_sz_arr[valid_idx];
+
+        try write_to.print(gpa, "char: \"{c}\" | x{d} : y{d} | x{d} : y{d} |\n", //
+            .{ char, sz.w, sz.h, sz.x_off, sz.y_off });
     }
 
     pub fn BlitText(
@@ -277,10 +277,11 @@ pub const Alphabet = struct {
     }
 
     fn blitInstances(self: *Alphabet, text: []const u8, dst: []sht.PerInstance) !u16 {
-        defer self.first = false;
         var inst_num: u16 = 0;
         var cursor: u16 = 0;
         var line: u8 = 0;
+        const char_w: f32 = 24;
+        const line_h: f32 = 42;
         for (text) |letter| {
             if (letter == '\n') {
                 line += 1;
@@ -295,17 +296,17 @@ pub const Alphabet = struct {
                 continue;
             }
 
-            const x_off: f32 = m.floaty(cursor) * 0.3;
-            const yf32: f32 = m.floaty(line) * 0.6;
-            const charw = gly_sz.w;
-            const xfrac = m.floaty(charw) / 128;
-            if (Alphabet.show_first_blit) if (self.first)
-                std.debug.print("+++ char({c}) at index({d}) has w({d}), xfrac({d}) xoff({d})\n", //
-                    .{ letter, tid, charw, xfrac, x_off });
+            const l_xpos: f32 = m.floaty(cursor) * char_w;
+            const l_ypos: f32 = m.floaty(line) * line_h;
+            const w = m.floaty(gly_sz.w) / 128;
+            const h = m.floaty(gly_sz.h) / 128;
+            const x_off = m.floaty(gly_sz.x_off) / 128;
+            const y_off = m.floaty(gly_sz.y_off) / 128;
 
             const val = sht.PerInstance{
-                .offset_2d = .{ x_off, -yf32 },
-                .other_offsets = .{ xfrac, @bitCast(@as(u32, tid)) },
+                .offset_2d = .{ l_xpos, -l_ypos },
+                .offset_4d = .{ w, h, x_off, -y_off },
+                .other_offsets = .{ @bitCast(@as(u32, tid)), 0 },
             };
             dst[inst_num] = val;
             inst_num += 1;

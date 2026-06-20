@@ -220,7 +220,6 @@ pub fn recordFrame(
             }
 
             //gui - maybe would be nice to clear depth first
-            const gui_scale_match = m.matScale(.{ 128, 128, 1 });
 
             hl_cmds.dynUboDsets(all_sets, 2);
             // >>> cursor <<<
@@ -261,17 +260,14 @@ pub fn recordFrame(
 
             // >>> font_rending <<<
             const letter_push = gm.PushConstant.PCBlob{
-                .model = m.matXmat(
-                    m.matTrans(.{ 25, -25, 0 }).mat,
-                    gui_scale_match.mat,
-                ).mat,
+                .model = m.matTrans(.{ 0, -32, 0 }).mat,
                 .inst_base = state.letters_inst_offset,
                 .tex_base = 160,
                 .mode = 1,
             };
             hl_cmds.useSprite();
             hl_cmds.push(&letter_push);
-            hl_cmds.drawInsances(BILBORD_IDX, state.letters_inst_num);
+            hl_cmds.drawInsances(GUI_BILBO_IDX, state.letters_inst_num);
             // <<< font_rending >>>
         }
         try gc.dev.endCommandBuffer(cbufr);

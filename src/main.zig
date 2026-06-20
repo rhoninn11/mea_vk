@@ -534,21 +534,22 @@ fn theDeepest(access: EasyAcces) !void {
             );
 
             var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 960);
-            try dyn_text.print(txta, "Some sample text to blit on a screan\n", .{});
+            try dyn_text.print(txta, "Some sample text to blit on a screan!\n", .{});
             if (on_area[m.Z] == 1.0) {
-                const x, const y, _ = on_area;
-                const a, const b = oklab.OkUnderstanding.abVal(.{ x, y });
-                try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
-                try dyn_text.print(txta, "{s:<16} | a:{d:>6.2} b:{d:>6.2}\n", .{ "pointing to", a, b });
-                if (input.sample_tirg.fired()) {
-                    std.debug.print(".{{{d:.2},{d:.2},{d:.2}}}\n", .{ ok_slider.frac(), a, b });
-                }
-                const pan_ax = input.pan_input.value()[0];
-                if (pan_ax.active()) {
-                    try dyn_text.print(txta, "blooop\n", .{});
-                    const gx, const gy = glass.frac();
-                    try dyn_text.print(txta, "{s:<14} | gx:{d:>6.2} gy:{d:>6.2}\n", .{ "glass cord", gx, gy });
-                }
+                // const x, const y, _ = on_area;
+                // const a, const b = oklab.OkUnderstanding.abVal(.{ x, y });
+                if (mbalphabet) |*al| try al.charInfo(txta, &dyn_text, ok_slider.curr);
+                // try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
+                // try dyn_text.print(txta, "{s:<16} | a:{d:>6.2} b:{d:>6.2}\n", .{ "pointing to", a, b });
+                // if (input.sample_tirg.fired()) {
+                //     std.debug.print(".{{{d:.2},{d:.2},{d:.2}}}\n", .{ ok_slider.frac(), a, b });
+                // }
+                // const pan_ax = input.pan_input.value()[0];
+                // if (pan_ax.active()) {
+                //     try dyn_text.print(txta, "blooop\n", .{});
+                //     const gx, const gy = glass.frac();
+                //     try dyn_text.print(txta, "{s:<14} | gx:{d:>6.2} gy:{d:>6.2}\n", .{ "glass cord", gx, gy });
+                // }
             } else {
                 _ = input.sample_tirg.fired();
             }
