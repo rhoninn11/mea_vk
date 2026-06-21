@@ -265,6 +265,7 @@ fn theDeepest(access: EasyAcces) !void {
     var all_imgs: imgs.ManyImages = try .init(access.gpa);
     defer all_imgs.deinit();
 
+    const basic_idx = 0;
     const basic_tex_set: [4]anyerror!imgs.RGBImage = .{
         imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb, false),
         imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_r, false),
@@ -272,12 +273,17 @@ fn theDeepest(access: EasyAcces) !void {
         imgs.vulkanTexture(&pic, looking_lyr.grid, looking_lyr.pix, true),
     };
     {
-        const base_idx = 0;
         inline for (0.., basic_tex_set) |i, risky_rgba| {
             const rgba = try risky_rgba;
             try all_imgs.appen(&rgba);
-            dset_atlas.updateTexture(0, &rgba, base_idx + i);
+            dset_atlas.updateTexture(0, &rgba, basic_idx + i);
         }
+    }
+    if (mbalphabet) |*abc| {
+        try u.ppmDebug(access.io, abc.char_atlas, 1024, 1024);
+        const rgba = try imgs.vulkanTexture(&pic, shu.xyGrid(1024, 1024), abc.char_atlas, false);
+        dset_atlas.updateTexture(0, &rgba, basic_idx + basic_tex_set.len);
+        try all_imgs.appen(&rgba);
     }
 
     var L: f32 = 0.0;
@@ -303,17 +309,6 @@ fn theDeepest(access: EasyAcces) !void {
     }
 
     const glyph_count: u8 = 24;
-    var glyph_atlas_idx: u8 = 160;
-    if (mbalphabet) |*abc| for (0..abc.num) |i| {
-        const pixels = abc.char_texd_arr[i];
-        const gly_sz = abc.char_sz_arr[i];
-        if (!gly_sz.empty()) {
-            const rgba = try imgs.vulkanTexture(&pic, gly_sz.gSize(), pixels, false);
-            dset_atlas.updateTexture(0, &rgba, glyph_atlas_idx);
-            try all_imgs.appen(&rgba);
-        }
-        glyph_atlas_idx += 1;
-    };
 
     // For frame recording
     const inflight_slots = 8;

@@ -473,7 +473,7 @@ pub fn rotMatX(part: f32) mat3 {
 }
 
 // conversions
-pub inline fn uinty(val: usize) u32 {
+pub inline fn uinty(val: anytype) u32 {
     return @as(u32, @intCast(val));
 }
 

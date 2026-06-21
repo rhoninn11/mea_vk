@@ -262,3 +262,23 @@ pub const Smooth = struct {
         return val;
     }
 };
+
+pub fn ppmDebug(io: std.Io, data: []u8, w: u16, h: u16) !void {
+    const f = try std.Io.Dir.cwd().createFile(io, "fs/debug.ppm", .{});
+    defer f.close(io);
+
+    var tmp_bfr: [4096]u8 = undefined;
+
+    var wr = f.writer(io, tmp_bfr[0..]);
+    const iowriter = &wr.interface;
+
+    try iowriter.print("P6\n{} {}\n255\n", .{ w, h });
+
+    const pix_num = data.len / 4;
+    for (0..pix_num) |i| {
+        const pix = data[i * 4 .. i * 4 + 3];
+        try iowriter.writeAll(pix);
+    }
+
+    try iowriter.flush();
+}

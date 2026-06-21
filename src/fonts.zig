@@ -201,14 +201,79 @@ pub const Alphabet = struct {
     char_map: CharLocMap,
     char_sz_arr: []GlyphSz,
     char_texd_arr: [][]u8,
+    char_atlas: []u8,
+    char_uvd_arr: []m.vec4,
 
     pub fn deinit(self: *Alphabet, gpa: std.mem.Allocator) void {
-        for (0..self.num + 1) |i| {
+        for (0..self.num) |i| {
             gpa.free(self.char_texd_arr[i]);
         }
         gpa.free(self.char_texd_arr);
         gpa.free(self.char_sz_arr);
+        gpa.free(self.char_atlas);
+        gpa.free(self.char_uvd_arr);
         self.char_map.deinit();
+    }
+
+    const atlas_w: u32 = 1024;
+    const atlas_h: u32 = 1024;
+    fn naiveAtlas(gpa: std.mem.Allocator, map: CharLocMap, sz_arr: []GlyphSz, texd_arr: [][]u8, pix_w: u8) !Alphabet {
+        var max_w: u8 = 0;
+        var max_h: u8 = 0;
+        for (sz_arr) |*sz| {
+            if (sz.w > max_w) max_w = @intCast(sz.w);
+            if (sz.h > max_h) max_h = @intCast(sz.h);
+        }
+
+        const nx: u32 = atlas_w / max_w;
+        const ny: u32 = atlas_h / max_h;
+        const nmax = nx * ny;
+        std.debug.print("+++ nx:{d} ny:{d} nmax:{d}\n", .{ nx, ny, nmax });
+        std.debug.assert(nmax > sz_arr.len);
+
+        var atlas_uv_data = try gpa.alloc(m.vec4, sz_arr.len);
+        errdefer gpa.free(atlas_uv_data);
+
+        var atlas = try gpa.alloc(u8, atlas_w * pix_w * atlas_h);
+        for (0..sz_arr.len) |i| {
+            const sz = sz_arr[i];
+            const data = texd_arr[i];
+
+            const x_start = (i % nx) * max_w;
+            const y_start = (i / nx) * max_h;
+
+            atlas_uv_data[i] = m.vec4{
+                m.floaty(x_start) / m.floaty(atlas_w),
+                m.floaty(y_start) / m.floaty(atlas_h),
+                m.floaty(sz.w) / m.floaty(atlas_w),
+                m.floaty(sz.h) / m.floaty(atlas_h),
+            };
+
+            const x_off = x_start * pix_w;
+            const y_off = y_start * atlas_w * pix_w;
+
+            const mem_off = y_off + x_off;
+
+            const w = m.uinty(sz.w);
+            const h = m.uinty(sz.h);
+            for (0..h) |jj| {
+                const src_off = jj * w * pix_w;
+                const dst_off = mem_off + jj * atlas_w * pix_w;
+
+                const tex_dst = atlas[dst_off .. dst_off + w * pix_w];
+                const tex_src = data[src_off .. src_off + w * pix_w];
+                @memcpy(tex_dst, tex_src);
+            }
+        }
+
+        return .{
+            .char_map = map,
+            .char_sz_arr = sz_arr,
+            .char_texd_arr = texd_arr,
+            .char_atlas = atlas,
+            .char_uvd_arr = atlas_uv_data,
+            .num = @intCast(sz_arr.len),
+        };
     }
 
     pub fn init(gpa: std.mem.Allocator, src: *const FontRendering) !Alphabet {
@@ -221,28 +286,23 @@ pub const Alphabet = struct {
         var how_big = try gpa.alloc(GlyphSz, ascii_len);
         errdefer gpa.free(how_big);
 
-        var pos: u16 = 0;
+        var count: u16 = 0;
         var tex_data_arr = try gpa.alloc([]u8, ascii_len);
         errdefer {
-            for (0..pos) |i| gpa.free(tex_data_arr[i]);
+            for (0..count) |i| gpa.free(tex_data_arr[i]);
             gpa.free(tex_data_arr);
         }
 
         var gly_sz: GlyphSz = undefined;
         for (0.., ascii_chars) |i, char| {
-            const next_pos: u8 = @as(u8, @intCast(i));
-            try char_map.put(char, next_pos);
-            tex_data_arr[next_pos] = try src.sampleCodepoint(gpa, char, &gly_sz);
-            how_big[next_pos] = gly_sz;
-            pos = next_pos;
+            const idx: u8 = @as(u8, @intCast(i));
+            try char_map.put(char, idx);
+            tex_data_arr[idx] = try src.sampleCodepoint(gpa, char, &gly_sz);
+            how_big[idx] = gly_sz;
+            count += 1;
         }
 
-        return .{
-            .char_map = char_map,
-            .char_sz_arr = how_big,
-            .char_texd_arr = tex_data_arr,
-            .num = pos,
-        };
+        return try Alphabet.naiveAtlas(gpa, char_map, how_big, tex_data_arr, 4);
     }
 
     pub fn charInfo(self: *const Alphabet, gpa: std.mem.Allocator, write_to: *std.ArrayList(u8), idx: u16) !void {
@@ -304,8 +364,9 @@ pub const Alphabet = struct {
             const y_off = m.floaty(gly_sz.y_off) / 128;
 
             const val = sht.PerInstance{
-                .offset_2d = .{ l_xpos, -l_ypos },
+                .offset_2d = .{ l_xpos, -l_ypos }, //screan placement
                 .offset_4d = .{ w, h, x_off, -y_off },
+                .new_usage = self.char_uvd_arr[tid],
                 .other_offsets = .{ @bitCast(@as(u32, tid)), 0 },
             };
             dst[inst_num] = val;
