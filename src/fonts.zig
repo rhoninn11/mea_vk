@@ -32,20 +32,20 @@ pub const GlyphSz = struct {
 pub fn getGlyphSDF(
     font_info: [*c]const tt.stbtt_fontinfo,
     glyph: c_int,
-    padding: c_int,
+    pixels: f32,
+    padding: u8,
     on_edge_val: u8,
-    dict_scale: f32,
     s: *GlyphSz,
 ) [*c]u8 {
-    //TODO: more understancing of scale for fonts are needed
-    const scale: f32 = tt.stbtt_ScaleForPixelHeight(font_info, 22);
+    const scale: f32 = tt.stbtt_ScaleForPixelHeight(font_info, pixels);
+    //TODO: i guess it has some internal font scale, or differnet fonts have it different
     return tt.stbtt_GetGlyphSDF(
         font_info,
         scale,
         glyph,
         padding,
         on_edge_val,
-        dict_scale,
+        4, //need more understanding here, but 4 per pixel seams ok, gives around 32 depth???
         &s.w,
         &s.h,
         &s.x_off,
@@ -98,6 +98,12 @@ pub const FontRendering = struct {
         const bitmap = getCodepointBitmap(&self.info, @intCast(codepnt), 128, glp_sz);
         defer tt.stbtt_FreeBitmap(bitmap, null);
 
+        var sdfsz: GlyphSz = undefined;
+        const sdf = getGlyphSDF(&self.info, @intCast(codepnt), 128, 8, 128, &sdfsz);
+        defer tt.stbtt_FreeSDF(sdf, null);
+
+        std.debug.print("**** sdf_sz: w{d}:h{d} xo:{d}:yo{d}\n", .{ sdfsz.w, sdfsz.h, sdfsz.x_off, sdfsz.y_off });
+
         // std.debug.print("+++ grid size {d}x{d}\n", .{ g.w, g.h });
         const g = glp_sz.gSize();
         const texture = try gpa.alloc(u8, g.total * 4);
@@ -120,74 +126,6 @@ pub const FontRendering = struct {
         return texture;
     }
 };
-
-pub fn bitmapTest(io: std.Io, font_info: [*c]tt.stbtt_fontinfo) !void {
-    var size: GlyphSz = .{};
-    const bitmap1 = getCodepointBitmap(&font_info, @intCast('a'), &size);
-    defer tt.stbtt_FreeBitmap(bitmap1, null);
-
-    const asciis: []const u8 = " .:ioVM@";
-    var buffer: [1024]u8 = undefined;
-
-    const iowriter = files.stdoutWriter(io, buffer[0..]);
-    std.debug.print("+++ FD | codepoint bitmap generated {d}x{d}\n", .{ size.w, size.h });
-
-    const w: usize = @intCast(size.w);
-    const h: usize = @intCast(size.h);
-    for (0..h) |yy| {
-        try iowriter.print("+++ FD | ", .{});
-        for (0..w) |x| {
-            const val = bitmap1[yy * w + x] >> 5;
-            const symbol = asciis[val .. val + 1];
-            try iowriter.print("{s}{s}", .{ symbol, symbol });
-        }
-        try iowriter.print("\n", .{});
-    }
-    try iowriter.flush();
-}
-
-pub fn lettersSpliced(
-    instances: [*]sht.PerInstance,
-    instance_offset: u16,
-    slice_num: u8,
-    phi: f32,
-) !void {
-    const lim_num = 8096;
-    std.debug.assert(slice_num <= lim_num);
-
-    const stack_size = lim_num * @sizeOf(sht.PerInstance);
-    var stack_mem: [stack_size]u8 = undefined;
-
-    var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
-    const local_a = provider.allocator();
-
-    var scratchpad: []sht.PerInstance = try local_a.alloc(sht.PerInstance, slice_num);
-    const r = 2.5;
-    const denominator = m.floaty(scratchpad.len - 1);
-
-    for (0..scratchpad.len) |i| {
-        var edit: sht.PerInstance = scratchpad[i];
-        const i_f: f32 = m.floaty(i);
-        const progress = i_f / denominator;
-
-        const amp = 0.2;
-        const phi0 = (progress + phi) * 5;
-        const r0 = r + @sin(phi0 * 4) * amp;
-        const p0: m.vec3 = .{ r0 * @cos(phi0), 0, r0 * @sin(phi0) };
-        edit.offset_4d = m.stack4(p0, i_f);
-
-        const phi1 = phi0 + 0.05;
-        const p1: m.vec3 = .{ r0 * @cos(phi1), 0, r0 * @sin(phi1) };
-
-        const front: m.vec3 = m.norm(p1 - p0);
-        const up: m.vec3 = .{ 0, 1, 0 };
-        edit.new_usage = m.stack4(front, 0);
-        edit.depth_ctrl = m.stack4(up, 0);
-
-        scratchpad[i] = edit;
-    }
-    @memcpy(instances + instance_offset, scratchpad);
-}
 
 pub const Alphabet = struct {
     const show_first_blit: bool = false;

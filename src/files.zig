@@ -116,6 +116,8 @@ pub const ZippedFiles = struct {
     file_paths: [][]u8,
     chars: []u8,
 
+    names: []const []const u8 = &.{&.{}},
+
     pub fn init(comptime N: usize, gpa: std.mem.Allocator, set_num: usize, glyph_num: usize) !ZippedFiles {
         return .{
             .file_sets = try gpa.alloc([][]u8, set_num),
@@ -220,5 +222,7 @@ pub fn zipSearch(
         zipout.file_sets[set_offset] = zipout.file_paths[file_offset - N .. file_offset];
         set_offset += 1;
     }
+
+    // TODO: fill zipout names with names_of_sort
     return zipout;
 }

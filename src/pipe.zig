@@ -10,6 +10,9 @@ const frag_triangle align(@alignOf(u32)) = @embedFile("triangle_frag").*;
 
 const vert_sprite align(@alignOf(u32)) = @embedFile("sprite_vert").*;
 const frag_sprite align(@alignOf(u32)) = @embedFile("sprite_frag").*;
+
+const vert_sdf align(@alignOf(u32)) = @embedFile("sdf_vert").*;
+const frag_sdf align(@alignOf(u32)) = @embedFile("sdf_frag").*;
 const Vertex = v.Vertex;
 
 //
@@ -22,7 +25,8 @@ const PipeType = enum(u8) {
     Triangle,
     Sprite,
     SpriteWDepth,
-}; //
+    FontSdf,
+}; // used pipes
 
 const PSSCI = vk.PipelineShaderStageCreateInfo;
 fn shaderStages(modules: [stlen]vk.ShaderModule) [stlen]PSSCI {
@@ -69,11 +73,13 @@ pub const Moduler = struct {
             .Triangle => .{ vert_triangle[0..], frag_triangle[0..] },
             .Sprite => .{ vert_sprite[0..], frag_sprite[0..] },
             .SpriteWDepth => .{ vert_sprite[0..], frag_sprite[0..] },
+            .FontSdf => .{ vert_sdf[0..], frag_sdf[0..] },
         };
         const depth_test = switch (pt) {
             .Triangle => true,
             .Sprite => false,
             .SpriteWDepth => true,
+            .FontSdf => false,
         };
 
         const mods = try self.initModuls(src);

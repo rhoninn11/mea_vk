@@ -190,9 +190,8 @@ pub fn build(b: *std.Build) !void {
     triangle_exe.root_module.linkLibrary(sdl_artifact);
     b.installArtifact(sdl_artifact);
 
-    if (use_zig_shaders) {
-        zig2spirv(b, triangle_exe);
-    } else {
+    if (use_zig_shaders) zig2spirv(b, triangle_exe) //back here while we using 0.17:D
+    else {
         var scope_stack: [256]u8 = undefined;
         const prefix: []const u8 = "src/shaders";
         const sdrs_map = try find_glsl_files(b, prefix);
@@ -291,16 +290,18 @@ fn find_glsl_files(b: *std.Build, prefix: []const u8) !bt.DersMap {
 
     const glsl_shaders = try files.zipSearch(io, arena, prefix, &.{ ".vert", ".frag" });
     for (glsl_shaders.file_paths) |path| {
-        std.debug.print("+++ found: {s}\n", .{path});
+        std.debug.print("+++ ||| {s}\n", .{path});
     }
 
     return bt.DersMap{
-        .names = &.{ "triangle", "sprite" },
+        .names = &.{ "triangle", "sprite", "sdf" },
         .files = &.{
             "triangle.vert",
             "triangle.frag",
             "sprite.vert",
             "sprite.frag",
+            "sdf.vert",
+            "sdf.frag",
         },
     };
 }
