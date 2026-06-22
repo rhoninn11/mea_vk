@@ -266,7 +266,7 @@ fn theDeepest(access: EasyAcces) !void {
     defer all_imgs.deinit();
 
     const basic_idx = 0;
-    const basic_tex_set: [4]anyerror!imgs.RGBImage = .{
+    const basic_tex_set: [4]anyerror!imgs.VkImage = .{
         imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb, false),
         imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_r, false),
         imgs.vulkanTexture(&pic, looking_vol.grid, looking_vol.pix, true),
@@ -275,15 +275,23 @@ fn theDeepest(access: EasyAcces) !void {
     {
         inline for (0.., basic_tex_set) |i, risky_rgba| {
             const rgba = try risky_rgba;
-            try all_imgs.appen(&rgba);
+            try all_imgs.append(&rgba);
             dset_atlas.updateTexture(0, &rgba, basic_idx + i);
         }
     }
     if (mbalphabet) |*abc| {
         try u.ppmDebug(access.io, abc.char_atlas, 1024, 1024);
         const rgba = try imgs.vulkanTexture(&pic, shu.xyGrid(1024, 1024), abc.char_atlas, false);
-        dset_atlas.updateTexture(0, &rgba, basic_idx + basic_tex_set.len);
-        try all_imgs.appen(&rgba);
+        dset_atlas.updateTexture(0, &rgba, 4);
+        try all_imgs.append(&rgba);
+    }
+
+    var mono = try imgs.u16Image.init(pic.gc, glass.img_sz);
+    {
+        errdefer mono.deinit();
+        try imgs.texPrep(&pic, glass.img_sz, glass.scan_raw.pixels, true, &mono);
+        dset_atlas.updateTexture(0, &mono, 5);
+        try all_imgs.append(&mono);
     }
 
     var L: f32 = 0.0;
@@ -302,7 +310,7 @@ fn theDeepest(access: EasyAcces) !void {
 
         const rgba = try imgs.vulkanTexture(&pic, ok_g, pixels, false);
         dset_atlas.updateTexture(0, &rgba, ok_atlas_idx);
-        try all_imgs.appen(&rgba);
+        try all_imgs.append(&rgba);
 
         ok_atlas_idx += 1;
         L += L_delt;

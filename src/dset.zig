@@ -203,7 +203,7 @@ pub const DescriptorPrep = struct {
         return self;
     }
 
-    pub fn updateTexture(self: *Self, idx: usize, img: *const gm.RGBImage, array_idx: ?u32) void {
+    pub fn updateTexture(self: *Self, idx: usize, img: *const gm.VkImage, array_idx: ?u32) void {
         const img_info = vk.DescriptorImageInfo{
             .image_layout = .shader_read_only_optimal,
             .image_view = img.vk_img_view.?,

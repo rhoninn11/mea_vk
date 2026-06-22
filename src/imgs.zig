@@ -133,6 +133,19 @@ pub const DepthImage = struct {
 };
 
 pub const RGBImage = struct {
+    pub fn init(gc: *const GraphicsContext, g: sht.GridSize) !VkImage {
+        const format: vk.Format = .a8b8g8r8_srgb_pack32;
+        return VkImage.init(gc, g, format);
+    }
+};
+
+pub const u16Image = struct {
+    pub fn init(gc: *const GraphicsContext, g: sht.GridSize) !VkImage {
+        return VkImage.init(gc, g, .r16_unorm);
+    }
+};
+
+pub const VkImage = struct {
     const show_size_at_init = false;
     const Self = @This();
 
@@ -148,9 +161,8 @@ pub const RGBImage = struct {
         return g.total * @sizeOf(u32);
     }
 
-    pub fn init(gc: *const GraphicsContext, g: sht.GridSize) !Self {
+    pub fn init(gc: *const GraphicsContext, g: sht.GridSize, format: vk.Format) !Self {
         const devk = gc.dev;
-        const format: vk.Format = .a8b8g8r8_srgb_pack32;
 
         const img_create_info: vk.ImageCreateInfo = .{
             .image_type = .@"2d",
@@ -241,11 +253,16 @@ pub const RGBImage = struct {
     }
 };
 
-pub fn vulkanTexture(pic: *const gm.PoolInCtx, g64: sht.GridSize, pixdata: []const u8, near: bool) !gm.RGBImage {
+pub fn vulkanTexture(pic: *const gm.PoolInCtx, g64: sht.GridSize, pixdata: []const u8, near: bool) !VkImage {
     var test_img = try gm.RGBImage.init(pic.gc, g64);
+    errdefer test_img.deinit();
 
+    try texPrep(pic, g64, pixdata, near, &test_img);
+    return test_img;
+}
+pub fn texPrep(pic: *const gm.PoolInCtx, g64: sht.GridSize, pixdata: []const u8, near: bool, test_img: *VkImage) !void {
     const buff_size = test_img.dvk_size;
-    const src_buff = try gm.createBuffer(
+    const src_buff = try gm.createBuffer( //TODO: maybe one omnipresent buffor for img data copying?
         pic.gc,
         gm.baked.memory_cpu,
         gm.baked.usage_src,
@@ -281,8 +298,6 @@ pub fn vulkanTexture(pic: *const gm.PoolInCtx, g64: sht.GridSize, pixdata: []con
 
     try test_img.createImageView(pic.gc);
     try test_img.createSampler(pic.gc, near);
-
-    return test_img;
 }
 
 pub fn imgLTrans(cmd_ctx: *const gm.PoolInCtx, cfg: t.ImgLTranConfig) !void {
@@ -354,7 +369,7 @@ pub fn bfr2ImgCopy(cmd_ctx: *const gm.PoolInCtx, cfg: BfrToImgCpyCfg) !void {
 }
 
 pub const ManyImages = struct {
-    array: std.ArrayList(RGBImage),
+    array: std.ArrayList(VkImage),
     _gpa: std.mem.Allocator,
     pub fn init(gpa: std.mem.Allocator) !ManyImages {
         return .{
@@ -367,7 +382,7 @@ pub const ManyImages = struct {
         self.array.deinit(self._gpa);
     }
 
-    pub fn appen(self: *ManyImages, item: *const RGBImage) !void {
+    pub fn append(self: *ManyImages, item: *const VkImage) !void {
         return self.array.append(self._gpa, item.*);
     }
 };
