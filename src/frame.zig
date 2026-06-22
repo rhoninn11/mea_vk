@@ -104,6 +104,9 @@ const CmdHelper = struct {
     pub fn useDSprite(self: *const CmdHelper) void {
         self.gc.dev.cmdBindPipeline(self.command, .graphics, self.draw.pipeline[2]);
     }
+    pub fn useSdf(self: *const CmdHelper) void {
+        self.gc.dev.cmdBindPipeline(self.command, .graphics, self.draw.pipeline[3]);
+    }
 };
 
 pub fn recordFrame(
@@ -239,6 +242,7 @@ pub fn recordFrame(
             // <<< cursor >>>
 
             // <<< scann_layers >>>
+            hl_cmds.useSprite();
             const scann_mat = state.nav.scanPlacement();
             var scan_push = gm.PushConstant.PCBlob{
                 .model = scann_mat,
@@ -247,7 +251,6 @@ pub fn recordFrame(
                 .scale2D = state.nav.uv_mult,
                 .point2D = state.nav.uv_offset,
             };
-            hl_cmds.useSprite();
             hl_cmds.push(&scan_push);
             hl_cmds.drawInsances(GUI_BILBO_IDX, 1);
 
@@ -259,13 +262,23 @@ pub fn recordFrame(
             // <<< scann_layers >>>
 
             // >>> font_rending <<<
+            hl_cmds.useSdf();
+
+            const letter_push_exp = gm.PushConstant.PCBlob{
+                .model = m.matTrans(.{ 0, -32, 0 }).mat,
+                .inst_base = state.letters_inst_offset,
+                .tex_base = 5,
+                .mode = 2,
+            };
+            hl_cmds.push(&letter_push_exp);
+            hl_cmds.drawInsances(GUI_BILBO_IDX, state.letters_inst_num);
+
             const letter_push = gm.PushConstant.PCBlob{
                 .model = m.matTrans(.{ 0, -32, 0 }).mat,
                 .inst_base = state.letters_inst_offset,
-                .tex_base = 160,
+                .tex_base = 4,
                 .mode = 1,
             };
-            hl_cmds.useSprite();
             hl_cmds.push(&letter_push);
             hl_cmds.drawInsances(GUI_BILBO_IDX, state.letters_inst_num);
             // <<< font_rending >>>

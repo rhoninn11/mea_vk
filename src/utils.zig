@@ -4,6 +4,7 @@ const t = @import("types.zig");
 const m = @import("math.zig");
 const motion = @import("motion.zig");
 const phys = @import("phys.zig");
+const sht = @import("shaders/types.zig");
 
 const in = @import("input.zig");
 
@@ -263,7 +264,7 @@ pub const Smooth = struct {
     }
 };
 
-pub fn ppmDebug(io: std.Io, data: []u8, w: u16, h: u16) !void {
+pub fn ppmRGBADebug(io: std.Io, data: []u8, g: sht.GridSize) !void {
     const f = try std.Io.Dir.cwd().createFile(io, "fs/debug.ppm", .{});
     defer f.close(io);
 
@@ -272,7 +273,7 @@ pub fn ppmDebug(io: std.Io, data: []u8, w: u16, h: u16) !void {
     var wr = f.writer(io, tmp_bfr[0..]);
     const iowriter = &wr.interface;
 
-    try iowriter.print("P6\n{} {}\n255\n", .{ w, h });
+    try iowriter.print("P6\n{} {}\n255\n", .{ g.w, g.h });
 
     const pix_num = data.len / 4;
     for (0..pix_num) |i| {

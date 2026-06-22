@@ -23,9 +23,18 @@ layout(location = 1) flat in uint v_tex_idx;
 layout(location = 0) out vec4 f_color; //out
 
 void main() {
-    vec4 tex_color = texture(tex_bindless[nonuniformEXT(v_tex_idx)], v_uv);
-    if (tex_color.a < 0.99) {
-        discard;
+    if (_pc.data.mode == 1) {
+        vec4 tex_color = texture(tex_bindless[nonuniformEXT(v_tex_idx)], v_uv);
+        if (tex_color.a < 0.99) {
+            discard;
+        }
+        f_color = vec4(0.2,0.3,0.5, 1);
+    } else {
+        float mono_val = texture(tex_bindless[nonuniformEXT(v_tex_idx)], v_uv).r;
+        if (mono_val > 0.5) {
+            f_color = vec4(1,1,1, 1);
+        } else {
+            f_color = vec4(0,0,0, 0);
+        }
     }
-    f_color = tex_color;
 }

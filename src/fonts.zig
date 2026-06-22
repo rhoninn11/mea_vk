@@ -155,10 +155,10 @@ pub const Alphabet = struct {
 
     const atlas_w: u32 = 1024;
     const atlas_h: u32 = 1024;
-    fn naiveAtlas(gpa: std.mem.Allocator, map: CharLocMap, sz_arr: []GlyphSz, texd_arr: [][]u8, pix_w: u8) !Alphabet {
+    fn naiveAtlas(self: *Alphabet, gpa: std.mem.Allocator, pix_w: u8) !void {
         var max_w: u8 = 0;
         var max_h: u8 = 0;
-        for (sz_arr) |*sz| {
+        for (self.char_sz_arr) |*sz| {
             if (sz.w > max_w) max_w = @intCast(sz.w);
             if (sz.h > max_h) max_h = @intCast(sz.h);
         }
@@ -167,15 +167,15 @@ pub const Alphabet = struct {
         const ny: u32 = atlas_h / max_h;
         const nmax = nx * ny;
         std.debug.print("+++ nx:{d} ny:{d} nmax:{d}\n", .{ nx, ny, nmax });
-        std.debug.assert(nmax > sz_arr.len);
+        std.debug.assert(nmax > self.char_sz_arr.len);
 
-        var atlas_uv_data = try gpa.alloc(m.vec4, sz_arr.len);
+        var atlas_uv_data = try gpa.alloc(m.vec4, self.char_sz_arr.len);
         errdefer gpa.free(atlas_uv_data);
 
         var atlas = try gpa.alloc(u8, atlas_w * pix_w * atlas_h);
-        for (0..sz_arr.len) |i| {
-            const sz = sz_arr[i];
-            const data = texd_arr[i];
+        for (0..self.char_sz_arr.len) |i| {
+            const sz = self.char_sz_arr[i];
+            const data = self.char_texd_arr[i];
 
             const x_start = (i % nx) * max_w;
             const y_start = (i / nx) * max_h;
@@ -204,17 +204,13 @@ pub const Alphabet = struct {
             }
         }
 
-        return .{
-            .char_map = map,
-            .char_sz_arr = sz_arr,
-            .char_texd_arr = texd_arr,
-            .char_atlas = atlas,
-            .char_uvd_arr = atlas_uv_data,
-            .num = @intCast(sz_arr.len),
-        };
+        self.char_atlas = atlas;
+        self.char_uvd_arr = atlas_uv_data;
     }
 
-    pub fn init(gpa: std.mem.Allocator, src: *const FontRendering) !Alphabet {
+    pub fn init(io: std.Io, gpa: std.mem.Allocator, src: *const FontRendering, cache_file: []const u8) !Alphabet {
+        _ = cache_file;
+        _ = io;
         const ascii_len = ascii_chars.len;
 
         var char_map: CharLocMap = .init(gpa);
@@ -240,7 +236,14 @@ pub const Alphabet = struct {
             count += 1;
         }
 
-        return try Alphabet.naiveAtlas(gpa, char_map, how_big, tex_data_arr, 4);
+        var self: Alphabet = undefined;
+        self.char_map = char_map;
+        self.char_texd_arr = tex_data_arr;
+        self.char_sz_arr = how_big;
+        self.num = @intCast(how_big.len);
+
+        try self.naiveAtlas(gpa, 4);
+        return self;
     }
 
     pub fn charInfo(self: *const Alphabet, gpa: std.mem.Allocator, write_to: *std.ArrayList(u8), idx: u16) !void {
@@ -278,7 +281,7 @@ pub const Alphabet = struct {
         var inst_num: u16 = 0;
         var cursor: u16 = 0;
         var line: u8 = 0;
-        const char_w: f32 = 24;
+        const char_w: f32 = 32;
         const line_h: f32 = 42;
         for (text) |letter| {
             if (letter == '\n') {

@@ -68,15 +68,15 @@ void main() {
     MatPack mvp = _ubo.data.matrices;
     Instance m_inst = _storage.arr[inst_idx];
 
-    float scale = 0.2;
-    float x_scale = m_inst.other_offsets.x;
+    float scale = 48;
+    vec3 char_scale = vec3(m_inst.offset_4d.xy, 1);
+    vec3 char_offset = vec3(m_inst.offset_4d.zw, 0);
+    // char_offset = vec3(0);
     vec4 delta = vec4(m_inst.offset_2d.x, m_inst.offset_2d.y, 0, 0);
-    vec4 base = vec4(a_pos*scale, 1);
-    
-    base.x = base.x*x_scale;
-    base.y = base.y*0.6;
+    vec4 base = vec4((a_pos*char_scale + char_offset)*scale, 1);
     
     gl_Position = mvp.proj * mvp.view * _pc.data.model * (base + delta);
-    v_tex_idx = _pc.data.tex_base + floatBitsToUint(m_inst.other_offsets.y);
-    v_uv = a_color.xy;
+    // v_tex_idx = _pc.data.tex_base + floatBitsToUint(m_inst.other_offsets.x);
+    v_uv = (a_color.xy*m_inst.new_usage.zw) + m_inst.new_usage.xy;
+    v_tex_idx = _pc.data.tex_base;
 }

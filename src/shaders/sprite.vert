@@ -79,7 +79,7 @@ void main() {
         gl_Position = mvp.proj * mvp.view * _pc.data.model * (base + delta);
         // v_tex_idx = _pc.data.tex_base + floatBitsToUint(m_inst.other_offsets.x);
         v_uv = (a_color.xy*m_inst.new_usage.zw) + m_inst.new_usage.xy;
-        v_tex_idx = 4;
+        v_tex_idx = _pc.data.tex_base;
 
     }else if (_pc.data.mode == 2) {
         vec4 base = vec4(a_pos, 1);

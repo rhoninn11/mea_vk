@@ -105,15 +105,16 @@ fn deeper(access: EasyAcces) host.OnHostErrors!void {
 fn theDeepest(access: EasyAcces) !void {
     const pages = std.heap.page_allocator;
     // font
-    var mbfont: ?fonts.FontRendering = fonts.FontRendering.init(access.io, pages, "fs/roboto.ttf") catch null;
-    defer if (mbfont) |font| font.deinit(pages);
+    var a_font: fonts.FontRendering = try fonts.FontRendering.init(access.io, pages, "fs/roboto.ttf");
+    defer a_font.deinit(pages);
 
-    var mbalphabet: ?fonts.Alphabet = null;
-    defer if (mbalphabet) |*alphabet| alphabet.deinit(access.gpa);
-
-    if (mbfont) |*font| {
-        mbalphabet = try fonts.Alphabet.init(access.gpa, font);
-    }
+    var abc = try fonts.Alphabet.init(
+        access.io,
+        access.gpa,
+        &a_font,
+        "fs/font.serdes",
+    );
+    defer abc.deinit(access.gpa);
 
     // vol data
     var dual_img = try proto.serdesLoadBackup(access.io, pages);
@@ -240,6 +241,8 @@ fn theDeepest(access: EasyAcces) !void {
     defer pipe_mod.destroyPipelin(pipeline_2nd);
     const pipeline_3rd = try pipe_mod.createPipeline(render_pass, .SpriteWDepth);
     defer pipe_mod.destroyPipelin(pipeline_3rd);
+    const pipeline_4th = try pipe_mod.createPipeline(render_pass, .FontSdf);
+    defer pipe_mod.destroyPipelin(pipeline_4th);
 
     var repo = try vertex.repoSpawn(gpa, &pic);
     defer repo.deinit(gc);
@@ -247,7 +250,12 @@ fn theDeepest(access: EasyAcces) !void {
 
     const draw_instanced_attempt: gm.DrawInfo = .{
         .instance_count = grid.total, // TODO: something like "InstanceMapping"...
-        .pipeline = [4]vk.Pipeline{ pipeline, pipeline_2nd, pipeline_3rd, undefined },
+        .pipeline = [4]vk.Pipeline{
+            pipeline,
+            pipeline_2nd,
+            pipeline_3rd,
+            pipeline_4th,
+        },
         .pipeline_layout = pipeline_layout,
         .uniform_dsets = dset_uniform.d_set_arr,
         .storage_dsets = storage.d_set_arr,
@@ -279,12 +287,12 @@ fn theDeepest(access: EasyAcces) !void {
             dset_atlas.updateTexture(0, &rgba, basic_idx + i);
         }
     }
-    if (mbalphabet) |*abc| {
-        try u.ppmDebug(access.io, abc.char_atlas, 1024, 1024);
-        const rgba = try imgs.vulkanTexture(&pic, shu.xyGrid(1024, 1024), abc.char_atlas, false);
-        dset_atlas.updateTexture(0, &rgba, 4);
-        try all_imgs.append(&rgba);
-    }
+
+    const g_abc = shu.xyGrid(1024, 1024);
+    try u.ppmRGBADebug(access.io, abc.char_atlas, g_abc);
+    const rgb_atlas = try imgs.vulkanTexture(&pic, g_abc, abc.char_atlas, false);
+    dset_atlas.updateTexture(0, &rgb_atlas, 4);
+    try all_imgs.append(&rgb_atlas);
 
     var mono = try imgs.u16Image.init(pic.gc, glass.img_sz);
     {
@@ -319,6 +327,7 @@ fn theDeepest(access: EasyAcces) !void {
     // For frame recording
     const inflight_slots = 8;
     std.debug.assert(swapchain_len < inflight_slots);
+
     var inflight_stack: [1024]u8 = undefined;
     var loc_stack: std.heap.FixedBufferAllocator = .init(inflight_stack[0..1024]);
     const cmdbufs: []vk.CommandBuffer = try loc_stack.allocator().alloc(vk.CommandBuffer, swapchain_len);
@@ -531,7 +540,7 @@ fn theDeepest(access: EasyAcces) !void {
             if (on_area[m.Z] == 1.0) {
                 const x, const y, _ = on_area;
                 const a, const b = oklab.OkUnderstanding.abVal(.{ x, y });
-                if (mbalphabet) |*al| try al.charInfo(txta, &dyn_text, ok_slider.curr);
+                try abc.charInfo(txta, &dyn_text, ok_slider.curr);
                 try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
                 try dyn_text.print(txta, "{s:<16} | a:{d:>6.2} b:{d:>6.2}\n", .{ "pointing to", a, b });
                 if (input.sample_tirg.fired()) {
@@ -546,13 +555,11 @@ fn theDeepest(access: EasyAcces) !void {
             } else {
                 _ = input.sample_tirg.fired();
             }
-            if (mbalphabet) |*alphabet| {
-                frame_state.letters_inst_num = try alphabet.BlitText(
-                    instances,
-                    frame_state.letters_inst_offset,
-                    dyn_text.items,
-                );
-            }
+            frame_state.letters_inst_num = try abc.BlitText(
+                instances,
+                frame_state.letters_inst_offset,
+                dyn_text.items,
+            );
         }
 
         try frame.recordFrame(
