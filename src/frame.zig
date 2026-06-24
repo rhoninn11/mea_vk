@@ -6,6 +6,7 @@ const vtx = @import("vertex.zig");
 const m = @import("math.zig");
 const v = @import("vertex.zig");
 const addons = @import("addons.zig");
+const pipe = @import("pipe.zig");
 
 pub const Navig = struct {
     screan: m.vec2,
@@ -93,6 +94,12 @@ const CmdHelper = struct {
             self.models.offsets[mdl_idx],
             0,
         );
+    }
+
+    // TODO: use known PipeIndex
+    pub fn use(self: *const CmdHelper, ptype: pipe.PipeType) void {
+        _ = self;
+        _ = ptype;
     }
 
     pub fn useTriangles(self: *const CmdHelper) void {
@@ -254,25 +261,26 @@ pub fn recordFrame(
             hl_cmds.push(&scan_push);
             hl_cmds.drawInsances(GUI_BILBO_IDX, 1);
 
-            const closer = m.matTrans(.{ 0, 0, -0.1 });
+            var closer = m.matTrans(.{ 0, 0, -0.1 });
             scan_push.model = m.matXmat(closer.mat, scann_mat).mat;
             scan_push.tex_base = 3;
             hl_cmds.push(&scan_push);
+            hl_cmds.drawInsances(GUI_BILBO_IDX, 1);
+
+            closer = m.matTrans(.{ 0, 0, -0.05 });
+            var scan_push_sdf = gm.PushConstant.PCBlob{
+                .model = m.matXmat(closer.mat, scann_mat).mat,
+                .tex_base = 5,
+                .mode = 4,
+                .scale2D = state.nav.uv_mult,
+                .point2D = state.nav.uv_offset,
+            };
+            hl_cmds.push(&scan_push_sdf);
             hl_cmds.drawInsances(GUI_BILBO_IDX, 1);
             // <<< scann_layers >>>
 
             // >>> font_rending <<<
             hl_cmds.useSdf();
-
-            const letter_push_exp = gm.PushConstant.PCBlob{
-                .model = m.matTrans(.{ 0, -32, 0 }).mat,
-                .inst_base = state.letters_inst_offset,
-                .tex_base = 5,
-                .mode = 2,
-            };
-            hl_cmds.push(&letter_push_exp);
-            hl_cmds.drawInsances(GUI_BILBO_IDX, state.letters_inst_num);
-
             const letter_push = gm.PushConstant.PCBlob{
                 .model = m.matTrans(.{ 0, -32, 0 }).mat,
                 .inst_base = state.letters_inst_offset,

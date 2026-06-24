@@ -21,29 +21,29 @@ const DulaKeyAction = union(SysLayer) {
     layerS: *const motion.msdl.KeyAction,
 };
 
-pub const DulaHoldsAxis = union(SysLayer) {
+pub const DualHoldsAxis = union(SysLayer) {
     const GAxis = motion.mglfw.HoldsAxis;
     const SAxis = motion.msdl.HoldsAxis;
     layerG: GAxis,
     layerS: SAxis,
 
-    pub fn initS(hmm: []const []const SAxis.BasedOn) !DulaHoldsAxis {
+    pub fn initS(hmm: []const []const SAxis.BasedOn) !DualHoldsAxis {
         return .{ .layerS = try SAxis.init(hmm) };
     }
-    pub fn reciveInput(self: *DulaHoldsAxis, duka: DulaKeyAction) void {
+    pub fn reciveInput(self: *DualHoldsAxis, duka: DulaKeyAction) void {
         switch (self.*) {
             .layerS => self.layerS.reciveInput(duka.layerS),
             else => {},
         }
     }
-    pub fn update(self: *DulaHoldsAxis) void {
+    pub fn update(self: *DualHoldsAxis) void {
         switch (self.*) {
             .layerS => self.layerS.update(),
             else => {},
         }
     }
 
-    pub fn value(self: *const DulaHoldsAxis) []const motion.Axis {
+    pub fn value(self: *const DualHoldsAxis) []const motion.Axis {
         return switch (self.*) {
             .layerS => &self.layerS.axes,
             else => &.{.none},
@@ -52,9 +52,9 @@ pub const DulaHoldsAxis = union(SysLayer) {
 };
 
 const HoldsAxis = motion.mglfw.HoldsAxis;
-pub var glass_input: DulaHoldsAxis = undefined;
-pub var plr_input: DulaHoldsAxis = undefined;
-pub var pan_input: DulaHoldsAxis = undefined;
+pub var glass_input: DualHoldsAxis = undefined;
+pub var plr_input: DualHoldsAxis = undefined;
+pub var pan_input: DualHoldsAxis = undefined;
 
 pub var ok_vis_trigger: Trigger = .{};
 pub var shader_reset_trigger: Trigger = .{};
@@ -71,13 +71,13 @@ const Tied = struct {
 };
 
 pub fn initS() !void {
-    glass_input = try DulaHoldsAxis.initS(&.{
+    glass_input = try DualHoldsAxis.initS(&.{
         &.{
-            sdl.keycode.Keycode.j, sdl.keycode.Keycode.k, //
-            sdl.keycode.Keycode.h, sdl.keycode.Keycode.l,
+            sdl.keycode.Keycode.h, sdl.keycode.Keycode.l, //
+            sdl.keycode.Keycode.k, sdl.keycode.Keycode.j,
         },
     });
-    plr_input = try DulaHoldsAxis.initS(&.{
+    plr_input = try DualHoldsAxis.initS(&.{
         &.{
             sdl.keycode.Keycode.a, sdl.keycode.Keycode.d, //
             sdl.keycode.Keycode.s, sdl.keycode.Keycode.w,
@@ -89,7 +89,7 @@ pub fn initS() !void {
             sdl.keycode.Keycode.f,    sdl.keycode.Keycode.r,
         },
     });
-    pan_input = try DulaHoldsAxis.initS(&.{
+    pan_input = try DualHoldsAxis.initS(&.{
         &.{ sdl.keycode.Keycode.space, sdl.keycode.Keycode.tab },
     });
 }
@@ -104,7 +104,7 @@ const sdl_inputs: []const Tied = &.{
     .{ .key = sdl.keycode.Keycode.three, .trig = &time_stop_trig },
 };
 
-const axesCheck = [_]*DulaHoldsAxis{
+const axesCheck = [_]*DualHoldsAxis{
     &glass_input,
     &plr_input,
     &pan_input,

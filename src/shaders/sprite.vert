@@ -81,14 +81,13 @@ void main() {
         v_uv = (a_color.xy*m_inst.new_usage.zw) + m_inst.new_usage.xy;
         v_tex_idx = _pc.data.tex_base;
 
-    }else if (_pc.data.mode == 2) {
+    }else if (_pc.data.mode == 2 || _pc.data.mode == 4) {
         vec4 base = vec4(a_pos, 1);
         gl_Position = mvp.proj * mvp.view * _pc.data.model * base;
         v_tex_idx = _pc.data.tex_base;
         float s = _pc.data.scale2D.x;
         v_uv = a_color.xy * s + _pc.data.point2D;
     }else {
-        
         // per instance transform matrix
         vec3 front = m_inst.new_usage.xyz;
         vec3 up = m_inst.depth_ctrl.xyz;

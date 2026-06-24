@@ -31,19 +31,29 @@ pub const Slider = struct {
     min: u16,
     max: u16,
     curr: u16,
-
     pub fn init(_min: u16, _max: u16) Slider {
-        return .{
-            .min = _min,
-            .max = _max,
-            .curr = (_min + _max) / 2,
-        };
+        return .{ .min = _min, .max = _max, .curr = _min };
+    }
+
+    pub fn initMid(_min: u16, _max: u16) Slider {
+        var base = init(_min, _max);
+        base.curr = (base.min + base.max) / 2;
+        return base;
     }
     pub fn inc(self: *Self) void {
         self.curr = @min(self.curr + 1, self.max);
     }
     pub fn dec(self: *Self) void {
         self.curr = if (self.curr == self.min) self.min else self.curr - 1;
+    }
+
+    pub fn drive(self: *Self, x_axis: motion.Axis) u16 {
+        switch (x_axis) {
+            motion.Axis.positive => self.inc(),
+            motion.Axis.negative => self.dec(),
+            else => {},
+        }
+        return self.curr;
     }
 
     pub fn frac(self: *const Self) f32 {
@@ -139,7 +149,7 @@ pub const CappedPlayer = struct {
         return -phi_moved; //why minus
     }
 
-    pub fn update(self: *CappedPlayer, input: *const in.DulaHoldsAxis, td: f32) void {
+    pub fn update(self: *CappedPlayer, input: *const in.DualHoldsAxis, td: f32) void {
         const phi_spead: f32 = 1;
         const phi_delt = aroundAxis(input.value()[0]) * td * std.math.tau * phi_spead;
         self.phi_raw += phi_delt;
@@ -158,7 +168,7 @@ pub fn playerPos(p: *t.Player) m.vec3 {
     return m.orbit_r(p.phi, p.r) + m.vec3{ 0, p.h, 0 };
 }
 
-pub fn playerApplyInput(player: *t.Player, input: *const in.DulaHoldsAxis, td: f32) void {
+pub fn playerApplyInput(player: *t.Player, input: *const in.DualHoldsAxis, td: f32) void {
     const plr = player;
 
     const r_speed: f32 = 3;

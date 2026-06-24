@@ -80,24 +80,6 @@ pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     };
 }
 
-pub fn findSedes(io: std.Io, here: []const u8) ![]const u8 {
-    const serdes_dir = try std.Io.Dir.cwd().openDir(
-        io,
-        here,
-        .{ .iterate = true },
-    );
-    defer serdes_dir.close(io);
-
-    var iterator = serdes_dir.iterate();
-
-    while (try iterator.next(io)) |entry| {
-        if (std.mem.endsWith(u8, entry.name, ".serdes")) {
-            return entry.name;
-        }
-    }
-    return error.NoSerdes;
-}
-
 pub const DualImageData = struct {
     raw_data: meagen.Image,
     layer_data: meagen.Image,
@@ -109,6 +91,21 @@ pub const DualImageData = struct {
         return .{
             .raw_data = raw_synth,
             .layer_data = try genLayers(gpa, &raw_synth.info.?),
+        };
+    }
+
+    pub fn initProto(io: std.Io, gpa: std.mem.Allocator, pbfr_files: []const []const u8) !DualImageData {
+        std.debug.assert(pbfr_files.len == 2);
+
+        var scann = try protoImgRead(io, gpa, pbfr_files[0]);
+        errdefer scann.deinit(gpa);
+
+        const layers = try protoImgRead(io, gpa, pbfr_files[1]);
+        errdefer scann.deinit(layers);
+
+        return .{
+            .raw_data = scann,
+            .layer_data = layers,
         };
     }
 
@@ -191,16 +188,12 @@ pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator) !DualImageData {
 
     var zip = try files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" });
     defer zip.deinit(gpa);
-
-    var scann = try protoImgRead(io, gpa, zip.file_sets[0][0]);
-    errdefer scann.deinit(gpa);
-
-    const layers = try protoImgRead(io, gpa, zip.file_sets[0][1]);
-    return DualImageData{ .raw_data = scann, .layer_data = layers };
+    return try DualImageData.initProto(io, gpa, zip.file_sets[0]);
 }
 
 pub const LookingGlass = struct {
     pos: @Vector(2, i32),
+    sliders: [2]utils.Slider,
     win_sz: sht.GridSize,
     scan_raw: *meagen.Image,
     scan_lyr: *meagen.Image,
@@ -212,35 +205,36 @@ pub const LookingGlass = struct {
 
         const src = &from.raw_data.info.?;
 
-        return LookingGlass{
+        var self = LookingGlass{
             .pos = .{ 0, 0 },
             .win_sz = g_sz,
             .scan_raw = &from.raw_data,
             .scan_lyr = &from.layer_data,
             .img_sz = sht.shu.xyGrid(@intCast(src.width), @intCast(src.height)),
+            .sliders = undefined,
         };
+
+        self.sliders[m.X] = .init(0, m.u16ty(self.limX(self.scan_raw)));
+        self.sliders[m.Y] = .init(0, m.u16ty(self.limY(self.scan_raw)));
+
+        return self;
     }
-    pub fn update(self: *LookingGlass, axes: *const input.DulaHoldsAxis) bool {
-        const src_size = self.scan_raw.info.?;
+    inline fn limX(self: *const @This(), img: *meagen.Image) i32 {
+        const src_size = img.info.?;
+        return @as(i32, @intCast(src_size.width)) - @as(i32, @intCast(self.win_sz.w)) - 1;
+    }
+    inline fn limY(self: *const @This(), img: *meagen.Image) i32 {
+        const src_size = img.info.?;
+        return @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.win_sz.h)) - 1;
+    }
 
-        const max_x = @as(i32, @intCast(src_size.width)) - @as(i32, @intCast(self.win_sz.w)) - 1;
-        const max_y = @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.win_sz.h)) - 1;
+    pub fn update(self: *LookingGlass, axes: *const input.DualHoldsAxis) bool {
+        const ax: [2]u8 = .{ m.X, m.Y };
+        const ax_val = axes.value();
+        inline for (ax) |slot|
+            self.pos[slot] = self.sliders[slot].drive(ax_val[slot]);
 
-        const x_axis = axes.value()[1];
-        self.pos[0] = switch (x_axis) {
-            motion.Axis.positive => if (self.pos[0] < max_x) self.pos[0] + 1 else max_x,
-            motion.Axis.negative => if (self.pos[0] > 0) self.pos[0] - 1 else 0,
-            else => self.pos[0],
-        };
-
-        const y_axis = axes.value()[0];
-        self.pos[1] = switch (y_axis) {
-            motion.Axis.positive => if (self.pos[1] < max_y) self.pos[1] + 1 else max_y,
-            motion.Axis.negative => if (self.pos[1] > 0) self.pos[1] - 1 else 0,
-            else => self.pos[1],
-        };
-
-        const is_moveing = x_axis != motion.Axis.none or y_axis != motion.Axis.none;
+        const is_moveing = ax_val[m.X] != motion.Axis.none or ax_val[m.Y] != motion.Axis.none;
         return is_moveing;
     }
     pub fn frac(self: *const LookingGlass) m.vec2 {

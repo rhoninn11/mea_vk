@@ -476,6 +476,9 @@ pub fn rotMatX(part: f32) mat3 {
 pub inline fn uinty(val: anytype) u32 {
     return @as(u32, @intCast(val));
 }
+pub inline fn u16ty(val: anytype) u16 {
+    return @as(u16, @intCast(val));
+}
 
 pub inline fn floaty(usz: anytype) f32 {
     return @as(f32, @floatFromInt(usz));

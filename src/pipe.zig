@@ -15,24 +15,17 @@ const vert_sdf align(@alignOf(u32)) = @embedFile("sdf_vert").*;
 const frag_sdf align(@alignOf(u32)) = @embedFile("sdf_frag").*;
 const Vertex = v.Vertex;
 
-//
+const slot_len: u8 = slots.len;
 const slots: []const vk.ShaderStageFlags = &.{
     vk.ShaderStageFlags{ .vertex_bit = true },
     vk.ShaderStageFlags{ .fragment_bit = true },
 };
-const stlen: u8 = slots.len;
-const PipeType = enum(u8) {
-    Triangle,
-    Sprite,
-    SpriteWDepth,
-    FontSdf,
-}; // used pipes
 
 const PSSCI = vk.PipelineShaderStageCreateInfo;
-fn shaderStages(modules: [stlen]vk.ShaderModule) [stlen]PSSCI {
-    var out: [stlen]PSSCI = undefined;
+fn shaderStages(modules: [slot_len]vk.ShaderModule) [slot_len]PSSCI {
+    var out: [slot_len]PSSCI = undefined;
 
-    inline for (0..stlen) |i| {
+    inline for (0..slot_len) |i| {
         out[i] = PSSCI{
             .stage = slots[i],
             .module = modules[i],
@@ -42,13 +35,21 @@ fn shaderStages(modules: [stlen]vk.ShaderModule) [stlen]PSSCI {
     return out;
 }
 
+// for selecting shaders?
+pub const PipeType = enum(u8) {
+    Triangle,
+    Sprite,
+    SpriteWDepth,
+    FontSdf,
+};
+
 pub const Moduler = struct {
     gc: *const gm.GraphicsContext,
     layout: vk.PipelineLayout,
-    pub fn initModuls(self: *const Moduler, lol: [stlen]EmbedSpirv) ![stlen]vk.ShaderModule {
-        var out: [stlen]vk.ShaderModule = undefined;
+    pub fn initModuls(self: *const Moduler, lol: [slot_len]EmbedSpirv) ![slot_len]vk.ShaderModule {
+        var out: [slot_len]vk.ShaderModule = undefined;
 
-        inline for (0..stlen) |i| {
+        inline for (0..slot_len) |i| {
             const mod = try self.gc.dev.createShaderModule(&.{
                 .code_size = lol[i].len,
                 .p_code = @ptrCast(lol[i].ptr),
@@ -59,7 +60,7 @@ pub const Moduler = struct {
         return out;
     }
 
-    pub fn destroyModules(self: *const Moduler, mods: [stlen]vk.ShaderModule) void {
+    pub fn destroyModules(self: *const Moduler, mods: [slot_len]vk.ShaderModule) void {
         for (mods[0..]) |mod|
             self.gc.dev.destroyShaderModule(mod, null);
     }
@@ -69,7 +70,7 @@ pub const Moduler = struct {
         render_pass: vk.RenderPass,
         pt: PipeType,
     ) !vk.Pipeline {
-        const src: [stlen]EmbedSpirv = switch (pt) {
+        const src: [slot_len]EmbedSpirv = switch (pt) {
             .Triangle => .{ vert_triangle[0..], frag_triangle[0..] },
             .Sprite => .{ vert_sprite[0..], frag_sprite[0..] },
             .SpriteWDepth => .{ vert_sprite[0..], frag_sprite[0..] },

@@ -407,7 +407,7 @@ fn theDeepest(access: EasyAcces) !void {
     var okphi: f32 = 0;
     var glyphphi: f32 = 0;
     var base_shading: bool = true;
-    var ok_slider: u.Slider = .init(0, OK_SWEEP - 1);
+    var ok_slider: u.Slider = .initMid(0, OK_SWEEP - 1);
 
     sdlh.wheel.up = .{ .a = &ok_slider, .f = u.Slider.inc };
     sdlh.wheel.down = .{ .a = &ok_slider, .f = u.Slider.dec };
@@ -536,7 +536,8 @@ fn theDeepest(access: EasyAcces) !void {
             );
 
             var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 960);
-            try dyn_text.print(txta, "Some sample text to blit on a screan!\n", .{});
+            const px, const py = glass.pos;
+            try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
             if (on_area[m.Z] == 1.0) {
                 const x, const y, _ = on_area;
                 const a, const b = oklab.OkUnderstanding.abVal(.{ x, y });
