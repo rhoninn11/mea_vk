@@ -57,6 +57,8 @@ layout(location = 1) in vec3 a_color;
 layout(location = 0) out vec2 v_uv;
 layout(location = 1) out uint v_tex_idx;
 
+layout(location = 2) out float vv_limit;
+
 float signDecoded(float val);
 vec3 unzip(vec2 zipped);
 
@@ -83,6 +85,9 @@ void main() {
 
     }else if (_pc.data.mode == 2 || _pc.data.mode == 4) {
         vec4 base = vec4(a_pos, 1);
+        mat4 model = _pc.data.model;
+        vv_limit = model[3][0];
+        model[3][0] = 0;
         gl_Position = mvp.proj * mvp.view * _pc.data.model * base;
         v_tex_idx = _pc.data.tex_base;
         float s = _pc.data.scale2D.x;

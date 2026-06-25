@@ -20,13 +20,16 @@ layout(set = 2, binding = 0) uniform sampler2D tex_bindless[];
 
 layout(location = 0) in vec2 v_uv;
 layout(location = 1) flat in uint v_tex_idx;
+layout(location = 2) in float vv_limit;
+
 layout(location = 0) out vec4 f_color; //out
 
 void main() {
     vec4 tex_color = texture(tex_bindless[nonuniformEXT(v_tex_idx)], v_uv);
 
     if (_pc.data.mode == 4) {
-        if (tex_color.r < 0.8) {
+        float supse_to_use = vv_limit;
+        if (tex_color.r < 0.6) {
             discard;
         }
         f_color = vec4(1);

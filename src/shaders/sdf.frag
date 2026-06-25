@@ -28,7 +28,7 @@ void main() {
         if (tex_color.a < 0.99) {
             discard;
         }
-        f_color = vec4(0.2,0.3,0.5, 1);
+        f_color = tex_color;
     } else {
         float mono_val = texture(tex_bindless[nonuniformEXT(v_tex_idx)], v_uv).r;
         if (mono_val > 0.5) {

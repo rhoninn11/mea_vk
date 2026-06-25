@@ -495,3 +495,11 @@ pub inline fn trygZero1(val: f32) f32 {
 pub inline fn tryg2u16f(val: f32) f32 {
     return ((val + 1) * 0.5 * ((1 << 16) - 3) + 1);
 }
+
+pub inline fn v2One() vec2 {
+    return .{ 1, 1 };
+}
+
+pub inline fn v2Zero() vec2 {
+    return .{ 1, 1 };
+}

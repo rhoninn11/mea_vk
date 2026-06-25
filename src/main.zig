@@ -58,26 +58,28 @@ pub fn main(init: std.process.Init) !void {
 }
 
 const OK_SWEEP: u8 = 128;
+const OK_TEX_BASE: u8 = 32;
+
 const last_q = sht.GridSize.g64.total + sht.GridSize.g64.total / 2;
 const last_half_of_last_q = sht.GridSize.g64.total + sht.GridSize.g64.total / 2;
 const first_letter_instance = 4608;
 const first_layer_instance = 6144;
+
 var navig: frame.Navig = .{
     .screan = .{ 128, 128 },
-    .cursor = .{ 0, 0 },
-
-    .scann_sz = .{ 1, 1 },
-
-    .uv_mult = .{ 1, 1 },
-    .uv_offset = .{ 0, 0 },
-
-    .ok_tex_off = 0,
+    .cursor = m.v2Zero(),
+    .scann_sz = m.v2One(),
+    .uv_mult = m.v2One(),
+    .uv_offset = m.v2One(),
+    .cursor_tex = 0,
 };
 
 var frame_state: frame.FrameState = .{
-    .alt_proj = false,
+    .alt_proj = true,
+    .ok_tex_base = OK_TEX_BASE,
     .model_idx = 0,
     .ok_slices_num = OK_SWEEP,
+    .ok_group = .{ .num = OK_SWEEP, .base = 0 },
     .layer_instance_offset = first_layer_instance,
     .layer_instance_num = 0,
     .letters_inst_offset = first_letter_instance,
@@ -302,21 +304,20 @@ fn theDeepest(access: EasyAcces) !void {
         try all_imgs.append(&mono);
     }
 
-    var L: f32 = 0.0;
-    const ok_attlas_base: u8 = 32;
-    var ok_atlas_idx: u8 = ok_attlas_base;
-
     const L_delt: f32 = 1.0 / @as(f32, @floatFromInt(OK_SWEEP - 1));
-    const ok_g = sht.GridSize.g128;
+    var ok_atlas_idx: u8 = OK_TEX_BASE;
+    var L: f32 = 0.0;
+
+    const tex_grid_ok = sht.GridSize.g128;
     for (0..OK_SWEEP) |i| {
         std.debug.assert(ok_atlas_idx < ATLAS_MAX);
         const pixels = switch (i) {
-            0 => try oklab.sampleInfernoAlt(gpa, &ok_g),
-            else => try oklab.OkUnderstanding.sampleSpace(gpa, L, &ok_g),
+            0 => try oklab.sampleInfernoAlt(gpa, &tex_grid_ok),
+            else => try oklab.OkUnderstanding.sampleSpace(gpa, L, &tex_grid_ok),
         };
         defer gpa.free(pixels);
 
-        const rgba = try imgs.vulkanTexture(&pic, ok_g, pixels, false);
+        const rgba = try imgs.vulkanTexture(&pic, tex_grid_ok, pixels, false);
         dset_atlas.updateTexture(0, &rgba, ok_atlas_idx);
         try all_imgs.append(&rgba);
 
@@ -427,7 +428,7 @@ fn theDeepest(access: EasyAcces) !void {
         }
         // navig.pos = input.
         navig.cursor = sdlh.peekPointer(win_size);
-        navig.ok_tex_off = ok_attlas_base + ok_slider.curr;
+        navig.cursor_tex = OK_TEX_BASE + ok_slider.curr;
 
         const coords: addons.Coords = .init(win_size);
         const on_area = coords.pointer(navig.cursor);

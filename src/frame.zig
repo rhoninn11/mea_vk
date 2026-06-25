@@ -17,7 +17,7 @@ pub const Navig = struct {
     uv_mult: m.vec2,
     uv_offset: m.vec2,
 
-    ok_tex_off: u16,
+    cursor_tex: u16,
 
     pub fn aspectScale(self: *const Navig) m.vec3 {
         const w, const h = self.scann_sz;
@@ -35,11 +35,18 @@ pub const Navig = struct {
     }
 };
 
+pub const InstGroup = struct {
+    base: u16,
+    num: u16,
+};
+
 pub const FrameState = struct {
     pub const scan_preview = 6140;
     pub const scan_layer_preview = 6142;
     alt_proj: bool,
     model_idx: u8,
+    ok_tex_base: u16,
+    ok_group: InstGroup,
     ok_slices_num: u8,
     layer_instance_offset: u16,
     layer_instance_num: u16,
@@ -215,6 +222,7 @@ pub fn recordFrame(
                 hl_cmds.drawInsances(cube_index, state.layer_instance_num);
             }
 
+            // Ok shows with alt proj
             if (state.alt_proj) {
                 const inst_ok_begin = sht.GridSize.g64.total;
                 const tex_ok_begin = 32;
@@ -229,66 +237,67 @@ pub fn recordFrame(
                 hl_cmds.drawInsances(BILBORD_IDX, state.ok_slices_num);
             }
 
-            //gui - maybe would be nice to clear depth first
+            hl_cmds.dynUboDsets(all_sets, 2); // GUI
+            {
+                const cursor = state.nav.cursor;
+                const guipush = gm.PushConstant.PCBlob{
+                    .model = m.matXmat(
+                        m.matTrans(.{ cursor[m.X], cursor[m.Y], 0 }).mat,
+                        m.matScale(.{ 25, 25, 1 }).mat,
+                    ).mat,
+                    .inst_base = 0,
+                    .tex_base = state.nav.cursor_tex,
+                    .mode = 3,
+                };
+                hl_cmds.useTriangles();
+                hl_cmds.push(&guipush);
+                hl_cmds.drawInsances(HEX_IDX, 1);
+            } // <<< cursor >>>
 
-            hl_cmds.dynUboDsets(all_sets, 2);
-            // >>> cursor <<<
-            const cursor = state.nav.cursor;
-            const guipush = gm.PushConstant.PCBlob{
-                .model = m.matXmat(
-                    m.matTrans(.{ cursor[m.X], cursor[m.Y], 0 }).mat,
-                    m.matScale(.{ 25, 25, 1 }).mat,
-                ).mat,
-                .inst_base = 0,
-                .tex_base = state.nav.ok_tex_off,
-                .mode = 3,
-            };
-            hl_cmds.useTriangles();
-            hl_cmds.push(&guipush);
-            hl_cmds.drawInsances(HEX_IDX, 1);
-            // <<< cursor >>>
+            {
+                hl_cmds.useSprite();
+                const scann_mat = state.nav.scanPlacement();
+                var scan_push = gm.PushConstant.PCBlob{
+                    .model = scann_mat,
+                    .tex_base = 2,
+                    .mode = 2,
+                    .scale2D = state.nav.uv_mult,
+                    .point2D = state.nav.uv_offset,
+                };
+                hl_cmds.push(&scan_push);
+                hl_cmds.drawInsances(GUI_BILBO_IDX, 1);
 
-            // <<< scann_layers >>>
-            hl_cmds.useSprite();
-            const scann_mat = state.nav.scanPlacement();
-            var scan_push = gm.PushConstant.PCBlob{
-                .model = scann_mat,
-                .tex_base = 2,
-                .mode = 2,
-                .scale2D = state.nav.uv_mult,
-                .point2D = state.nav.uv_offset,
-            };
-            hl_cmds.push(&scan_push);
-            hl_cmds.drawInsances(GUI_BILBO_IDX, 1);
+                var closer = m.matTrans(.{ 0, 0, -0.1 });
+                scan_push.model = m.matXmat(closer.mat, scann_mat).mat;
+                scan_push.tex_base = 3;
+                hl_cmds.push(&scan_push);
+                hl_cmds.drawInsances(GUI_BILBO_IDX, 1);
 
-            var closer = m.matTrans(.{ 0, 0, -0.1 });
-            scan_push.model = m.matXmat(closer.mat, scann_mat).mat;
-            scan_push.tex_base = 3;
-            hl_cmds.push(&scan_push);
-            hl_cmds.drawInsances(GUI_BILBO_IDX, 1);
+                closer = m.matTrans(.{ 0, 0, -0.05 });
+                const delta_store = m.matXmat(closer.mat, scann_mat).mat;
+                // delta_store[0][3] = 0.5;
+                var scan_push_sdf = gm.PushConstant.PCBlob{
+                    .model = delta_store,
+                    .tex_base = 5,
+                    .mode = 4,
+                    .scale2D = state.nav.uv_mult,
+                    .point2D = state.nav.uv_offset,
+                };
+                hl_cmds.push(&scan_push_sdf);
+                hl_cmds.drawInsances(GUI_BILBO_IDX, 1);
+            } // <<< scann_layers >>>
 
-            closer = m.matTrans(.{ 0, 0, -0.05 });
-            var scan_push_sdf = gm.PushConstant.PCBlob{
-                .model = m.matXmat(closer.mat, scann_mat).mat,
-                .tex_base = 5,
-                .mode = 4,
-                .scale2D = state.nav.uv_mult,
-                .point2D = state.nav.uv_offset,
-            };
-            hl_cmds.push(&scan_push_sdf);
-            hl_cmds.drawInsances(GUI_BILBO_IDX, 1);
-            // <<< scann_layers >>>
-
-            // >>> font_rending <<<
-            hl_cmds.useSdf();
-            const letter_push = gm.PushConstant.PCBlob{
-                .model = m.matTrans(.{ 0, -32, 0 }).mat,
-                .inst_base = state.letters_inst_offset,
-                .tex_base = 4,
-                .mode = 1,
-            };
-            hl_cmds.push(&letter_push);
-            hl_cmds.drawInsances(GUI_BILBO_IDX, state.letters_inst_num);
+            {
+                hl_cmds.useSdf();
+                const letter_push = gm.PushConstant.PCBlob{
+                    .model = m.matTrans(.{ 0, -32, 0 }).mat,
+                    .inst_base = state.letters_inst_offset,
+                    .tex_base = 4,
+                    .mode = 1,
+                };
+                hl_cmds.push(&letter_push);
+                hl_cmds.drawInsances(GUI_BILBO_IDX, state.letters_inst_num);
+            }
             // <<< font_rending >>>
         }
         try gc.dev.endCommandBuffer(cbufr);
