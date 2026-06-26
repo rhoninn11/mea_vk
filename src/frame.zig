@@ -41,17 +41,13 @@ pub const InstGroup = struct {
 };
 
 pub const FrameState = struct {
-    pub const scan_preview = 6140;
-    pub const scan_layer_preview = 6142;
     alt_proj: bool,
+    alt_shader: bool,
     model_idx: u8,
     ok_tex_base: u16,
     ok_group: InstGroup,
-    ok_slices_num: u8,
-    layer_instance_offset: u16,
-    layer_instance_num: u16,
-    letters_inst_offset: u16,
-    letters_inst_num: u16,
+    char_group: InstGroup,
+    layer_group: InstGroup,
     nav: *const Navig,
 };
 
@@ -201,40 +197,41 @@ pub fn recordFrame(
             );
 
             const ubo_slot: u8 = if (state.alt_proj) 1 else 0;
-            const geopush = gm.PushConstant.PCBlob{
-                .model = m.matTrans(.{ 0, 0, 0 }).mat,
-            };
-
-            //triangle
-            hl_cmds.useTriangles();
             hl_cmds.dynUboDsets(all_sets, ubo_slot);
-            hl_cmds.push(&geopush);
-            hl_cmds.drawInsances(state.model_idx, draw.instance_count);
+            hl_cmds.useTriangles();
+            {
+                const geopush = gm.PushConstant.PCBlob{
+                    .model = m.matTrans(.{ 0, 0, 0 }).mat,
+                };
 
-            if (state.layer_instance_num > 0) {
+                hl_cmds.push(&geopush);
+                hl_cmds.drawInsances(state.model_idx, draw.instance_count);
+            } // scann slice
+
+            if (state.layer_group.num > 0) {
                 const cube_index = 1;
                 const layerpush = gm.PushConstant.PCBlob{
                     .model = m.matTrans(.{ 0, 0, 0 }).mat,
-                    .inst_base = state.layer_instance_offset,
+                    .inst_base = state.layer_group.base,
                     .mode = 1,
                 };
                 hl_cmds.push(&layerpush);
-                hl_cmds.drawInsances(cube_index, state.layer_instance_num);
-            }
+                hl_cmds.drawInsances(cube_index, state.layer_group.num);
+            } // layer markers
 
             // Ok shows with alt proj
             if (state.alt_proj) {
-                const inst_ok_begin = sht.GridSize.g64.total;
+                // const inst_ok_begin = sht.GridSize.g64.total;
                 const tex_ok_begin = 32;
 
                 const okpush = gm.PushConstant.PCBlob{
                     .model = m.matTrans(.{ 0, -3, 0 }).mat,
-                    .inst_base = inst_ok_begin,
+                    .inst_base = state.ok_group.base,
                     .tex_base = tex_ok_begin,
                 };
                 hl_cmds.useDSprite();
                 hl_cmds.push(&okpush);
-                hl_cmds.drawInsances(BILBORD_IDX, state.ok_slices_num);
+                hl_cmds.drawInsances(BILBORD_IDX, state.ok_group.num);
             }
 
             hl_cmds.dynUboDsets(all_sets, 2); // GUI
@@ -291,12 +288,12 @@ pub fn recordFrame(
                 hl_cmds.useSdf();
                 const letter_push = gm.PushConstant.PCBlob{
                     .model = m.matTrans(.{ 0, -32, 0 }).mat,
-                    .inst_base = state.letters_inst_offset,
+                    .inst_base = state.char_group.base,
                     .tex_base = 4,
                     .mode = 1,
                 };
                 hl_cmds.push(&letter_push);
-                hl_cmds.drawInsances(GUI_BILBO_IDX, state.letters_inst_num);
+                hl_cmds.drawInsances(GUI_BILBO_IDX, state.char_group.num);
             }
             // <<< font_rending >>>
         }

@@ -102,9 +102,6 @@ pub const FontRendering = struct {
         const sdf = getGlyphSDF(&self.info, @intCast(codepnt), 128, 8, 128, &sdfsz);
         defer tt.stbtt_FreeSDF(sdf, null);
 
-        std.debug.print("**** sdf_sz: w{d}:h{d} xo:{d}:yo{d}\n", .{ sdfsz.w, sdfsz.h, sdfsz.x_off, sdfsz.y_off });
-
-        // std.debug.print("+++ grid size {d}x{d}\n", .{ g.w, g.h });
         const g = glp_sz.gSize();
         const texture = try gpa.alloc(u8, g.total * 4);
 

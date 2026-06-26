@@ -5,6 +5,7 @@ const m = @import("math.zig");
 const dset = @import("dset.zig");
 const sht = @import("shaders/types.zig");
 const addons = @import("addons.zig");
+const frame = @import("frame.zig");
 
 pub fn srgb_to_oklab(srgb: m.vec3) m.vec3 {
     const lms_conv: [3]m.vec3 = .{
@@ -60,9 +61,9 @@ pub const OkUnderstanding = struct {
         return val;
     }
 
-    pub fn labSpliced(instances: [*]sht.PerInstance, instance_offset: u32, slice_num: u8, phi: f32) !void {
+    pub fn labSpliced(instances: [*]sht.PerInstance, inst_base: u16, inst_num: u16, phi: f32) !void {
         const lim_num = 8096;
-        std.debug.assert(slice_num <= lim_num);
+        std.debug.assert(inst_num <= lim_num);
 
         const stack_size = lim_num * @sizeOf(sht.PerInstance);
         var stack_mem: [stack_size]u8 = undefined;
@@ -70,7 +71,7 @@ pub const OkUnderstanding = struct {
         var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
         const local_a = provider.allocator();
 
-        var scratchpad: []sht.PerInstance = try local_a.alloc(sht.PerInstance, slice_num);
+        var scratchpad: []sht.PerInstance = try local_a.alloc(sht.PerInstance, inst_num);
         const denominator = @as(f32, @floatFromInt(scratchpad.len - 1));
         const r = 2.5;
         for (0..scratchpad.len) |i| {
@@ -94,7 +95,7 @@ pub const OkUnderstanding = struct {
 
             scratchpad[i] = edit;
         }
-        @memcpy(instances + instance_offset, scratchpad);
+        @memcpy(instances + inst_base, scratchpad);
     }
 
     pub fn labAtInfinitum(self: *const OkUnderstanding, storage_dset: dset.DescriptorPrep) !void {

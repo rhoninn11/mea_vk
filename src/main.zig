@@ -59,11 +59,9 @@ pub fn main(init: std.process.Init) !void {
 
 const OK_SWEEP: u8 = 128;
 const OK_TEX_BASE: u8 = 32;
-
-const last_q = sht.GridSize.g64.total + sht.GridSize.g64.total / 2;
-const last_half_of_last_q = sht.GridSize.g64.total + sht.GridSize.g64.total / 2;
-const first_letter_instance = 4608;
-const first_layer_instance = 6144;
+const OK_INST_BASE: u16 = sht.GridSize.g64.total;
+const CHAR_INST_BASE: u16 = 4608;
+const LYR_INST_BASE = 6144;
 
 var navig: frame.Navig = .{
     .screan = .{ 128, 128 },
@@ -74,16 +72,14 @@ var navig: frame.Navig = .{
     .cursor_tex = 0,
 };
 
-var frame_state: frame.FrameState = .{
+var state: frame.FrameState = .{
     .alt_proj = true,
+    .alt_shader = false,
     .ok_tex_base = OK_TEX_BASE,
     .model_idx = 0,
-    .ok_slices_num = OK_SWEEP,
-    .ok_group = .{ .num = OK_SWEEP, .base = 0 },
-    .layer_instance_offset = first_layer_instance,
-    .layer_instance_num = 0,
-    .letters_inst_offset = first_letter_instance,
-    .letters_inst_num = 0,
+    .ok_group = .{ .base = OK_INST_BASE, .num = OK_SWEEP },
+    .char_group = .{ .base = CHAR_INST_BASE, .num = 0 },
+    .layer_group = .{ .base = LYR_INST_BASE, .num = 0 },
     .nav = &navig,
 };
 
@@ -361,7 +357,7 @@ fn theDeepest(access: EasyAcces) !void {
     var timeline1 = addons.Timeline.init(access.io);
     time_glob = &timeline;
     var perf_stats = addons.PerfStats.init(access.io);
-    var state: Swapchain.PresentState = .optimal;
+    var vk_state: Swapchain.PresentState = .optimal;
 
     const s_interval = std.time.us_per_s;
     timeline1.arm(s_interval * 0.5);
@@ -399,7 +395,7 @@ fn theDeepest(access: EasyAcces) !void {
                 render_pass,
                 framebuffers,
                 &draw_instanced_attempt,
-                &frame_state,
+                &state,
             );
         }
     }
@@ -407,7 +403,6 @@ fn theDeepest(access: EasyAcces) !void {
     //state
     var okphi: f32 = 0;
     var glyphphi: f32 = 0;
-    var base_shading: bool = true;
     var ok_slider: u.Slider = .initMid(0, OK_SWEEP - 1);
 
     sdlh.wheel.up = .{ .a = &ok_slider, .f = u.Slider.inc };
@@ -442,18 +437,19 @@ fn theDeepest(access: EasyAcces) !void {
         timeline.update(access.io);
         timeline1.update(access.io);
 
-        if (input.exit_trig.fired()) window.closeWindow();
-        if (input.time_stop_trig.fired()) timeline1.passageToggle();
-        if (input.shader_reset_trigger.fired()) base_shading = true;
-
         const td = timeline.deltaS();
         const td1 = timeline1.deltaS();
         okphi += td1 * 0.1;
         glyphphi += td1 * 0.13;
 
-        pamperek.update(&input.plr_input, td);
+        if (input.exit_trig.fired()) window.closeWindow();
+        if (input.time_stop_trig.fired()) timeline1.passageToggle();
+
+        if (input.shader_reset_trigger.fired()) state.alt_shader = true;
+        if (glass.update(&input.glass_input)) state.alt_shader = false;
+
+        pamperek.update(td, &input.plr_input);
         smooth_scale.update(td, ok_slider.frac());
-        if (glass.update(&input.glass_input)) base_shading = false;
 
         const scan_scale = smooth_scale.out() * 0.95 + 0.05;
         const xoff, const yoff = glass.frac();
@@ -471,7 +467,7 @@ fn theDeepest(access: EasyAcces) !void {
 
         const dbg_data = u.DbgMonitor.DbgVals{
             .phi = pamperek.p.phi,
-            .inst_num = frame_state.layer_instance_num,
+            .inst_num = state.layer_group.num,
             .observer_pos = pamperek.pos(),
             .win_size = win_size,
         };
@@ -479,21 +475,44 @@ fn theDeepest(access: EasyAcces) !void {
         try dbgmonit.update(access.io, &dbg_data);
 
         if (input.alt_projection_trigger.fired()) {
-            frame_state.alt_proj = !frame_state.alt_proj;
+            state.alt_proj = !state.alt_proj;
         }
 
         if (input.slide_r_trig.fired()) {
-            const last = frame_state.model_idx == repo.head - 1;
-            frame_state.model_idx = if (last) 0 else frame_state.model_idx + 1;
+            const last = state.model_idx == repo.head - 1;
+            state.model_idx = if (last) 0 else state.model_idx + 1;
         }
 
         if (input.slide_l_trig.fired()) {
-            const first = frame_state.model_idx == 0;
-            frame_state.model_idx = if (first) repo.head - 1 else frame_state.model_idx - 1;
+            const first = state.model_idx == 0;
+            state.model_idx = if (first) repo.head - 1 else state.model_idx - 1;
         }
 
         if (input.dbg_trig.fired()) {
             dbgmonit.enabled = !dbgmonit.enabled;
+        }
+
+        var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 960);
+        const px, const py = glass.pos;
+        try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
+        if (on_area[m.Z] == 1.0) {
+            const x, const y, _ = on_area;
+            const a, const b = oklab.OkUnderstanding.abVal(.{ x, y });
+            try abc.charInfo(txta, &dyn_text, ok_slider.curr);
+            try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
+            try dyn_text.print(txta, "{s:<16} | a:{d:>6.2} b:{d:>6.2}\n", .{ "pointing to", a, b });
+            const pan_ax = input.pan_input.value()[0];
+            if (pan_ax.active()) {
+                try dyn_text.print(txta, "blooop\n", .{});
+                const gx, const gy = glass.frac();
+                try dyn_text.print(txta, "{s:<14} | gx:{d:>6.2} gy:{d:>6.2}\n", .{ "glass cord", gx, gy });
+            }
+
+            if (input.sample_tirg.fired()) {
+                std.debug.print(".{{{d:.2},{d:.2},{d:.2}}}\n", .{ ok_slider.frac(), a, b });
+            }
+        } else {
+            _ = input.sample_tirg.fired();
         }
 
         //minimalized
@@ -504,22 +523,6 @@ fn theDeepest(access: EasyAcces) !void {
         const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
 
         {
-            // cubes 0-4095
-            // ok slices 4096-4223
-            // glyphs 4224-4247
-            // text 4608-?
-            // layers 6144-?
-
-            if (base_shading) {
-                try glass.updateStorage(instances, false);
-            } else {
-                try glass.updateStorage(instances, true);
-                const first = frame_state.layer_instance_offset;
-                const lnum = try glass.updateLayerStorage( //
-                    instances, first, false);
-                frame_state.layer_instance_num = lnum;
-            }
-
             try refils.unifomRefil(
                 uniforms,
                 timeline1.total_s,
@@ -527,39 +530,34 @@ fn theDeepest(access: EasyAcces) !void {
                 size,
                 win_size,
             );
+            // cubes 0-4095
+            // ok slices 4096-4223
+            // glyphs 4224-4247
+            // text 4608-?
+            // layers 6144-?
 
-            const first_ok_instance = g64.total;
+            if (state.alt_shader) {
+                try glass.updateStorage(instances, false);
+            } else {
+                try glass.updateStorage(instances, true);
+                const lnum = try glass.updateLayerStorage(
+                    instances,
+                    state.layer_group.base,
+                    false,
+                );
+                state.layer_group.num = lnum;
+            }
+
             try oklab.OkUnderstanding.labSpliced(
                 instances,
-                first_ok_instance,
-                OK_SWEEP,
+                state.ok_group.base,
+                state.ok_group.num,
                 okphi,
             );
 
-            var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 960);
-            const px, const py = glass.pos;
-            try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
-            if (on_area[m.Z] == 1.0) {
-                const x, const y, _ = on_area;
-                const a, const b = oklab.OkUnderstanding.abVal(.{ x, y });
-                try abc.charInfo(txta, &dyn_text, ok_slider.curr);
-                try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
-                try dyn_text.print(txta, "{s:<16} | a:{d:>6.2} b:{d:>6.2}\n", .{ "pointing to", a, b });
-                if (input.sample_tirg.fired()) {
-                    std.debug.print(".{{{d:.2},{d:.2},{d:.2}}}\n", .{ ok_slider.frac(), a, b });
-                }
-                const pan_ax = input.pan_input.value()[0];
-                if (pan_ax.active()) {
-                    try dyn_text.print(txta, "blooop\n", .{});
-                    const gx, const gy = glass.frac();
-                    try dyn_text.print(txta, "{s:<14} | gx:{d:>6.2} gy:{d:>6.2}\n", .{ "glass cord", gx, gy });
-                }
-            } else {
-                _ = input.sample_tirg.fired();
-            }
-            frame_state.letters_inst_num = try abc.BlitText(
+            state.char_group.num = try abc.BlitText(
                 instances,
-                frame_state.letters_inst_offset,
+                state.char_group.base,
                 dyn_text.items,
             );
         }
@@ -570,9 +568,9 @@ fn theDeepest(access: EasyAcces) !void {
             render_pass,
             framebuffers,
             &draw_instanced_attempt,
-            &frame_state,
+            &state,
         );
-        if (state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {
+        if (vk_state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {
             // std.debug.assert(false); //cuz it will throw error due to bad depth_img resolution
             resolution_extent = win_size;
             try gc.dev.deviceWaitIdle();
@@ -603,13 +601,13 @@ fn theDeepest(access: EasyAcces) !void {
                     render_pass,
                     framebuffers,
                     &draw_instanced_attempt,
-                    &frame_state,
+                    &state,
                 );
             }
         }
 
         const cmdbuf = cmdbufs[swapchain.image_index];
-        state = swapchain.present(cmdbuf) catch |err| switch (err) {
+        vk_state = swapchain.present(cmdbuf) catch |err| switch (err) {
             error.OutOfDateKHR => Swapchain.PresentState.suboptimal,
             else => |narrow| {
                 std.debug.print("+++ some other presentation error {s}\n", .{@errorName(narrow)});
