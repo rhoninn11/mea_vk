@@ -57,6 +57,7 @@ layout(location = 1) in vec3 a_color;
 
 layout(location = 0) out vec2 v_uv;
 layout(location = 1) out uint v_tex_idx;
+layout(location = 2) out float v_zero_one;
 
 float signDecoded(float val);
 vec3 unzip(vec2 zipped);
@@ -79,4 +80,6 @@ void main() {
     // v_tex_idx = _pc.data.tex_base + floatBitsToUint(m_inst.other_offsets.x);
     v_uv = (a_color.xy*m_inst.new_usage.zw) + m_inst.new_usage.xy;
     v_tex_idx = _pc.data.tex_base;
+
+    v_zero_one = sin(_ubo.data.temporal.x)*0.5 + 0.5;
 }

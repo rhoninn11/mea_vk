@@ -27,14 +27,14 @@ layout(location = 0) out vec4 f_color; //out
 void main() {
     vec4 tex_color = texture(tex_bindless[nonuniformEXT(v_tex_idx)], v_uv);
 
-    if (_pc.data.mode == 4) {
+    if (_pc.data.mode == 4) { // mono value tresholding
         float supse_to_use = vv_limit;
         if (tex_color.r < 0.6) {
             discard;
         }
         f_color = vec4(1);
     }
-    else {
+    else { // crop ok space slices
         if (tex_color.a < 0.99) {
             discard;
         }

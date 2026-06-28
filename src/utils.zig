@@ -293,3 +293,24 @@ pub fn ppmRGBADebug(io: std.Io, data: []u8, g: sht.GridSize) !void {
 
     try iowriter.flush();
 }
+
+pub fn ppmU8Debug(io: std.Io, data: []u8, g: sht.GridSize) !void {
+    const f = try std.Io.Dir.cwd().createFile(io, "fs/debug.ppm", .{});
+    defer f.close(io);
+
+    var tmp_bfr: [4096]u8 = undefined;
+
+    var wr = f.writer(io, tmp_bfr[0..]);
+    const iowriter = &wr.interface;
+
+    try iowriter.print("P6\n{} {}\n255\n", .{ g.w, g.h });
+
+    const pix_num = data.len;
+    for (0..pix_num) |i| {
+        const val = data[i];
+        const pix: []const u8 = &.{ val, val, val };
+        try iowriter.writeAll(pix);
+    }
+
+    try iowriter.flush();
+}

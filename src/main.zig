@@ -132,7 +132,7 @@ fn theDeepest(access: EasyAcces) !void {
     var swapchain_len: u8 = undefined;
 
     const gpa = access.gpa;
-    const gc = access.vkctx;
+    const gc = access.gm;
     var window = access.host;
 
     var resolution_extent = try window.winExtent();
@@ -297,12 +297,16 @@ fn theDeepest(access: EasyAcces) !void {
     }
 
     const g_abc = shu.xyGrid(1024, 1024);
-    try u.ppmRGBADebug(access.io, abc.char_atlas, g_abc);
-    const rgb_atlas = try imgs.vulkanTexture(&pic, g_abc, abc.char_atlas, false);
-    dset_atlas.updateTexture(0, &rgb_atlas, 4);
-    try all_imgs.append(&rgb_atlas);
+    try u.ppmU8Debug(access.io, abc.char_atlas, g_abc);
 
-    var mono = try imgs.u16Image.init(pic.gc, glass.img_sz);
+    var noname = try imgs.U8Image.init(access.gm, g_abc);
+    try imgs.texPrep(&pic, g_abc, abc.char_atlas, false, &noname);
+
+    // const sdf_atlas = try imgs.vulkanTexture(&pic, g_abc, abc.char_atlas, false);
+    dset_atlas.updateTexture(0, &noname, 4);
+    try all_imgs.append(&noname);
+
+    var mono = try imgs.U16Image.init(pic.gc, glass.img_sz);
     {
         errdefer mono.deinit();
         try imgs.texPrep(&pic, glass.img_sz, glass.scan_raw.pixels, true, &mono);

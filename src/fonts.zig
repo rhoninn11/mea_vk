@@ -31,21 +31,23 @@ pub const GlyphSz = struct {
 
 pub fn getGlyphSDF(
     font_info: [*c]const tt.stbtt_fontinfo,
-    glyph: c_int,
+    codepoint: c_int,
     pixels: f32,
     padding: u8,
     on_edge_val: u8,
     s: *GlyphSz,
 ) [*c]u8 {
+    _ = padding;
     const scale: f32 = tt.stbtt_ScaleForPixelHeight(font_info, pixels);
+    const glyph = tt.stbtt_FindGlyphIndex(font_info, codepoint);
     //TODO: i guess it has some internal font scale, or differnet fonts have it different
     return tt.stbtt_GetGlyphSDF(
         font_info,
         scale,
         glyph,
-        padding,
+        0,
         on_edge_val,
-        4, //need more understanding here, but 4 per pixel seams ok, gives around 32 depth???
+        32, //need more understanding here, but 4 per pixel seams ok, gives around 32 depth???
         &s.w,
         &s.h,
         &s.x_off,
@@ -94,33 +96,59 @@ pub const FontRendering = struct {
         gpa.free(self.content);
     }
 
-    pub fn sampleCodepoint(self: *const FontRendering, gpa: std.mem.Allocator, codepnt: u8, glp_sz: *GlyphSz) ![]u8 {
+    const Vari = enum(u8) {
+        rgba,
+        sdf,
+    };
+
+    pub fn sampleCodepoint(
+        self: *const FontRendering,
+        gpa: std.mem.Allocator,
+        codepnt: u8,
+        glp_sz: *GlyphSz,
+        opt: Vari,
+    ) ![]u8 {
         const bitmap = getCodepointBitmap(&self.info, @intCast(codepnt), 128, glp_sz);
         defer tt.stbtt_FreeBitmap(bitmap, null);
 
         var sdfsz: GlyphSz = undefined;
-        const sdf = getGlyphSDF(&self.info, @intCast(codepnt), 128, 8, 128, &sdfsz);
+        sdfsz.w = 0;
+        sdfsz.h = 0;
+        const sdf = getGlyphSDF(&self.info, @intCast(codepnt), 128, 8, 255, &sdfsz);
         defer tt.stbtt_FreeSDF(sdf, null);
+        std.debug.print("a: {d}x{d} | b: {d}x{d}\n", .{ glp_sz.w, glp_sz.h, sdfsz.w, sdfsz.h });
+        std.debug.assert(sdfsz.w == glp_sz.w and //
+            sdfsz.h == glp_sz.h);
 
         const g = glp_sz.gSize();
-        const texture = try gpa.alloc(u8, g.total * 4);
+        switch (opt) {
+            .rgba => {
+                const texture = try gpa.alloc(u8, g.total * 4);
+                for (0..g.h) |yy| {
+                    for (0..g.w) |x| {
+                        const i = yy * g.w + x;
+                        const val: u8 = bitmap[i];
+                        const dist: u8 = sdf[i];
 
-        for (0..g.h) |yy| {
-            for (0..g.w) |x| {
-                const i = yy * g.w + x;
-                const iq = i * 4;
+                        const qq = i * 4;
+                        if (val == 0) {
+                            texture[qq + m.A] = 0;
+                            continue;
+                        }
 
-                const val: u8 = bitmap[i];
+                        const pixval: []const u8 = &.{ dist, val, val, 255 };
 
-                if (val == 0) {
-                    texture[iq + m.A] = 0;
-                    continue;
+                        @memmove(texture[qq .. qq + 4], pixval);
+                    }
                 }
-                const pixval: []const u8 = &.{ val, val, val, 255 };
-                @memmove(texture[iq .. iq + 4], pixval);
-            }
+                return texture;
+            },
+            .sdf => {
+                const tex_gray = try gpa.alloc(u8, g.total);
+                @memcpy(tex_gray, sdf);
+                return tex_gray;
+            },
         }
-        return texture;
     }
 };
 
@@ -208,6 +236,7 @@ pub const Alphabet = struct {
     pub fn init(io: std.Io, gpa: std.mem.Allocator, src: *const FontRendering, cache_file: []const u8) !Alphabet {
         _ = cache_file;
         _ = io;
+        const t: FontRendering.Vari = .sdf;
         // TODO: would like to find out if atlas stored aleady on fs
         const ascii_len = ascii_chars.len;
 
@@ -229,7 +258,7 @@ pub const Alphabet = struct {
         for (0.., ascii_chars) |i, char| {
             const idx: u8 = @as(u8, @intCast(i));
             try char_map.put(char, idx);
-            tex_data_arr[idx] = try src.sampleCodepoint(gpa, char, &gly_sz);
+            tex_data_arr[idx] = try src.sampleCodepoint(gpa, char, &gly_sz, t);
             how_big[idx] = gly_sz;
             count += 1;
         }
@@ -240,7 +269,10 @@ pub const Alphabet = struct {
         self.char_sz_arr = how_big;
         self.num = @intCast(how_big.len);
 
-        try self.naiveAtlas(gpa, 4);
+        switch (t) {
+            .rgba => try self.naiveAtlas(gpa, 4),
+            .sdf => try self.naiveAtlas(gpa, 1),
+        }
         return self;
     }
 

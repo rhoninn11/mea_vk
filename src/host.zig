@@ -10,7 +10,7 @@ pub const EasyAcces = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
     host: DualHostWin,
-    vkctx: *const gm.GraphicsContext,
+    gm: *const gm.GraphicsContext,
 };
 
 pub const OnHostErrors = error{
@@ -75,7 +75,7 @@ pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
     std.log.debug("Using device: {s}", .{vkctx_sdl.deviceName()});
     const access = EasyAcces{
         .host = .{ .sdl_h = sdl_ctx },
-        .vkctx = &vkctx_sdl,
+        .gm = &vkctx_sdl,
         .gpa = init.gpa,
         .io = init.io,
     };

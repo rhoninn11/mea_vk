@@ -139,9 +139,15 @@ pub const RGBImage = struct {
     }
 };
 
-pub const u16Image = struct {
+pub const U16Image = struct {
     pub fn init(gc: *const GraphicsContext, g: sht.GridSize) !VkImage {
         return VkImage.init(gc, g, .r16_unorm);
+    }
+};
+
+pub const U8Image = struct {
+    pub fn init(gc: *const GraphicsContext, g: sht.GridSize) !VkImage {
+        return VkImage.init(gc, g, .r8_unorm);
     }
 };
 
