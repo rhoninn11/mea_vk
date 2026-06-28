@@ -193,12 +193,14 @@ pub const FrameRecorder = struct {
     pool: vk.CommandPool,
     cmds: *vk.CommandBuffer,
     id: u8,
+    flag: bool = false,
 
-    pub fn clear(self: *const FrameRecorder, gm: *const GraphicsContext) !void {
+    pub fn clear(self: *FrameRecorder, gm: *const GraphicsContext) !void {
+        if (!self.flag) return;
         try gm.dev.resetCommandPool(self.pool, .{});
     }
 
-    pub fn begin(self: *const FrameRecorder, gm: *const GraphicsContext) !void {
+    pub fn begin(self: *FrameRecorder, gm: *const GraphicsContext) !void {
         const cbai: vk.CommandBufferAllocateInfo = .{
             .command_pool = self.pool,
             .level = .primary,
@@ -206,6 +208,7 @@ pub const FrameRecorder = struct {
         };
 
         try gm.dev.allocateCommandBuffers(&cbai, @ptrCast(self.cmds));
+        self.flag = true;
     }
 };
 

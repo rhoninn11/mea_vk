@@ -229,6 +229,15 @@ fn theDeepest(access: EasyAcces) !void {
     }, null);
     defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
 
+    var framebuffers = try createFramebuffers(
+        gc,
+        gpa,
+        render_pass,
+        swapchain,
+    );
+    defer destroyFramebuffers(gc, gpa, framebuffers);
+
+    // pipelines
     const pipe_mod: pipe.Moduler = .{
         .gc = gc,
         .layout = pipeline_layout,
@@ -261,11 +270,12 @@ fn theDeepest(access: EasyAcces) !void {
         .models = &repo,
     };
 
-    // fill storage and textures
+    // grid saved
     const spacing = 0.1;
     const size = 0.04;
-    try refils.storagePrefil(storage, grid, spacing);
+    try refils.gridPrefil(storage, grid, spacing);
 
+    // textures
     const g64 = sht.GridSize.g64;
 
     var all_imgs: imgs.ManyImages = try .init(access.gpa);
@@ -325,32 +335,29 @@ fn theDeepest(access: EasyAcces) !void {
     const inflight_slots = 8;
     std.debug.assert(swapchain_len < inflight_slots);
 
+    // recorders
+    var slot: u8 = 0;
     var inflight_stack: [1024]u8 = undefined;
     var loc_stack: std.heap.FixedBufferAllocator = .init(inflight_stack[0..1024]);
     const cmdbufs: []vk.CommandBuffer = try loc_stack.allocator().alloc(vk.CommandBuffer, swapchain_len);
     const pools: []vk.CommandPool = try loc_stack.allocator().alloc(vk.CommandPool, swapchain_len);
     const recorders: []gm.FrameRecorder = try loc_stack.allocator().alloc(gm.FrameRecorder, swapchain_len);
-
-    var framebuffers = try createFramebuffers(
-        gc,
-        gpa,
-        render_pass,
-        swapchain,
-    );
-    defer destroyFramebuffers(gc, gpa, framebuffers);
-
-    var created: u8 = 0;
-    const frame_pools_config: vk.CommandPoolCreateInfo = .{
+    const frame_cmd_pool_cfg: vk.CommandPoolCreateInfo = .{
         .queue_family_index = gc.graphics_queue.family,
         .flags = .{ .transient_bit = true },
     };
+
     for (0..swapchain_len) |_| {
-        pools[created] = try gc.dev.createCommandPool(&frame_pools_config, null);
-        created += 1;
+        pools[slot] = try gc.dev.createCommandPool(&frame_cmd_pool_cfg, null);
+        recorders[slot] = gm.FrameRecorder{
+            .id = @intCast(slot),
+            .gm = pic.gc,
+            .pool = pools[slot],
+            .cmds = &cmdbufs[slot],
+        };
+        slot += 1;
     }
-    defer for (0..created) |i| {
-        gc.dev.destroyCommandPool(pools[i], null);
-    };
+    defer for (0..slot) |i| gc.dev.destroyCommandPool(pools[i], null);
 
     // Related to scene
     var timeline = addons.Timeline.init(access.io);
@@ -370,35 +377,6 @@ fn theDeepest(access: EasyAcces) !void {
     inertia.phx = .default;
 
     var dbgmonit = u.DbgMonitor{};
-
-    { // Frame recording
-        const frame_sz = try window.winExtent();
-        for (0..swapchain_len) |i| {
-            const uniform_mapping = dset_uniform.buff_arr.items[i].?.mapping.?;
-            const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
-            recorders[i] = gm.FrameRecorder{
-                .id = @intCast(i),
-                .gm = pic.gc,
-                .pool = pools[i],
-                .cmds = &cmdbufs[i],
-            };
-            try refils.unifomRefil(
-                uniforms,
-                0.0,
-                pamperek.pos(),
-                size,
-                frame_sz,
-            );
-            try frame.recordFrame(
-                &recorders[i],
-                swapchain.extent,
-                render_pass,
-                framebuffers,
-                &draw_instanced_attempt,
-                &state,
-            );
-        }
-    }
 
     //state
     var okphi: f32 = 0;

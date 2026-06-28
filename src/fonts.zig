@@ -208,6 +208,7 @@ pub const Alphabet = struct {
     pub fn init(io: std.Io, gpa: std.mem.Allocator, src: *const FontRendering, cache_file: []const u8) !Alphabet {
         _ = cache_file;
         _ = io;
+        // TODO: would like to find out if atlas stored aleady on fs
         const ascii_len = ascii_chars.len;
 
         var char_map: CharLocMap = .init(gpa);

@@ -120,7 +120,7 @@ const CmdHelper = struct {
 };
 
 pub fn recordFrame(
-    rec: *const gm.FrameRecorder,
+    rec: *gm.FrameRecorder,
     extent: vk.Extent2D,
     render_pass: vk.RenderPass,
     framebuffers: []const vk.Framebuffer,

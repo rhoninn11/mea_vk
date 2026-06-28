@@ -36,7 +36,7 @@ pub fn unifomRefil(
     @memcpy(uniforms, scratchpad);
 }
 
-pub fn storagePrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {
+pub fn gridPrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {
     const instance_num = grid.total;
     const lim_num = 8096;
     std.debug.assert(instance_num <= lim_num);
