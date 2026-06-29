@@ -96,59 +96,28 @@ pub const FontRendering = struct {
         gpa.free(self.content);
     }
 
-    const Vari = enum(u8) {
-        rgba,
-        sdf,
-    };
-
     pub fn sampleCodepoint(
         self: *const FontRendering,
         gpa: std.mem.Allocator,
         codepnt: u8,
-        glp_sz: *GlyphSz,
-        opt: Vari,
+        sdf_sz: *GlyphSz,
     ) ![]u8 {
-        const bitmap = getCodepointBitmap(&self.info, @intCast(codepnt), 128, glp_sz);
+        var cdp_sz: GlyphSz = undefined;
+        cdp_sz.w = 0;
+        cdp_sz.h = 0;
+        const bitmap = getCodepointBitmap(&self.info, @intCast(codepnt), 128, sdf_sz);
         defer tt.stbtt_FreeBitmap(bitmap, null);
 
-        var sdfsz: GlyphSz = undefined;
-        sdfsz.w = 0;
-        sdfsz.h = 0;
-        const sdf = getGlyphSDF(&self.info, @intCast(codepnt), 128, 8, 255, &sdfsz);
+        const sdf = getGlyphSDF(&self.info, @intCast(codepnt), 128, 8, 255, &cdp_sz);
         defer tt.stbtt_FreeSDF(sdf, null);
-        std.debug.print("a: {d}x{d} | b: {d}x{d}\n", .{ glp_sz.w, glp_sz.h, sdfsz.w, sdfsz.h });
-        std.debug.assert(sdfsz.w == glp_sz.w and //
-            sdfsz.h == glp_sz.h);
+        std.debug.print("a: {d}x{d} | b: {d}x{d}\n", .{ cdp_sz.w, cdp_sz.h, sdf_sz.w, sdf_sz.h });
+        std.debug.assert(sdf_sz.w == cdp_sz.w and //
+            sdf_sz.h == cdp_sz.h);
 
-        const g = glp_sz.gSize();
-        switch (opt) {
-            .rgba => {
-                const texture = try gpa.alloc(u8, g.total * 4);
-                for (0..g.h) |yy| {
-                    for (0..g.w) |x| {
-                        const i = yy * g.w + x;
-                        const val: u8 = bitmap[i];
-                        const dist: u8 = sdf[i];
-
-                        const qq = i * 4;
-                        if (val == 0) {
-                            texture[qq + m.A] = 0;
-                            continue;
-                        }
-
-                        const pixval: []const u8 = &.{ dist, val, val, 255 };
-
-                        @memmove(texture[qq .. qq + 4], pixval);
-                    }
-                }
-                return texture;
-            },
-            .sdf => {
-                const tex_gray = try gpa.alloc(u8, g.total);
-                @memcpy(tex_gray, sdf);
-                return tex_gray;
-            },
-        }
+        const g = sdf_sz.gSize();
+        const tex_gray = try gpa.alloc(u8, g.total);
+        @memcpy(tex_gray, sdf);
+        return tex_gray;
     }
 };
 
@@ -233,10 +202,9 @@ pub const Alphabet = struct {
         self.char_uvd_arr = atlas_uv_data;
     }
 
-    pub fn init(io: std.Io, gpa: std.mem.Allocator, src: *const FontRendering, cache_file: []const u8) !Alphabet {
+    pub fn init(io: std.Io, gpa: std.mem.Allocator, font: *const FontRendering, cache_file: []const u8) !Alphabet {
         _ = cache_file;
         _ = io;
-        const t: FontRendering.Vari = .sdf;
         // TODO: would like to find out if atlas stored aleady on fs
         const ascii_len = ascii_chars.len;
 
@@ -258,7 +226,7 @@ pub const Alphabet = struct {
         for (0.., ascii_chars) |i, char| {
             const idx: u8 = @as(u8, @intCast(i));
             try char_map.put(char, idx);
-            tex_data_arr[idx] = try src.sampleCodepoint(gpa, char, &gly_sz, t);
+            tex_data_arr[idx] = try font.sampleCodepoint(gpa, char, &gly_sz);
             how_big[idx] = gly_sz;
             count += 1;
         }
@@ -269,10 +237,8 @@ pub const Alphabet = struct {
         self.char_sz_arr = how_big;
         self.num = @intCast(how_big.len);
 
-        switch (t) {
-            .rgba => try self.naiveAtlas(gpa, 4),
-            .sdf => try self.naiveAtlas(gpa, 1),
-        }
+        const sdf_byte_per_pix = 1;
+        try self.naiveAtlas(gpa, sdf_byte_per_pix);
         return self;
     }
 

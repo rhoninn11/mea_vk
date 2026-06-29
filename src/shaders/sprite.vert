@@ -69,7 +69,7 @@ void main() {
     MatPack mvp = _ubo.data.matrices;
     Instance m_inst = _storage.arr[inst_idx];
 
-    if (_pc.data.mode == 1) {
+    if (_pc.data.mode == 1) { // what im dooing here?
         
         float scale = 48;
         vec3 char_scale = vec3(m_inst.offset_4d.xy, 1);

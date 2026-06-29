@@ -299,12 +299,12 @@ fn theDeepest(access: EasyAcces) !void {
     const g_abc = shu.xyGrid(1024, 1024);
     try u.ppmU8Debug(access.io, abc.char_atlas, g_abc);
 
-    var noname = try imgs.U8Image.init(access.gm, g_abc);
-    try imgs.texPrep(&pic, g_abc, abc.char_atlas, false, &noname);
+    var char_atlas = try imgs.U8Image.init(access.gm, g_abc);
+    try imgs.texPrep(&pic, g_abc, abc.char_atlas, false, &char_atlas);
 
     // const sdf_atlas = try imgs.vulkanTexture(&pic, g_abc, abc.char_atlas, false);
-    dset_atlas.updateTexture(0, &noname, 4);
-    try all_imgs.append(&noname);
+    dset_atlas.updateTexture(0, &char_atlas, 4);
+    try all_imgs.append(&char_atlas);
 
     var mono = try imgs.U16Image.init(pic.gc, glass.img_sz);
     {
