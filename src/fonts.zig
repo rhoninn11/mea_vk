@@ -5,6 +5,7 @@ const hmm = @import("oct");
 
 const files = @import("files.zig");
 const sht = @import("shaders/types.zig");
+const shu = @import("shaders/utils.zig");
 const dset = @import("dset.zig");
 const m = @import("math.zig");
 
@@ -37,7 +38,6 @@ pub fn getGlyphSDF(
     on_edge_val: u8,
     s: *GlyphSz,
 ) [*c]u8 {
-    _ = padding;
     const scale: f32 = tt.stbtt_ScaleForPixelHeight(font_info, pixels);
     const glyph = tt.stbtt_FindGlyphIndex(font_info, codepoint);
     //TODO: i guess it has some internal font scale, or differnet fonts have it different
@@ -45,7 +45,7 @@ pub fn getGlyphSDF(
         font_info,
         scale,
         glyph,
-        0,
+        padding,
         on_edge_val,
         32, //need more understanding here, but 4 per pixel seams ok, gives around 32 depth???
         &s.w,
@@ -111,8 +111,10 @@ pub const FontRendering = struct {
         const sdf = getGlyphSDF(&self.info, @intCast(codepnt), 128, 8, 255, &cdp_sz);
         defer tt.stbtt_FreeSDF(sdf, null);
         std.debug.print("a: {d}x{d} | b: {d}x{d}\n", .{ cdp_sz.w, cdp_sz.h, sdf_sz.w, sdf_sz.h });
-        std.debug.assert(sdf_sz.w == cdp_sz.w and //
-            sdf_sz.h == cdp_sz.h);
+        // std.debug.assert(sdf_sz.w == cdp_sz.w and //
+        //     sdf_sz.h == cdp_sz.h);
+
+        sdf_sz.* = cdp_sz;
 
         const g = sdf_sz.gSize();
         const tex_gray = try gpa.alloc(u8, g.total);
@@ -120,6 +122,10 @@ pub const FontRendering = struct {
         return tex_gray;
     }
 };
+
+pub const font_g = shu.xyGrid(font_atlas_w, font_atlas_h);
+pub const font_atlas_w: u32 = 1024 * 2;
+pub const font_atlas_h: u32 = 1024;
 
 pub const Alphabet = struct {
     const show_first_blit: bool = false;
@@ -147,8 +153,6 @@ pub const Alphabet = struct {
         self.char_map.deinit();
     }
 
-    const atlas_w: u32 = 1024;
-    const atlas_h: u32 = 1024;
     fn naiveAtlas(self: *Alphabet, gpa: std.mem.Allocator, pix_w: u8) !void {
         var max_w: u8 = 0;
         var max_h: u8 = 0;
@@ -157,8 +161,8 @@ pub const Alphabet = struct {
             if (sz.h > max_h) max_h = @intCast(sz.h);
         }
 
-        const nx: u32 = atlas_w / max_w;
-        const ny: u32 = atlas_h / max_h;
+        const nx: u32 = font_atlas_w / max_w;
+        const ny: u32 = font_atlas_h / max_h;
         const nmax = nx * ny;
         std.debug.print("+++ nx:{d} ny:{d} nmax:{d}\n", .{ nx, ny, nmax });
         std.debug.assert(nmax > self.char_sz_arr.len);
@@ -166,7 +170,8 @@ pub const Alphabet = struct {
         var atlas_uv_data = try gpa.alloc(m.vec4, self.char_sz_arr.len);
         errdefer gpa.free(atlas_uv_data);
 
-        var atlas = try gpa.alloc(u8, atlas_w * pix_w * atlas_h);
+        var atlas = try gpa.alloc(u8, font_atlas_w * pix_w * font_atlas_h);
+        @memset(atlas, 0);
         for (0..self.char_sz_arr.len) |i| {
             const sz = self.char_sz_arr[i];
             const data = self.char_texd_arr[i];
@@ -175,14 +180,14 @@ pub const Alphabet = struct {
             const y_start = (i / nx) * max_h;
 
             atlas_uv_data[i] = m.vec4{
-                m.floaty(x_start) / m.floaty(atlas_w),
-                m.floaty(y_start) / m.floaty(atlas_h),
-                m.floaty(sz.w) / m.floaty(atlas_w),
-                m.floaty(sz.h) / m.floaty(atlas_h),
+                m.floaty(x_start) / m.floaty(font_atlas_w),
+                m.floaty(y_start) / m.floaty(font_atlas_h),
+                m.floaty(sz.w) / m.floaty(font_atlas_w),
+                m.floaty(sz.h) / m.floaty(font_atlas_h),
             };
 
             const x_off = x_start * pix_w;
-            const y_off = y_start * atlas_w * pix_w;
+            const y_off = y_start * font_atlas_w * pix_w;
 
             const mem_off = y_off + x_off;
 
@@ -190,7 +195,7 @@ pub const Alphabet = struct {
             const h = m.uinty(sz.h);
             for (0..h) |jj| {
                 const src_off = jj * w * pix_w;
-                const dst_off = mem_off + jj * atlas_w * pix_w;
+                const dst_off = mem_off + jj * font_atlas_w * pix_w;
 
                 const tex_dst = atlas[dst_off .. dst_off + w * pix_w];
                 const tex_src = data[src_off .. src_off + w * pix_w];
@@ -223,10 +228,18 @@ pub const Alphabet = struct {
         }
 
         var gly_sz: GlyphSz = undefined;
-        for (0.., ascii_chars) |i, char| {
-            const idx: u8 = @as(u8, @intCast(i));
+        for (ascii_chars) |char| {
+            const idx: u8 = @as(u8, @intCast(count));
             try char_map.put(char, idx);
-            tex_data_arr[idx] = try font.sampleCodepoint(gpa, char, &gly_sz);
+            switch (char != ' ') { // TODO: tutaj spacja najprowdopodobnej bruździ
+                true => {
+                    tex_data_arr[idx] = try font.sampleCodepoint(gpa, char, &gly_sz);
+                },
+                false => {
+                    tex_data_arr[idx] = try gpa.alloc(u8, 16);
+                    gly_sz = GlyphSz{};
+                },
+            }
             how_big[idx] = gly_sz;
             count += 1;
         }

@@ -29,14 +29,16 @@ void main() {
         vec4 tex_color = texture(tex_bindless[nonuniformEXT(v_tex_idx)], v_uv);
         // f_color = vec4(vec3(tex_color.r), 1);
         
-        if (tex_color.r <= 0.3) {
+        if (tex_color.r <= 0.0) {
+            discard;
+        } else if (tex_color.r <= 0.95 ) {
             f_color = vec4(vec3(0), 1);
-        }else {
+        } else {
             f_color = vec4(1);
         }
 
         if (tex_color.a < 0.5) {
             discard;
         }
-    } 
+    }
 }

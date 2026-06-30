@@ -296,7 +296,7 @@ fn theDeepest(access: EasyAcces) !void {
         }
     }
 
-    const g_abc = shu.xyGrid(1024, 1024);
+    const g_abc = fonts.font_g;
     try u.ppmU8Debug(access.io, abc.char_atlas, g_abc);
 
     var char_atlas = try imgs.U8Image.init(access.gm, g_abc);
