@@ -36,7 +36,7 @@ fn shaderStages(modules: [slot_len]vk.ShaderModule) [slot_len]PSSCI {
 }
 
 // for selecting shaders?
-pub const PipeType = enum(u8) {
+pub const EBrush = enum(u8) {
     Triangle,
     Sprite,
     SpriteWDepth,
@@ -68,7 +68,7 @@ pub const Moduler = struct {
     pub fn createPipeline(
         self: *const Moduler,
         render_pass: vk.RenderPass,
-        pt: PipeType,
+        pt: EBrush,
     ) !vk.Pipeline {
         const src: [slot_len]EmbedSpirv = switch (pt) {
             .Triangle => .{ vert_triangle[0..], frag_triangle[0..] },

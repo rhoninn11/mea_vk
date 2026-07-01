@@ -242,14 +242,17 @@ fn theDeepest(access: EasyAcces) !void {
         .gc = gc,
         .layout = pipeline_layout,
     };
-    const pipeline = try pipe_mod.createPipeline(render_pass, .Triangle);
-    defer pipe_mod.destroyPipelin(pipeline);
-    const pipeline_2nd = try pipe_mod.createPipeline(render_pass, .Sprite);
-    defer pipe_mod.destroyPipelin(pipeline_2nd);
-    const pipeline_3rd = try pipe_mod.createPipeline(render_pass, .SpriteWDepth);
-    defer pipe_mod.destroyPipelin(pipeline_3rd);
-    const pipeline_4th = try pipe_mod.createPipeline(render_pass, .FontSdf);
-    defer pipe_mod.destroyPipelin(pipeline_4th);
+
+    var num: u8 = 0;
+    const all_brush = std.enums.values(pipe.EBrush);
+    var pipelines: [all_brush.len]vk.Pipeline = undefined;
+    for (0.., all_brush) |i, pencil| {
+        pipelines[i] = try pipe_mod.createPipeline(render_pass, pencil);
+        num += 1;
+    }
+    defer for (0..num) |i| {
+        pipe_mod.destroyPipelin(pipelines[i]);
+    };
 
     var repo = try vertex.repoSpawn(gpa, &pic);
     defer repo.deinit(gc);
@@ -257,12 +260,7 @@ fn theDeepest(access: EasyAcces) !void {
 
     const draw_instanced_attempt: gm.DrawInfo = .{
         .instance_count = grid.total, // TODO: something like "InstanceMapping"...
-        .pipeline = [4]vk.Pipeline{
-            pipeline,
-            pipeline_2nd,
-            pipeline_3rd,
-            pipeline_4th,
-        },
+        .pipeline = pipelines,
         .pipeline_layout = pipeline_layout,
         .uniform_dsets = dset_uniform.d_set_arr,
         .storage_dsets = storage.d_set_arr,

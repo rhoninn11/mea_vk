@@ -100,7 +100,7 @@ const CmdHelper = struct {
     }
 
     // TODO: use known PipeIndex
-    pub fn use(self: *const CmdHelper, ptype: pipe.PipeType) void {
+    pub fn use(self: *const CmdHelper, ptype: pipe.EBrush) void {
         _ = self;
         _ = ptype;
     }

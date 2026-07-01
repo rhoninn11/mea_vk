@@ -24,15 +24,23 @@ layout(location = 2) in float vv_limit;
 
 layout(location = 0) out vec4 f_color; //out
 
+vec4 sample_bindles(uint i, vec2 uv) {
+    return texture(tex_bindless[nonuniformEXT(i)], uv);
+}
+
 void main() {
-    vec4 tex_color = texture(tex_bindless[nonuniformEXT(v_tex_idx)], v_uv);
+    vec4 tex_color = sample_bindles(v_tex_idx, v_uv);
 
     if (_pc.data.mode == 4) { // mono value tresholding
         float supse_to_use = vv_limit;
         if (tex_color.r < 0.6) {
             discard;
         }
-        f_color = vec4(1);
+        float base = (tex_color.r - 0.6) * 2.5;
+        
+        vec2 grad_uv = vec2(base, 0);
+        vec4 grad_color = sample_bindles(32, grad_uv);
+        f_color = vec4(grad_color.rgb, 1);
     }
     else { // crop ok space slices
         if (tex_color.a < 0.99) {
