@@ -68,6 +68,8 @@ void main() {
     uint inst_idx = _pc.data.inst_base + gl_InstanceIndex;
     MatPack mvp = _ubo.data.matrices;
     Instance m_inst = _storage.arr[inst_idx];
+    float time = _ubo.data.temporal.x;
+    vv_limit = sin(time) * 0.1;
 
     if (_pc.data.mode == 1) { // what im dooing here?
         
@@ -86,8 +88,8 @@ void main() {
     }else if (_pc.data.mode == 2 || _pc.data.mode == 4) {
         vec4 base = vec4(a_pos, 1);
         mat4 model = _pc.data.model;
-        vv_limit = model[3][0];
-        model[3][0] = 0;
+        // vv_limit = model[3][0];
+        // model[3][0] = 0;
         gl_Position = mvp.proj * mvp.view * _pc.data.model * base;
         v_tex_idx = _pc.data.tex_base;
         float s = _pc.data.scale2D.x;

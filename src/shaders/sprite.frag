@@ -27,19 +27,21 @@ layout(location = 0) out vec4 f_color; //out
 vec4 sample_bindles(uint i, vec2 uv) {
     return texture(tex_bindless[nonuniformEXT(i)], uv);
 }
+#define GRAD_TEX 32
 
 void main() {
     vec4 tex_color = sample_bindles(v_tex_idx, v_uv);
+    float treshold_val = 0.5 + vv_limit;
+    float treshold_scale = 1.0/(1.0-treshold_val);
 
     if (_pc.data.mode == 4) { // mono value tresholding
-        float supse_to_use = vv_limit;
-        if (tex_color.r < 0.6) {
+        if (tex_color.r < treshold_val) {
             discard;
         }
-        float base = (tex_color.r - 0.6) * 2.5;
+        float base = (tex_color.r - treshold_val) * treshold_scale;
         
         vec2 grad_uv = vec2(base, 0);
-        vec4 grad_color = sample_bindles(32, grad_uv);
+        vec4 grad_color = sample_bindles(GRAD_TEX, grad_uv);
         f_color = vec4(grad_color.rgb, 1);
     }
     else { // crop ok space slices
