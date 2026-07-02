@@ -89,12 +89,13 @@ const CmdHelper = struct {
         );
     }
 
-    pub fn drawInsances(self: *const CmdHelper, mdl_idx: u16, num: u32) void {
+    pub fn drawInsances(self: *const CmdHelper, mdl_idx: v.EMesh, num: u32) void {
+        const idx: u8 = @intFromEnum(mdl_idx);
         self.gc.dev.cmdDraw(
             self.command,
-            self.models.sizes[mdl_idx],
+            self.models.sizes[idx],
             num,
-            self.models.offsets[mdl_idx],
+            self.models.offsets[idx],
             0,
         );
     }
@@ -172,9 +173,6 @@ pub fn recordFrame(
     // const instace_sz = @sizeOf(sht.PerInstance);
     // _ = instace_sz;
     {
-        const BILBORD_IDX = 4;
-        const HEX_IDX = 5;
-        const GUI_BILBO_IDX = 6;
         try gc.dev.beginCommandBuffer(cbufr, &.{});
 
         gc.dev.cmdSetViewport(cbufr, 0, viewport);
@@ -206,17 +204,17 @@ pub fn recordFrame(
                 };
 
                 hl_cmds.push(&geopush);
-                hl_cmds.drawInsances(state.model_idx, draw.instance_count); // grid
+                const selectable: v.EMesh = std.enums.fromInt(v.EMesh, state.model_idx) orelse v.EMesh.cube;
+                hl_cmds.drawInsances(selectable, draw.instance_count); // grid
 
                 if (state.layer_group.num > 0) {
-                    const cube_index = 1;
                     const layerpush = gm.PushConstant.PCBlob{
                         .model = m.matTrans(.{ 0, 0, 0 }).mat,
                         .inst_base = state.layer_group.base,
                         .mode = 1, // triangle mode
                     };
                     hl_cmds.push(&layerpush);
-                    hl_cmds.drawInsances(cube_index, state.layer_group.num); // layers
+                    hl_cmds.drawInsances(.cube, state.layer_group.num); // layers
                 }
             }
 
@@ -230,7 +228,7 @@ pub fn recordFrame(
                     // triangle mode ???
                 };
                 hl_cmds.push(&okpush);
-                hl_cmds.drawInsances(BILBORD_IDX, state.ok_group.num); // ok slices
+                hl_cmds.drawInsances(.quad, state.ok_group.num); // ok slices
             }
 
             hl_cmds.dynUboDsets(all_sets, 2); // GUI
@@ -247,7 +245,7 @@ pub fn recordFrame(
                     .mode = 3, //triangle mode
                 };
                 hl_cmds.push(&guipush);
-                hl_cmds.drawInsances(HEX_IDX, 1); // cursor
+                hl_cmds.drawInsances(.hexy, 1); // cursor
             }
 
             {
@@ -261,13 +259,13 @@ pub fn recordFrame(
                     .point2D = state.nav.uv_offset,
                 };
                 hl_cmds.push(&scan_push);
-                hl_cmds.drawInsances(GUI_BILBO_IDX, 1); // scann color map
+                hl_cmds.drawInsances(.quad, 1); // scann color map
 
                 var closer = m.matTrans(.{ 0, 0, -0.1 });
                 scan_push.model = m.matXmat(closer.mat, scann_mat).mat;
                 scan_push.tex_base = 3;
                 hl_cmds.push(&scan_push);
-                hl_cmds.drawInsances(GUI_BILBO_IDX, 1); // scann layers
+                hl_cmds.drawInsances(.quad, 1); // scann layers
 
                 closer = m.matTrans(.{ 0, 0, -0.05 });
                 const delta_store = m.matXmat(closer.mat, scann_mat).mat;
@@ -280,7 +278,7 @@ pub fn recordFrame(
                     .point2D = state.nav.uv_offset,
                 };
                 hl_cmds.push(&scan_push_sdf);
-                hl_cmds.drawInsances(GUI_BILBO_IDX, 1); // scann shaded
+                hl_cmds.drawInsances(.quad, 1); // scann shaded
             }
 
             {
@@ -292,7 +290,7 @@ pub fn recordFrame(
                     .mode = 1, //sdf mode
                 };
                 hl_cmds.push(&letter_push);
-                hl_cmds.drawInsances(GUI_BILBO_IDX, state.char_group.num); // text
+                hl_cmds.drawInsances(.quad, state.char_group.num); // text
             }
         }
         try gc.dev.endCommandBuffer(cbufr);

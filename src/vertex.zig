@@ -46,7 +46,7 @@ const PairArray = std.ArrayList(PairPoint);
 pub const TriangleArray = std.ArrayList(Vertex);
 
 const tri_loops = [_]u8{ 0, 1, 2, 2, 1, 3 };
-const quad: []const Vertex = &.{
+const plane: []const Vertex = &.{
     Vertex{ .pos = .{ 1, 0, -1 }, .color = .{ 1, 1, 0 } },
     Vertex{ .pos = .{ -1, 0, -1 }, .color = .{ 0, 1, 0 } },
     Vertex{ .pos = .{ 1, 0, 1 }, .color = .{ 1, 0, 0 } },
@@ -109,36 +109,70 @@ pub const Math = struct {
 };
 
 pub const Utils = struct {
-    pub fn Ring(alloc: Allocator, param: RingParams) error{OutOfMemory}!TriangleArray {
-        const vert_num: usize = @as(usize, param.len) * 2;
+    pub fn Plane(gpa: Allocator) !TriangleArray {
+        var triangles: TriangleArray = try .initCapacity(gpa, 6);
+        errdefer triangles.deinit(gpa);
 
-        var pair_arr: PairArray = .empty;
-        try pair_arr.resize(alloc, vert_num);
-        defer pair_arr.deinit(alloc); //intermediate cals
-
-        ringPairs(pair_arr.items, param);
-        return try triangulateSegments(alloc, pair_arr.items);
+        try blitPlane(gpa, &triangles);
+        Math.matApply(triangles.items, Math.xrot90);
+        return triangles;
     }
 
-    pub fn Cube(alloc: Allocator) error{OutOfMemory}!TriangleArray {
-        var triangles: TriangleArray = try .initCapacity(alloc, 30);
-        errdefer triangles.deinit(alloc);
+    pub fn Quad(alloc: Allocator) !TriangleArray {
+        const triangles = try Plane(alloc);
+
+        Math.matApply4(triangles.items, m.matXmat(
+            m.matScale(m.splat3d(0.5)).mat,
+            m.matTrans(.{ 1, -1, 0 }).mat,
+        ).mat);
+        return triangles;
+    }
+
+    pub fn Hexy(gpa: Allocator) !TriangleArray {
+        var triangles: TriangleArray = try .initCapacity(gpa, 6);
+        errdefer triangles.deinit(gpa);
+
+        try blitPlane(gpa, &triangles);
+        const tis = triangles.items;
+        const factor = @sqrt(3.0) / 3.0;
+        Math.matApply(triangles.items, Math.xrot90);
+        Math.scaleApply(triangles.items, .{ factor, 1, 1 });
+        for (0..6) |i| {
+            const val = &triangles.items[i].color[0];
+            val.* = factor * val.* + (1 - factor) / 2.0;
+        }
+
+        try triangles.appendSlice(gpa, &.{ tis[0], tis[2], Vertex{
+            .pos = .{ 1, 0, 0 },
+            .color = .{ 1, 0.5, 0 },
+        } });
+        try triangles.appendSlice(gpa, &.{ tis[5], tis[4], Vertex{
+            .pos = .{ -1, 0, 0 },
+            .color = .{ 0, 0.5, 0 },
+        } });
+
+        return triangles;
+    }
+
+    pub fn Cube(gpa: Allocator) error{OutOfMemory}!TriangleArray {
+        var triangles: TriangleArray = try .initCapacity(gpa, 30);
+        errdefer triangles.deinit(gpa);
 
         var lid: [6]Vertex = undefined;
 
         for (0.., tri_loops) |i, ti| {
-            lid[i] = quad[ti];
+            lid[i] = plane[ti];
             lid[i].color = .{ 1, 1, 0 };
         }
         // top
         Math.transApply(lid[0..], .{ 0, 1, 0 });
-        try triangles.appendSlice(alloc, lid[0..]);
+        try triangles.appendSlice(gpa, lid[0..]);
         // middle
-        try addSides(alloc, &triangles);
+        try addSides(gpa, &triangles);
         // bottom
         for (0..lid.len) |i| lid[i].color = .{ 0, 1, 0 };
         Math.matApply(lid[0..], Math.xrot180);
-        try triangles.appendSlice(alloc, lid[0..]);
+        try triangles.appendSlice(gpa, lid[0..]);
 
         Math.scaleApply(triangles.items, .{ 0.9, 0.9, 0.9 });
         return triangles;
@@ -155,7 +189,7 @@ pub const Utils = struct {
             .outer_r = unit,
             .inner_r = unit * 0.5,
         };
-        var lid_ring = try Ring(gpa, ring_param);
+        var lid_ring = try Loooped.Ring(gpa, ring_param);
         defer lid_ring.deinit(gpa);
 
         // top
@@ -182,7 +216,7 @@ pub const Utils = struct {
         {
             // TODO:
             // add propper uv mapping
-            try blitQuad(gpa, &triangles);
+            try blitPlane(gpa, &triangles);
             Math.matApply(triangles.items, Math.xrot90);
 
             Math.scaleApply(triangles.items, m.splat3d(0.5));
@@ -242,70 +276,19 @@ pub const Utils = struct {
         return triangles_final;
     }
 
-    fn blitQuad(alloc: Allocator, ta: *TriangleArray) !void {
+    const Ops = struct {};
+    fn blitPlane(alloc: Allocator, ta: *TriangleArray) !void {
         var lid: [6]Vertex = undefined;
         for (0.., tri_loops) |i, ti| {
-            lid[i] = quad[ti];
+            lid[i] = plane[ti];
         }
         return ta.appendSlice(alloc, &lid);
-    }
-
-    pub fn Bilboard(alloc: Allocator) !TriangleArray {
-        var triangles: TriangleArray = try .initCapacity(alloc, 6);
-        errdefer triangles.deinit(alloc);
-
-        try blitQuad(alloc, &triangles);
-        Math.matApply(triangles.items, Math.xrot90);
-        return triangles;
-    }
-    pub fn GuiBilboard(alloc: Allocator) !TriangleArray {
-        const triangles = try Bilboard(alloc);
-
-        Math.matApply4(triangles.items, m.matXmat(
-            m.matScale(m.splat3d(0.5)).mat,
-            m.matTrans(.{ 1, -1, 0 }).mat,
-        ).mat);
-        return triangles;
-    }
-
-    pub fn Hexy(gpa: Allocator) !TriangleArray {
-        var triangles: TriangleArray = try .initCapacity(gpa, 6);
-        errdefer triangles.deinit(gpa);
-
-        try blitQuad(gpa, &triangles);
-        const tis = triangles.items;
-        const factor = @sqrt(3.0) / 3.0;
-        Math.matApply(triangles.items, Math.xrot90);
-        Math.scaleApply(triangles.items, .{ factor, 1, 1 });
-        for (0..6) |i| {
-            const val = &triangles.items[i].color[0];
-            val.* = factor * val.* + (1 - factor) / 2.0;
-        }
-
-        try triangles.appendSlice(gpa, &.{ tis[0], tis[2], Vertex{
-            .pos = .{ 1, 0, 0 },
-            .color = .{ 1, 0.5, 0 },
-        } });
-        try triangles.appendSlice(gpa, &.{ tis[5], tis[4], Vertex{
-            .pos = .{ -1, 0, 0 },
-            .color = .{ 0, 0.5, 0 },
-        } });
-
-        return triangles;
-    }
-
-    fn blitting(alloc: Allocator, stencil: *TriangleArray) !TriangleArray {
-        const rotX = m.rotMatX(0.25);
-
-        _ = alloc;
-        _ = stencil;
-        _ = rotX;
     }
 
     fn addSides(alloc: Allocator, tris: *TriangleArray) !void {
         var face: [6]Vertex = undefined;
         for (0.., tri_loops) |i, ti| {
-            face[i] = quad[ti];
+            face[i] = plane[ti];
             const u: f32 = if (ti < 2) 0 else 1;
             face[i].color = .{ u, 1, 0 };
         }
@@ -319,73 +302,86 @@ pub const Utils = struct {
         }
     }
 
-    fn ringPairs(pair_points: []PairPoint, param: RingParams) void {
-        std.debug.assert(@mod(pair_points.len, 2) == 0);
-        const segments = pair_points.len / 2;
+    const Loooped = struct {
+        pub fn Ring(alloc: Allocator, param: RingParams) error{OutOfMemory}!TriangleArray {
+            const vert_num: usize = @as(usize, param.len) * 2;
 
-        for (0..segments) |i| {
-            // const flen: f32 = @floatFromInt(len - 1);
-            // const fi: f32 = @floatFromInt(i);
-            const progress = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(segments - 1));
+            var pair_arr: PairArray = .empty;
+            try pair_arr.resize(alloc, vert_num);
+            defer pair_arr.deinit(alloc); //intermediate cals
 
-            const phi = std.math.tau * progress;
-            const stamp_a = PairPoint{
-                .progress = progress,
-                .pos = .{
-                    std.math.cos(phi),
-                    std.math.sin(phi),
-                    0,
-                },
-                .v = 0.0,
-            };
-            var stamp_b = stamp_a;
-            stamp_b.v = 1.0;
-
-            pair_points[i * 2] = stamp_a;
-            pair_points[i * 2 + 1] = stamp_b;
+            ringPairs(pair_arr.items, param);
+            return try triangulateSegments(alloc, pair_arr.items);
         }
 
-        for (0..segments) |seg_i| {
-            const pnt_i = seg_i * 2;
-            const base: [2]f32 = pair_points[pnt_i].pos[0..2].*;
+        fn ringPairs(pair_points: []PairPoint, param: RingParams) void {
+            std.debug.assert(@mod(pair_points.len, 2) == 0);
+            const segments = pair_points.len / 2;
 
-            const height: f32 = if (param.flat) 0.0 else 0.5;
-            pair_points[pnt_i + 1].pos = m.stack(m.mul2D(base, param.inner_r), height);
-            pair_points[pnt_i].pos = m.stack(m.mul2D(base, param.outer_r), 0);
-        }
-    }
+            for (0..segments) |i| {
+                // const flen: f32 = @floatFromInt(len - 1);
+                // const fi: f32 = @floatFromInt(i);
+                const progress = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(segments - 1));
 
-    fn triangulateSegments(alloc: Allocator, pair_points: []const PairPoint) !TriangleArray {
-        std.debug.assert(@mod(pair_points.len, 2) == 0);
-        const len = pair_points.len / 2;
-
-        const segments = len - 1;
-        const vert_size = @as(usize, segments) * 6;
-        var stage_vert_arr: std.ArrayList(Vertex) = .empty;
-        try stage_vert_arr.resize(alloc, vert_size);
-        var stage_vert = stage_vert_arr.items;
-        // const delta: [2]f32 = .{ 0.05, 0.07 };
-        // var off: [2]f32 = .{ 0, 0 };
-
-        for (0..segments) |pre_i| {
-            const tri_pair_i = pre_i * 6;
-            const pos_i = pre_i * 2;
-
-            for (tri_loops, 0..) |pos_off, jj| {
-                const stage = pair_points[pos_i + pos_off];
-                const v = Vertex{
+                const phi = std.math.tau * progress;
+                const stamp_a = PairPoint{
+                    .progress = progress,
                     .pos = .{
-                        stage.pos[X],
-                        stage.pos[Z],
-                        stage.pos[Y],
+                        std.math.cos(phi),
+                        std.math.sin(phi),
+                        0,
                     },
-                    .color = .{ stage.progress, stage.v, 0 },
+                    .v = 0.0,
                 };
-                stage_vert[tri_pair_i + jj] = v;
+                var stamp_b = stamp_a;
+                stamp_b.v = 1.0;
+
+                pair_points[i * 2] = stamp_a;
+                pair_points[i * 2 + 1] = stamp_b;
+            }
+
+            for (0..segments) |seg_i| {
+                const pnt_i = seg_i * 2;
+                const base: [2]f32 = pair_points[pnt_i].pos[0..2].*;
+
+                const height: f32 = if (param.flat) 0.0 else 0.5;
+                pair_points[pnt_i + 1].pos = m.stack(m.mul2D(base, param.inner_r), height);
+                pair_points[pnt_i].pos = m.stack(m.mul2D(base, param.outer_r), 0);
             }
         }
-        return stage_vert_arr;
-    }
+
+        fn triangulateSegments(alloc: Allocator, pair_points: []const PairPoint) !TriangleArray {
+            std.debug.assert(@mod(pair_points.len, 2) == 0);
+            const len = pair_points.len / 2;
+
+            const segments = len - 1;
+            const vert_size = @as(usize, segments) * 6;
+            var stage_vert_arr: std.ArrayList(Vertex) = .empty;
+            try stage_vert_arr.resize(alloc, vert_size);
+            var stage_vert = stage_vert_arr.items;
+            // const delta: [2]f32 = .{ 0.05, 0.07 };
+            // var off: [2]f32 = .{ 0, 0 };
+
+            for (0..segments) |pre_i| {
+                const tri_pair_i = pre_i * 6;
+                const pos_i = pre_i * 2;
+
+                for (tri_loops, 0..) |pos_off, jj| {
+                    const stage = pair_points[pos_i + pos_off];
+                    const v = Vertex{
+                        .pos = .{
+                            stage.pos[X],
+                            stage.pos[Z],
+                            stage.pos[Y],
+                        },
+                        .color = .{ stage.progress, stage.v, 0 },
+                    };
+                    stage_vert[tri_pair_i + jj] = v;
+                }
+            }
+            return stage_vert_arr;
+        }
+    };
 };
 
 const MODEL_MAX: u8 = 8;
@@ -448,38 +444,32 @@ pub fn probing(show: bool) void {
     tinkering(VertexAlt1, show);
     tinkering(VertexAlt2, show);
 }
+
+const meshes_alt: []const TriGen = &.{
+    &Utils.Plane,   &Utils.Quad, &Utils.Hexy,   &Utils.Hexy, //
+    &Utils.Pierced, &Utils.Cube, &Utils.Hollow,
+};
+
+const meshes: []const TriGen = &.{
+    &Utils.Pierced, &Utils.Cube, &Utils.Hollow, &Utils.Hexy, //
+    &Utils.Plane,   &Utils.Hexy, &Utils.Quad,
+};
+
+pub const EMesh = enum(u8) {
+    pierced = 0,
+    cube,
+    hollow,
+    ring,
+    plane,
+    hexy,
+    quad,
+};
+
+const TriGen = *const fn (Allocator) error{OutOfMemory}!TriangleArray;
 pub fn populateModels(gpa: std.mem.Allocator, here: *TriangleArray, as: *VertRepo) !void {
-    var param = RingParams.default;
     var shape: TriangleArray = undefined;
 
-    // const HOLLOW_CUBE = 0;
-    // const CUBE = 1;
-    // const PIERCERD = 2;
-    const TriGen = *const fn (Allocator) error{OutOfMemory}!TriangleArray;
-    const gen1: []const TriGen = &.{ &Utils.Pierced, &Utils.Cube, &Utils.Hollow };
-    for (gen1) |generator| {
-        shape = try generator(gpa);
-        defer shape.deinit(gpa);
-
-        try here.appendSlice(gpa, shape.items);
-        as.register(shape.items);
-    }
-
-    // const RING = 3;
-    //--- First
-    param.len = 32;
-    param.flat = false;
-    shape = try Utils.Ring(gpa, param);
-    try here.appendSlice(gpa, shape.items);
-    as.register(shape.items);
-    shape.deinit(gpa);
-    //----
-
-    // const BILBO = 4;
-    // const BILBO_HEX = 5;
-    // const BILBO_GUI = 6
-    const gen2: []const TriGen = &.{ &Utils.Bilboard, &Utils.Hexy, &Utils.GuiBilboard };
-    for (gen2) |generator| {
+    for (meshes) |generator| {
         shape = try generator(gpa);
         defer shape.deinit(gpa);
 
