@@ -228,7 +228,7 @@ pub fn recordFrame(
                     // triangle mode ???
                 };
                 hl_cmds.push(&okpush);
-                hl_cmds.drawInsances(.quad, state.ok_group.num); // ok slices
+                hl_cmds.drawInsances(.hexy, state.ok_group.num); // ok slices
             }
 
             hl_cmds.dynUboDsets(all_sets, 2); // GUI

@@ -198,6 +198,7 @@ pub const LookingGlass = struct {
     scan_raw: *meagen.Image,
     scan_lyr: *meagen.Image,
     img_sz: sht.GridSize,
+    inverse: bool = false,
 
     pub fn init(from: *DualImageData, g_sz: sht.GridSize) LookingGlass {
         std.debug.assert(from.raw_data.info.?.img_type == meagen.ImgType.DUO);
@@ -276,18 +277,22 @@ pub const LookingGlass = struct {
         return self.scan_lyr.pixels[lo_idx];
     }
 
-    pub fn scanVal(self: *LookingGlass, i: usize) u16 {
-        return self.hdrVal(self.lookingIdx(i));
+    pub fn scanValNorm(self: *LookingGlass, i: usize) f32 {
+        const U16max: f32 = 1 << 16;
+        const uval = self.hdrVal(self.lookingIdx(i));
+        const fval = @as(f32, @floatFromInt(uval));
+        const norm = fval / U16max;
+
+        return if (self.inverse) 1 - norm else norm;
     }
 
     pub fn layerVal(self: *LookingGlass, i: usize) u8 {
         return self.stdval(self.lookingIdx(i));
     }
 
-    const U16max: f32 = 1 << 16;
     const TRIM_FACTOR = 0.4;
     const INST_LIM = 8096 + 4096;
-    pub fn updateStorage(self: *LookingGlass, instances: [*]sht.PerInstance, enabled: bool) !void {
+    pub fn bakeScann(self: *LookingGlass, instances: [*]sht.PerInstance, enabled: bool) !void {
         const total = self.win_sz.total;
 
         std.debug.assert(total <= INST_LIM);
@@ -302,9 +307,8 @@ pub const LookingGlass = struct {
 
         for (0..total) |i| {
             var prev_one: sht.PerInstance = scratchpad[i];
-            const h = @as(f32, @floatFromInt(self.scanVal(i)));
+            const level = self.scanValNorm(i);
 
-            const level = h / U16max;
             const tresholded_h = @max(0, ((level - TRIM_FACTOR) / (1 - TRIM_FACTOR)));
             // TODO: depth can be controlled by push constant mode i guess
             prev_one.depth_ctrl[0] = if (enabled) 1 else 0;
@@ -316,7 +320,7 @@ pub const LookingGlass = struct {
         @memcpy(instances, scratchpad);
     }
 
-    pub fn updateLayerStorage(
+    pub fn bakeRidges(
         self: *LookingGlass,
         instances: [*]sht.PerInstance,
         first_layer_instance: u32,
@@ -341,9 +345,7 @@ pub const LookingGlass = struct {
 
         for (0..total_cells) |i| {
             var src_inst: sht.PerInstance = src_cells_data[i];
-            const h = @as(f32, @floatFromInt(self.scanVal(i)));
-
-            const level = h / U16max;
+            const level = self.scanValNorm(i);
             const tresholded_h = @max(0, ((level - TRIM_FACTOR) / (1 - TRIM_FACTOR)));
 
             const layer_val = self.layerVal(i);

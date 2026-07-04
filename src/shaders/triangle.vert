@@ -78,7 +78,12 @@ void main() {
     
     vec3 pos_im = pos_scaled;
     if (gate > 0.5) {
-        pos_im = vec3(pos_scaled.x, pos_scaled.y*(10*h+0.5), pos_scaled.z);
+        float mult = 10;
+        if (_pc.data.mode == 1 ) {
+            mult = 30;
+        }
+        
+        pos_im = vec3(pos_scaled.x, pos_scaled.y*(mult*h+0.5), pos_scaled.z);
     }
     if (gate > 1.5) {
         pos_im = pos_scaled;
@@ -91,9 +96,6 @@ void main() {
     float depth_osc = sin(_group.data.temporal.x + m_inst.new_usage.y)*0.49 + 0.5;
     float y_anim = depth_osc + gl_InstanceIndex*0.0001; // to combat depth flickering
     if (gate > 0.5) {
-        y_anim = h*2;
-    }
-    if (gate > 1.5) {
         y_anim = h*2;
     }
 

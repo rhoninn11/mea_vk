@@ -472,6 +472,10 @@ fn theDeepest(access: EasyAcces) !void {
             dbgmonit.enabled = !dbgmonit.enabled;
         }
 
+        if (input.inverse_tirg.fired()) {
+            glass.inverse = !glass.inverse;
+        }
+
         var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 960);
         const px, const py = glass.pos;
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
@@ -517,10 +521,10 @@ fn theDeepest(access: EasyAcces) !void {
             // layers 6144-?
 
             if (state.alt_shader) {
-                try glass.updateStorage(instances, false);
+                try glass.bakeScann(instances, false);
             } else {
-                try glass.updateStorage(instances, true);
-                const lnum = try glass.updateLayerStorage(
+                try glass.bakeScann(instances, true);
+                const lnum = try glass.bakeRidges(
                     instances,
                     state.layer_group.base,
                     false,

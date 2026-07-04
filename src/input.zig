@@ -63,6 +63,7 @@ pub var slide_l_trig: Trigger = .{};
 pub var slide_r_trig: Trigger = .{};
 pub var dbg_trig: Trigger = .{};
 pub var sample_tirg: Trigger = .{};
+pub var inverse_tirg: Trigger = .{};
 
 const KeyActionSdl = motion.msdl.KeyAction;
 const Tied = struct {
@@ -102,6 +103,7 @@ const sdl_inputs: []const Tied = &.{
     .{ .key = sdl.keycode.Keycode.b, .trig = &slide_r_trig },
     .{ .key = sdl.keycode.Keycode.two, .trig = &dbg_trig },
     .{ .key = sdl.keycode.Keycode.three, .trig = &time_stop_trig },
+    .{ .key = sdl.keycode.Keycode.four, .trig = &inverse_tirg },
 };
 
 const axesCheck = [_]*DualHoldsAxis{
