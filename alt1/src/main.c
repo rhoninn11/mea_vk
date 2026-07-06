@@ -1,6 +1,7 @@
 #include "stdio.h"
 #include "string.h"
 #include "stdint.h"
+#include "unistd.h"
 #include "math.h"
 
 #include "raylib.h"
@@ -14,6 +15,13 @@
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"
 
+#define STB_SPRINTF_IMPLEMENTATION
+#include "stb_sprintf.h"
+
+#define WIN32_LEAN_AND_MEAN
+#define NOGDI
+#define NOUSER
+#include "tinydir.h"
 
 #define LOCAL_STACK 2*1024
 #define TXT_RED "\x1b[31m"
@@ -119,10 +127,44 @@ void readImages(const char *file, PlacementInfo **dynamic_array) {
     }
 }
 
+#define _8KB 8096
+char text_scratchpad[_8KB];
+char* scratchpad_beg = text_scratchpad;
+uint16_t scratpad_space_left = _8KB;
+
+void imgCrawler() {
+    tinydir_dir dir;
+    const char* base_dir = "fs/images/";
+    tinydir_open(&dir, base_dir);
+    
+    printf("+++ what we have here:\n");
+    while(dir.has_next) {
+        tinydir_file file;
+        tinydir_readfile(&dir, &file);
+        
+        if (!file.is_dir) {
+            int len = stbsp_snprintf(scratchpad_beg, scratpad_space_left, "%s%s", base_dir, file.name);
+            char* file_path = scratchpad_beg;
+            file_path[len] = '\0';
+            
+            uint16_t delta = len + 1;
+            scratchpad_beg += delta;
+            scratpad_space_left -= delta;
+
+            printf("    %s%s len of %d\n", base_dir, file.name, len);
+        }
+        tinydir_next(&dir);
+    }
+    tinydir_close(&dir);
+}
+
 int main(void)
 {
-    InitWindow(1920, 1080, "colmap data preview");
+    imgCrawler();
+    
+    InitWindow(1600, 900, "colmap data preview");
     SetTargetFPS(60);
+    SetWindowPosition(100, 100);
 
     Camera3D camera = {
         .position   = (Vector3){5.0f, 5.0f, 5.0f},
@@ -195,7 +237,7 @@ int main(void)
         }
         DrawGrid(10, 1.0f);
         EndMode3D();
-
+        // sprintf(char *Buffer, const char *Format, ...)
         DrawText("Hello World!", 10, 10, 20, DARKGRAY);
         EndDrawing();
     }
