@@ -29,9 +29,17 @@ pub const Navig = struct {
         const x, const y, _ = self.aspectScale();
         _, const hs = self.screan;
 
-        const mult = (hs / y);
-        const scale: m.vec3 = .{ x * mult, y * mult, 1 };
-        return m.matScale(scale).mat;
+        const base = (hs / y);
+        const mult = base * 0.90;
+        const padding = base * 0.05;
+        const s: m.vec3 = .{ x * mult, y * mult, 1 };
+
+        const saled = m.matScale(s);
+        const side: f32 = @max(x, y);
+        const moved = m.matTrans(.{ side * padding, -y * padding, 0 });
+        const combinde = m.matXmat(moved.mat, saled.mat).mat;
+
+        return combinde;
     }
 };
 
