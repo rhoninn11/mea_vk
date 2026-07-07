@@ -26,8 +26,8 @@ pub fn unifomRefil(
     }
 
     const target: m.vec3 = .{ 0, 0, 0 };
-    scratchpad[0].matrices = try addons.paramatricVariation(camera, target, true);
-    scratchpad[1].matrices = try addons.paramatricVariation(camera, target, false);
+    scratchpad[0].matrices = try addons.paramatricVariation(camera, target, .persp);
+    scratchpad[1].matrices = try addons.paramatricVariation(camera, target, .orthoside);
 
     const x: f32 = @as(f32, @floatFromInt(screan.width));
     const y: f32 = @as(f32, @floatFromInt(screan.height));

@@ -121,10 +121,10 @@ pub fn sdlKeyDown(key: sdl.keycode.Keycode) void {
         if (x.down(bind.key)) bind.trig.activated = true;
     }
 
-    for (axesCheck) |hmm| hmm.reciveInput(.{ .layerS = &x });
+    for (axesCheck) |hld_ax| hld_ax.reciveInput(.{ .layerS = &x });
 }
 
 pub fn sdlKeyUp(key: sdl.keycode.Keycode) void {
     const x: KeyActionSdl = .{ .key = key, .action = glfw.Release };
-    for (axesCheck) |hmm| hmm.reciveInput(.{ .layerS = &x });
+    for (axesCheck) |hld_ax| hld_ax.reciveInput(.{ .layerS = &x });
 }

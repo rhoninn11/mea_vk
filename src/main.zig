@@ -11,6 +11,7 @@ const gm = @import("graphics_context.zig");
 const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
 const Swapchain = @import("swapchain.zig").Swapchain;
 const a = @import("addons.zig");
+const d = @import("debug.zig");
 const dset = @import("dset.zig");
 
 const vertex = @import("vertex.zig");
@@ -275,10 +276,10 @@ fn theDeepest(access: EasyAcces) !void {
 
     const basic_idx = 0;
     const basic_tex_set: [4]anyerror!imgs.VkImage = .{
-        imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb, false),
-        imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_r, false),
-        imgs.vulkanTexture(&pic, looking_vol.grid, looking_vol.pix, true),
-        imgs.vulkanTexture(&pic, looking_lyr.grid, looking_lyr.pix, true),
+        imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb, .default),
+        imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_r, .default),
+        imgs.vulkanTexture(&pic, looking_vol.grid, looking_vol.pix, .nearest),
+        imgs.vulkanTexture(&pic, looking_lyr.grid, looking_lyr.pix, .nearest),
     };
     {
         inline for (0.., basic_tex_set) |i, risky_rgba| {
@@ -289,10 +290,10 @@ fn theDeepest(access: EasyAcces) !void {
     }
 
     const g_abc = fonts.font_g;
-    try u.ppmU8Debug(access.io, abc.char_atlas, g_abc);
+    try d.ppmU8Debug(access.io, abc.char_atlas, g_abc);
 
     var char_atlas = try imgs.U8Image.init(access.gm, g_abc);
-    try imgs.texPrep(&pic, g_abc, abc.char_atlas, false, &char_atlas);
+    try imgs.texPrep(&pic, g_abc, abc.char_atlas, &char_atlas, .default);
 
     // const sdf_atlas = try imgs.vulkanTexture(&pic, g_abc, abc.char_atlas, false);
     dset_atlas.updateTexture(0, &char_atlas, 4);
@@ -301,7 +302,7 @@ fn theDeepest(access: EasyAcces) !void {
     var mono = try imgs.U16Image.init(pic.gc, glass.img_sz);
     {
         errdefer mono.deinit();
-        try imgs.texPrep(&pic, glass.img_sz, glass.scan_raw.pixels, true, &mono);
+        try imgs.texPrep(&pic, glass.img_sz, glass.scan_raw.pixels, &mono, .nearest);
         dset_atlas.updateTexture(0, &mono, 5);
         try all_imgs.append(&mono);
     }
@@ -319,7 +320,7 @@ fn theDeepest(access: EasyAcces) !void {
         };
         defer gpa.free(pixels);
 
-        const rgba = try imgs.vulkanTexture(&pic, tex_grid_ok, pixels, false);
+        const rgba = try imgs.vulkanTexture(&pic, tex_grid_ok, pixels, .nearest);
         dset_atlas.updateTexture(0, &rgba, ok_atlas_idx);
         try all_imgs.append(&rgba);
 
@@ -372,15 +373,15 @@ fn theDeepest(access: EasyAcces) !void {
     var inertia = IVec3.Inertia.init(.{ pamperek.phi_raw, 0, 0 });
     inertia.phx = .default;
 
-    var dbgmonit = u.DbgMonitor{};
+    var dbgmonit = d.DbgMonitor{};
 
     //state
     var okphi: f32 = 0;
     var glyphphi: f32 = 0;
     var ok_slider: u.Slider = .initMid(0, OK_SWEEP - 1);
 
-    sdlh.wheel.up = .{ .a = &ok_slider, .f = u.Slider.inc };
-    sdlh.wheel.down = .{ .a = &ok_slider, .f = u.Slider.dec };
+    sdlh.wheel.up = .{ .a = &ok_slider, .f = u.Slider.incX5 };
+    sdlh.wheel.down = .{ .a = &ok_slider, .f = u.Slider.decX5 };
     var smooth_scale: u.Smooth = .{};
 
     // main loop
@@ -427,7 +428,6 @@ fn theDeepest(access: EasyAcces) !void {
 
         const scan_scale = smooth_scale.out() * 0.95 + 0.05;
         const uv_mult = @as(m.vec2, @splat(scan_scale)) / navig.scann_aspect;
-        std.debug.print(" well {any} {any}\n", .{ navig.scann_aspect, uv_mult });
         navig.uv_mult = uv_mult;
 
         const xoff, const yoff = glass.frac();
@@ -443,7 +443,7 @@ fn theDeepest(access: EasyAcces) !void {
         navig.uv_mult = @splat(scan_scale);
         navig.uv_offset = .{ scann_xoff, scann_yoff };
 
-        const dbg_data = u.DbgMonitor.DbgVals{
+        const dbg_data = d.DbgMonitor.DbgVals{
             .phi = pamperek.p.phi,
             .inst_num = state.layer_group.num,
             .observer_pos = pamperek.pos(),
@@ -479,7 +479,7 @@ fn theDeepest(access: EasyAcces) !void {
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
         if (on_area[m.Z] == 1.0) {
             const x, const y, _ = on_area;
-            try abc.charInfo(txta, &dyn_text, ok_slider.curr);
+            // try abc.charInfo(txta, &dyn_text, ok_slider.curr);
             try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
             const pan_ax = input.pan_input.value()[0];
             if (pan_ax.active()) {

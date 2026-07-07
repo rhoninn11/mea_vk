@@ -4,6 +4,7 @@ const glfw = @import("third_party/glfw.zig");
 const gftx = @import("graphics_context.zig");
 
 const t = @import("types.zig");
+const d = @import("debug.zig");
 const sht = @import("shaders/types.zig");
 const m = @import("math.zig");
 const utils = @import("utils.zig");
@@ -11,7 +12,7 @@ const time = @import("time.zig");
 
 const Allocator = std.mem.Allocator;
 
-pub const PerfStats = utils.PerfStats;
+pub const PerfStats = d.PerfStats;
 
 pub const Timeline = time.Timeline;
 
@@ -43,11 +44,14 @@ pub const GridOps = struct {
 
 // ------------------------------------------------
 
+const EPersp = enum(u8) { ortho = 0, persp, orthoside };
+
 const MatPack = sht.MatPack;
-pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: bool) !MatPack {
+pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: EPersp) !MatPack {
     const persp_window = switch (persp) {
-        true => m.mat_persp(1, 0.75, std.math.pi / 2.0, 0.1, 20),
-        false => m.mat_ortho_uniformed(10),
+        .ortho => m.mat_ortho_uniformed(10),
+        .persp => m.mat_persp(1, 0.75, std.math.pi / 2.0, 0.1, 20),
+        .orthoside => m.mat_ortho_shift(10, .{ -5, 0, 0 }),
     };
 
     const ref_up: m.vec3 = .{ 0, 1, 0 };
@@ -99,11 +103,6 @@ pub fn visible(a: vk.Extent2D) bool {
     return a.width != 0 and a.height != 0;
 }
 
-const EasyAcces = struct {
-    window: ?*c_long,
-    vkctx: ?*const gftx.GraphicsContext = null,
-};
-
 fn asAbsV2(vkext: vk.Extent2D) m.vec2 {
     return .{
         m.floaty(@abs(vkext.width)),
@@ -122,7 +121,7 @@ pub const Coords = struct {
             .sz_area = undefined,
             .offset = undefined,
         };
-        base.calcArea(0.5);
+        base.calcArea(0.9);
         return base;
     }
 

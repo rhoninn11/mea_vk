@@ -222,9 +222,18 @@ pub const VkImage = struct {
 
         self.vk_img_view = try devk.createImageView(&image_view_create_info, null);
     }
-    pub fn createSampler(self: *Self, gc: *const GraphicsContext, near: bool) !void {
+
+    const ESamplerMode = enum(u8) {
+        nearest = 0,
+        default,
+    };
+
+    pub fn createSampler(self: *Self, gc: *const GraphicsContext, mode: ESamplerMode) !void {
         const props = gc.instance.getPhysicalDeviceProperties(gc.pdev);
-        const filter: vk.Filter = if (near) .nearest else .linear;
+        const filter = switch (mode) {
+            .nearest => vk.Filter.nearest,
+            .default => vk.Filter.linear,
+        };
         const sample_create_info: vk.SamplerCreateInfo = .{
             .mag_filter = filter,
             .min_filter = filter,
@@ -259,14 +268,25 @@ pub const VkImage = struct {
     }
 };
 
-pub fn vulkanTexture(pic: *const gm.PoolInCtx, g64: sht.GridSize, pixdata: []const u8, near: bool) !VkImage {
+pub fn vulkanTexture(
+    pic: *const gm.PoolInCtx,
+    g64: sht.GridSize,
+    pixdata: []const u8,
+    mode: VkImage.ESamplerMode,
+) !VkImage {
     var test_img = try gm.RGBImage.init(pic.gc, g64);
     errdefer test_img.deinit();
 
-    try texPrep(pic, g64, pixdata, near, &test_img);
+    try texPrep(pic, g64, pixdata, &test_img, mode);
     return test_img;
 }
-pub fn texPrep(pic: *const gm.PoolInCtx, g64: sht.GridSize, pixdata: []const u8, near: bool, test_img: *VkImage) !void {
+pub fn texPrep(
+    pic: *const gm.PoolInCtx,
+    g64: sht.GridSize,
+    pixdata: []const u8,
+    test_img: *VkImage,
+    mode: VkImage.ESamplerMode,
+) !void {
     const buff_size = test_img.dvk_size;
     const src_buff = try gm.createBuffer( //TODO: maybe one omnipresent buffor for img data copying?
         pic.gc,
@@ -303,7 +323,7 @@ pub fn texPrep(pic: *const gm.PoolInCtx, g64: sht.GridSize, pixdata: []const u8,
     });
 
     try test_img.createImageView(pic.gc);
-    try test_img.createSampler(pic.gc, near);
+    try test_img.createSampler(pic.gc, mode);
 }
 
 pub fn imgLTrans(cmd_ctx: *const gm.PoolInCtx, cfg: t.ImgLTranConfig) !void {

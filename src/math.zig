@@ -307,14 +307,19 @@ pub fn mat_ortho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32)
     };
 }
 
-pub inline fn mat_ortho_default() mat4u {
+pub fn mat_ortho_default() mat4u {
     const scale = 1;
     return mat_ortho_uniformed(scale);
 }
 
-pub inline fn mat_ortho_uniformed(scale: f32) mat4u {
+pub fn mat_ortho_uniformed(scale: f32) mat4u {
     // from up down depends, y axis flip in vulkan
     return mat_ortho(scale, -scale, scale, -scale, scale, -scale);
+}
+
+pub fn mat_ortho_shift(scale: f32, shift: vec3) mat4u {
+    const x, const y, const z = shift;
+    return mat_ortho(x + scale, x - scale, y + scale, y - scale, z + scale, z - scale);
 }
 
 test "|ortho_to_vulkan" {
