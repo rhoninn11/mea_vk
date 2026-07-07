@@ -104,6 +104,13 @@ const EasyAcces = struct {
     vkctx: ?*const gftx.GraphicsContext = null,
 };
 
+fn asAbsV2(vkext: vk.Extent2D) m.vec2 {
+    return .{
+        m.floaty(@abs(vkext.width)),
+        m.floaty(@abs(vkext.height)),
+    };
+}
+
 pub const Coords = struct {
     const Self = @This();
     sz_scr: m.vec2,
@@ -111,10 +118,7 @@ pub const Coords = struct {
     offset: m.vec2,
     pub fn init(screan: vk.Extent2D) Coords {
         var base: Self = .{
-            .sz_scr = .{
-                m.floaty(@abs(screan.width)),
-                m.floaty(@abs(screan.height)),
-            },
+            .sz_scr = asAbsV2(screan),
             .sz_area = undefined,
             .offset = undefined,
         };
@@ -142,7 +146,7 @@ pub const Coords = struct {
         self.offset = scratch;
     }
 
-    pub fn pointer(self: *const Self, cursor: m.vec2) m.vec3 {
+    pub fn update(self: *const Self, cursor: m.vec2) m.vec3 {
         const axnum = 2;
         const axes: [axnum]u8 = .{ m.X, m.Y };
         var in_num: u8 = 0;

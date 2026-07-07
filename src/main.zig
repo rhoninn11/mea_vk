@@ -127,6 +127,7 @@ fn theDeepest(access: EasyAcces) !void {
     defer looking_lyr.deinit(access.gpa);
 
     navig.scann_sz = looking_vol.size;
+    navig.scann_aspect = navig.aspectScale();
 
     //vk related
     var swapchain_len: u8 = undefined;
@@ -406,7 +407,7 @@ fn theDeepest(access: EasyAcces) !void {
         navig.cursor_tex = OK_TEX_BASE + ok_slider.curr;
 
         const coords: addons.Coords = .init(win_size);
-        const on_area = coords.pointer(navig.cursor);
+        const on_area = coords.update(navig.cursor);
         navig.screan = coords.sz_scr;
 
         const img_idx = swapchain.image_index;
@@ -432,6 +433,10 @@ fn theDeepest(access: EasyAcces) !void {
         smooth_scale.update(td, ok_slider.frac());
 
         const scan_scale = smooth_scale.out() * 0.95 + 0.05;
+        const uv_mult = @as(m.vec2, @splat(scan_scale)) / navig.scann_aspect;
+        std.debug.print(" well {any} {any}\n", .{navig.scann_aspect});
+        navig.uv_mult = uv_mult;
+
         const xoff, const yoff = glass.frac();
         const scann_xoff = switch (xoff + scan_scale > 1) {
             true => 1.0 - scan_scale,
@@ -481,19 +486,13 @@ fn theDeepest(access: EasyAcces) !void {
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
         if (on_area[m.Z] == 1.0) {
             const x, const y, _ = on_area;
-            const a, const b = oklab.OkUnderstanding.abVal(.{ x, y });
             try abc.charInfo(txta, &dyn_text, ok_slider.curr);
             try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
-            try dyn_text.print(txta, "{s:<16} | a:{d:>6.2} b:{d:>6.2}\n", .{ "pointing to", a, b });
             const pan_ax = input.pan_input.value()[0];
             if (pan_ax.active()) {
                 try dyn_text.print(txta, "blooop\n", .{});
                 const gx, const gy = glass.frac();
                 try dyn_text.print(txta, "{s:<14} | gx:{d:>6.2} gy:{d:>6.2}\n", .{ "glass cord", gx, gy });
-            }
-
-            if (input.sample_tirg.fired()) {
-                std.debug.print(".{{{d:.2},{d:.2},{d:.2}}}\n", .{ ok_slider.frac(), a, b });
             }
         } else {
             _ = input.sample_tirg.fired();

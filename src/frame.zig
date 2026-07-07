@@ -13,20 +13,25 @@ pub const Navig = struct {
     cursor: m.vec2,
 
     scann_sz: m.vec2,
+    scann_aspect: m.vec2 = undefined,
 
     uv_mult: m.vec2,
     uv_offset: m.vec2,
 
     cursor_tex: u16,
-
-    pub fn aspectScale(self: *const Navig) m.vec3 {
+    pub fn aspectScale(self: *const Navig) m.vec2 {
         const w, const h = self.scann_sz;
         const hscale = h / w;
-        return .{ 1, hscale, 1 };
+        return .{ 1, hscale };
+    }
+
+    pub fn aspectScale3(self: *const Navig) m.vec3 {
+        const w, const h = self.aspectScale();
+        return .{ w, h, 1 };
     }
 
     pub fn scanPlacement(self: *const Navig) m.mat4 {
-        const x, const y, _ = self.aspectScale();
+        const x, const y, _ = self.aspectScale3();
         _, const hs = self.screan;
 
         const base = (hs / y);
