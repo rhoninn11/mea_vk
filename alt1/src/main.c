@@ -1,6 +1,7 @@
 #include "stdio.h"
 #include "string.h"
 #include "stdint.h"
+#include <stdarg.h>
 #include "unistd.h"
 #include "math.h"
 
@@ -14,9 +15,6 @@
 
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"
-
-#define STB_SPRINTF_IMPLEMENTATION
-#include "stb_sprintf.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOGDI
@@ -132,39 +130,119 @@ char text_scratchpad[_8KB];
 char* scratchpad_beg = text_scratchpad;
 uint16_t scratpad_space_left = _8KB;
 
-void imgCrawler() {
+char* strCommit(int len) {
+    char* file_path = scratchpad_beg;
+    file_path[len] = '\0';
+
+    uint16_t delta = len + 1;
+    scratchpad_beg += delta;
+    scratpad_space_left -= delta;
+
+    return file_path;
+}
+
+typedef struct{
+    char *img_file;
+    Texture2D tex;
+}ImgInfo;
+
+typedef struct{
+    char *key;
+    ImgInfo value;
+}ImgMapEntry;
+
+
+int ends_with(const char *str, const char *suffix) {
+    size_t len_str = strlen(str);
+    size_t len_suffix = strlen(suffix);
+
+    if (len_suffix > len_str)
+        return 0;
+
+    return memcmp(str + len_str - len_suffix, suffix, len_suffix) == 0;
+}
+
+#define MAX_IMGS 8
+void imgCrawler(ImgMapEntry **map, const char* base_dir, const char* sufix) {
+    int img_n = 0;
     tinydir_dir dir;
-    const char* base_dir = "fs/images/";
     tinydir_open(&dir, base_dir);
     
     printf("+++ what we have here:\n");
     while(dir.has_next) {
         tinydir_file file;
         tinydir_readfile(&dir, &file);
-        
-        if (!file.is_dir) {
-            int len = stbsp_snprintf(scratchpad_beg, scratpad_space_left, "%s%s", base_dir, file.name);
-            char* file_path = scratchpad_beg;
-            file_path[len] = '\0';
-            
-            uint16_t delta = len + 1;
-            scratchpad_beg += delta;
-            scratpad_space_left -= delta;
+        if (file.is_dir) {
+            tinydir_next(&dir);
+            continue;
+        };
 
-            printf("    %s%s len of %d\n", base_dir, file.name, len);
+        if (!ends_with(file.name, sufix)) {
+            tinydir_next(&dir);
+            continue;
         }
+
+        int len = snprintf(NULL, 0, "%s%s", base_dir, file.name);
+        assert(len < scratpad_space_left);
+
+        len = snprintf(scratchpad_beg, scratpad_space_left, "%s%s", base_dir, file.name);
+        char* file_path = strCommit(len);
+        
+        len = snprintf(NULL, 0, "%s", file.name);
+        assert(len < scratpad_space_left);
+
+        len = snprintf(scratchpad_beg, scratpad_space_left, "%s", file.name);
+        char* file_name = strCommit(len);
+
+        ImgInfo val = {
+            .img_file = file_path,
+            .tex = LoadTexture(file_path),
+        };
+        shput(*map, file_name, val);
+        img_n += 1;
+        if (img_n == MAX_IMGS) {
+            break;
+        }
+
         tinydir_next(&dir);
+        
     }
     tinydir_close(&dir);
 }
 
+ImgMapEntry* img_info_map = NULL;
+void showMap(ImgMapEntry *const map) {
+    for (int i = 0; i < shlen(map); i++) {
+        ImgInfo val = map[i].value;
+        printf("key: %s, val %s, tex: %d\n", map[i].key, val.img_file, val.tex.id);
+    }
+}
+
+#define LOCAL_PRINT_SZ 128
+char local_print_mem[LOCAL_PRINT_SZ];
+char* fmt(char const *fmt, ...) {
+    va_list args_a, args_b; 
+    va_start(args_a, fmt);
+    va_copy(args_b, args_a);
+
+    int len = vsnprintf(NULL, 0, fmt, args_a);
+    assert(len < LOCAL_PRINT_SZ);
+
+    vsnprintf(local_print_mem, LOCAL_PRINT_SZ, fmt, args_b);
+    return local_print_mem;
+}
+
+
 int main(void)
 {
-    imgCrawler();
+    const char* img_dir = "fs/images_png/";
     
     InitWindow(1600, 900, "colmap data preview");
     SetTargetFPS(60);
     SetWindowPosition(100, 100);
+
+    imgCrawler(&img_info_map, img_dir, ".png");
+    showMap(img_info_map);
 
     Camera3D camera = {
         .position   = (Vector3){5.0f, 5.0f, 5.0f},
@@ -185,7 +263,6 @@ int main(void)
     float angle = 0.0f;
     float radius = 16.0f;
     bool rot_flag = true;
-
         
     char *some_info = &easy_access_stack[0];
 
@@ -195,10 +272,10 @@ int main(void)
     //could be done without memory leak inside function
     readImages("fs/images.txt", &img_placements); 
 
-    int img_num = arrlen(img_placements);
-    int show_num = img_num;
-    printf("recorded (%d)\n", img_num);
-    if (img_num > 32) show_num = 32;
+    uint32_t placement_num = arrlen(img_placements);
+    int show_num = placement_num;
+    printf("recorded (%d)\n", placement_num);
+    if (placement_num > 32) show_num = 32;
     for(int i = 0; i < show_num; i++) {
         printV3(some_info, img_placements[i].pos);
         printf("Img (%4d) at %s\n", i, some_info);
@@ -230,15 +307,23 @@ int main(void)
             DrawCube(positions[i], 1.0f, 1.0f, 1.0f, colors[i]);
             DrawCubeWires(positions[i], 1.0f, 1.0f, 1.0f, BLACK);
         }
-        float cube_size = 0.5f;
+
+        uint32_t img_num = shlen(img_info_map);
         for (int i = 0; i < img_num; i++) {
+            Vector3 pos = { 0.0f, 0.0f, 8.0f + i};
+            Texture2D tex = img_info_map[i].value.tex;
+            DrawBillboard(camera, tex, pos, 4, WHITE);
+        }
+
+        float cube_size = 0.5f;
+        for (int i = 0; i < placement_num; i++) {
             PlacementInfo info = img_placements[i];
             DrawCube(info.pos, cube_size, cube_size, cube_size, colors[0]);
         }
         DrawGrid(10, 1.0f);
         EndMode3D();
-        // sprintf(char *Buffer, const char *Format, ...)
-        DrawText("Hello World!", 10, 10, 20, DARKGRAY);
+        const char* dbg_text = fmt("camera placement num: %d\nimage textures loaded: %d\n", placement_num, img_num);
+        DrawText(dbg_text, 10, 10, 20, DARKGRAY);
         EndDrawing();
     }
 
