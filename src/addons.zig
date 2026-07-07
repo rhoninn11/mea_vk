@@ -165,3 +165,52 @@ pub const Coords = struct {
         return .{ r[m.X], r[m.Y], test_val };
     }
 };
+
+pub const Navig = struct {
+    screan: m.vec2,
+    cursor: m.vec2,
+
+    scann_sz: m.vec2,
+    scann_aspect: m.vec2 = undefined,
+
+    uv_mult: m.vec2,
+    uv_offset: m.vec2,
+
+    cursor_tex: u16,
+    pub fn aspectScale(self: *const Navig) m.vec2 {
+        const w, const h = self.scann_sz;
+        const hscale = h / w;
+        return .{ 1, hscale };
+    }
+
+    pub fn aspectScale3(self: *const Navig) m.vec3 {
+        const w, const h = self.aspectScale();
+        return .{ w, h, 1 };
+    }
+
+    pub fn scanPlacement(self: *const Navig) m.mat4 {
+        const x, const y, _ = self.aspectScale3();
+        _, const hs = self.screan;
+
+        const base = (hs / y);
+        const mult = base * 0.90;
+        const padding = base * 0.05;
+        const s: m.vec3 = .{ x * mult, y * mult, 1 };
+
+        const saled = m.matScale(s);
+        const side: f32 = @max(x, y);
+        const moved = m.matTrans(.{ side * padding, -y * padding, 0 });
+        const combinde = m.matXmat(moved.mat, saled.mat).mat;
+
+        return combinde;
+    }
+
+    pub const default = @This(){
+        .screan = .{ 128, 128 },
+        .cursor = m.v2Zero(),
+        .scann_sz = m.v2One(),
+        .uv_mult = m.v2One(),
+        .uv_offset = m.v2One(),
+        .cursor_tex = 0,
+    };
+};

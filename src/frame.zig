@@ -7,46 +7,7 @@ const m = @import("math.zig");
 const v = @import("vertex.zig");
 const addons = @import("addons.zig");
 const pipe = @import("pipe.zig");
-
-pub const Navig = struct {
-    screan: m.vec2,
-    cursor: m.vec2,
-
-    scann_sz: m.vec2,
-    scann_aspect: m.vec2 = undefined,
-
-    uv_mult: m.vec2,
-    uv_offset: m.vec2,
-
-    cursor_tex: u16,
-    pub fn aspectScale(self: *const Navig) m.vec2 {
-        const w, const h = self.scann_sz;
-        const hscale = h / w;
-        return .{ 1, hscale };
-    }
-
-    pub fn aspectScale3(self: *const Navig) m.vec3 {
-        const w, const h = self.aspectScale();
-        return .{ w, h, 1 };
-    }
-
-    pub fn scanPlacement(self: *const Navig) m.mat4 {
-        const x, const y, _ = self.aspectScale3();
-        _, const hs = self.screan;
-
-        const base = (hs / y);
-        const mult = base * 0.90;
-        const padding = base * 0.05;
-        const s: m.vec3 = .{ x * mult, y * mult, 1 };
-
-        const saled = m.matScale(s);
-        const side: f32 = @max(x, y);
-        const moved = m.matTrans(.{ side * padding, -y * padding, 0 });
-        const combinde = m.matXmat(moved.mat, saled.mat).mat;
-
-        return combinde;
-    }
-};
+const a = @import("addons.zig");
 
 pub const InstGroup = struct {
     base: u16,
@@ -61,7 +22,7 @@ pub const FrameState = struct {
     ok_group: InstGroup,
     char_group: InstGroup,
     layer_group: InstGroup,
-    nav: *const Navig,
+    nav: *const a.Navig,
 };
 
 fn Dynamic(t: type) type {
@@ -115,21 +76,13 @@ const CmdHelper = struct {
 
     // TODO: use known PipeIndex
     pub fn use(self: *const CmdHelper, ptype: pipe.EBrush) void {
-        _ = self;
-        _ = ptype;
-    }
-
-    pub fn useTriangles(self: *const CmdHelper) void {
-        self.gc.dev.cmdBindPipeline(self.command, .graphics, self.draw.pipeline[0]);
-    }
-    pub fn useSprite(self: *const CmdHelper) void {
-        self.gc.dev.cmdBindPipeline(self.command, .graphics, self.draw.pipeline[1]);
-    }
-    pub fn useDSprite(self: *const CmdHelper) void {
-        self.gc.dev.cmdBindPipeline(self.command, .graphics, self.draw.pipeline[2]);
-    }
-    pub fn useSdf(self: *const CmdHelper) void {
-        self.gc.dev.cmdBindPipeline(self.command, .graphics, self.draw.pipeline[3]);
+        const brush = switch (ptype) {
+            .triangle => self.draw.pipeline[0],
+            .sprite => self.draw.pipeline[1],
+            .dsprite => self.draw.pipeline[2],
+            .fontsdf => self.draw.pipeline[3],
+        };
+        self.gc.dev.cmdBindPipeline(self.command, .graphics, brush);
     }
 };
 
@@ -209,7 +162,7 @@ pub fn recordFrame(
 
             const ubo_slot: u8 = if (state.alt_proj) 1 else 0;
             hl_cmds.dynUboDsets(all_sets, ubo_slot);
-            hl_cmds.useTriangles();
+            hl_cmds.use(.triangle);
             {
                 const geopush = gm.PushConstant.PCBlob{
                     .model = m.matTrans(.{ 0, 0, 0 }).mat,
@@ -232,7 +185,7 @@ pub fn recordFrame(
             }
 
             if (state.alt_proj) {
-                hl_cmds.useDSprite();
+                hl_cmds.use(.dsprite);
 
                 const okpush = gm.PushConstant.PCBlob{
                     .model = m.matTrans(.{ 0, -3, 0 }).mat,
@@ -246,7 +199,7 @@ pub fn recordFrame(
 
             hl_cmds.dynUboDsets(all_sets, 2); // GUI
             {
-                hl_cmds.useTriangles();
+                hl_cmds.use(.triangle);
                 const cursor = state.nav.cursor;
                 const guipush = gm.PushConstant.PCBlob{
                     .model = m.matXmat(
@@ -262,7 +215,7 @@ pub fn recordFrame(
             }
 
             {
-                hl_cmds.useSprite();
+                hl_cmds.use(.sprite);
                 const scann_mat = state.nav.scanPlacement();
                 var scan_push = gm.PushConstant.PCBlob{
                     .model = scann_mat,
@@ -295,7 +248,7 @@ pub fn recordFrame(
             }
 
             {
-                hl_cmds.useSdf();
+                hl_cmds.use(.fontsdf);
                 const letter_push = gm.PushConstant.PCBlob{
                     .model = m.matTrans(.{ 0, -32, 0 }).mat,
                     .inst_base = state.char_group.base,

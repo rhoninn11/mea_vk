@@ -37,10 +37,10 @@ fn shaderStages(modules: [slot_len]vk.ShaderModule) [slot_len]PSSCI {
 
 // for selecting shaders?
 pub const EBrush = enum(u8) {
-    Triangle,
-    Sprite,
-    SpriteWDepth,
-    FontSdf,
+    triangle,
+    sprite,
+    dsprite,
+    fontsdf,
 };
 
 pub const Moduler = struct {
@@ -71,16 +71,16 @@ pub const Moduler = struct {
         pt: EBrush,
     ) !vk.Pipeline {
         const src: [slot_len]EmbedSpirv = switch (pt) {
-            .Triangle => .{ vert_triangle[0..], frag_triangle[0..] },
-            .Sprite => .{ vert_sprite[0..], frag_sprite[0..] },
-            .SpriteWDepth => .{ vert_sprite[0..], frag_sprite[0..] },
-            .FontSdf => .{ vert_sdf[0..], frag_sdf[0..] },
+            .triangle => .{ vert_triangle[0..], frag_triangle[0..] },
+            .sprite => .{ vert_sprite[0..], frag_sprite[0..] },
+            .dsprite => .{ vert_sprite[0..], frag_sprite[0..] },
+            .fontsdf => .{ vert_sdf[0..], frag_sdf[0..] },
         };
         const depth_test = switch (pt) {
-            .Triangle => true,
-            .Sprite => false,
-            .SpriteWDepth => true,
-            .FontSdf => false,
+            .triangle => true,
+            .sprite => false,
+            .dsprite => true,
+            .fontsdf => false,
         };
 
         const mods = try self.initModuls(src);

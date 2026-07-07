@@ -10,7 +10,7 @@ const gm = @import("graphics_context.zig");
 
 const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
 const Swapchain = @import("swapchain.zig").Swapchain;
-const addons = @import("addons.zig");
+const a = @import("addons.zig");
 const dset = @import("dset.zig");
 
 const vertex = @import("vertex.zig");
@@ -39,7 +39,7 @@ const pipe = @import("pipe.zig");
 const app_name = "oct_anotator";
 const future_app_name = "oct_calculator";
 
-var time_glob: ?*addons.Timeline = null;
+var time_glob: ?*a.Timeline = null;
 const BasicErrs = error{
     NoCtx,
 };
@@ -63,14 +63,7 @@ const OK_INST_BASE: u16 = sht.GridSize.g64.total;
 const CHAR_INST_BASE: u16 = 4608;
 const LYR_INST_BASE = 6144;
 
-var navig: frame.Navig = .{
-    .screan = .{ 128, 128 },
-    .cursor = m.v2Zero(),
-    .scann_sz = m.v2One(),
-    .uv_mult = m.v2One(),
-    .uv_offset = m.v2One(),
-    .cursor_tex = 0,
-};
+var navig = a.Navig.default;
 
 var state: frame.FrameState = .{
     .alt_proj = true,
@@ -363,10 +356,10 @@ fn theDeepest(access: EasyAcces) !void {
     defer for (0..slot) |i| gc.dev.destroyCommandPool(pools[i], null);
 
     // Related to scene
-    var timeline = addons.Timeline.init(access.io);
-    var timeline1 = addons.Timeline.init(access.io);
+    var timeline = a.Timeline.init(access.io);
+    var timeline1 = a.Timeline.init(access.io);
     time_glob = &timeline;
-    var perf_stats = addons.PerfStats.init(access.io);
+    var perf_stats = a.PerfStats.init(access.io);
     var vk_state: Swapchain.PresentState = .optimal;
 
     const s_interval = std.time.us_per_s;
@@ -398,7 +391,7 @@ fn theDeepest(access: EasyAcces) !void {
 
         access.host.pollEvents();
         const win_size = try access.host.winExtent();
-        if (!addons.visible(win_size)) {
+        if (!a.visible(win_size)) {
             try access.io.sleep(.fromMilliseconds(50), .real);
             continue;
         }
@@ -406,7 +399,7 @@ fn theDeepest(access: EasyAcces) !void {
         navig.cursor = sdlh.peekPointer(win_size);
         navig.cursor_tex = OK_TEX_BASE + ok_slider.curr;
 
-        const coords: addons.Coords = .init(win_size);
+        const coords: a.Coords = .init(win_size);
         const on_area = coords.update(navig.cursor);
         navig.screan = coords.sz_scr;
 
@@ -434,7 +427,7 @@ fn theDeepest(access: EasyAcces) !void {
 
         const scan_scale = smooth_scale.out() * 0.95 + 0.05;
         const uv_mult = @as(m.vec2, @splat(scan_scale)) / navig.scann_aspect;
-        std.debug.print(" well {any} {any}\n", .{navig.scann_aspect});
+        std.debug.print(" well {any} {any}\n", .{ navig.scann_aspect, uv_mult });
         navig.uv_mult = uv_mult;
 
         const xoff, const yoff = glass.frac();
@@ -553,7 +546,7 @@ fn theDeepest(access: EasyAcces) !void {
             &draw_instanced_attempt,
             &state,
         );
-        if (vk_state == .suboptimal or addons.extentDiffer(resolution_extent, win_size)) {
+        if (vk_state == .suboptimal or a.extentDiffer(resolution_extent, win_size)) {
             // std.debug.assert(false); //cuz it will throw error due to bad depth_img resolution
             resolution_extent = win_size;
             try gc.dev.deviceWaitIdle();
