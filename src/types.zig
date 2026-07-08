@@ -29,3 +29,9 @@ pub const Player = struct {
     h: f32,
     r: f32,
 };
+
+pub const Ray = struct {
+    up: m.vec3 = .{ 0, 1, 0 },
+    at: m.vec3,
+    to: m.vec3,
+};

@@ -366,11 +366,11 @@ fn theDeepest(access: EasyAcces) !void {
     const s_interval = std.time.us_per_s;
     timeline1.arm(s_interval * 0.5);
 
-    var pamperek: u.CappedPlayer = .default;
-    pamperek.inertia.phx = .default;
+    var orbital: u.CappedPlayer = .default;
+    orbital.inertia.phx = .default;
 
     const IVec3 = phys.InertiaPack(m.vec3);
-    var inertia = IVec3.Inertia.init(.{ pamperek.phi_raw, 0, 0 });
+    var inertia = IVec3.Inertia.init(.{ orbital.phi_raw, 0, 0 });
     inertia.phx = .default;
 
     var dbgmonit = d.DbgMonitor{};
@@ -427,7 +427,9 @@ fn theDeepest(access: EasyAcces) !void {
         if (input.shader_reset_trigger.fired()) state.alt_shader = true;
         if (glass.update(&input.glass_input)) state.alt_shader = false;
 
-        pamperek.update(td, &input.plr_input);
+        // orbit control
+        orbital.update(td, &input.plr_input);
+
         smooth_scale.update(td, ok_slider.frac());
 
         const scan_scale = smooth_scale.out() * 0.95 + 0.05;
@@ -448,9 +450,9 @@ fn theDeepest(access: EasyAcces) !void {
         navig.uv_map.offset = .{ scann_xoff, scann_yoff };
 
         const dbg_data = d.DbgMonitor.DbgVals{
-            .phi = pamperek.p.phi,
+            .phi = orbital.p.phi,
             .inst_num = state.layer_group.num,
-            .observer_pos = pamperek.pos(),
+            .observer_pos = orbital.pos(),
             .win_size = win_size,
         };
 
@@ -501,13 +503,18 @@ fn theDeepest(access: EasyAcces) !void {
         const instances: [*]sht.PerInstance = @ptrCast(@alignCast(storage_mapping));
         const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
 
+        const camaera_ray = t.Ray{
+            .at = orbital.pos(),
+            .to = .{ 0, 0, 0 },
+        };
+
         {
             try refils.unifomRefil(
                 uniforms,
                 timeline1.total_s,
-                pamperek.pos(),
                 size,
                 win_size,
+                camaera_ray,
             );
             // cubes 0-4095
             // ok slices 4096-4223
@@ -550,7 +557,6 @@ fn theDeepest(access: EasyAcces) !void {
             &state,
         );
         if (vk_state == .suboptimal or a.extentDiffer(resolution_extent, win_size)) {
-            // std.debug.assert(false); //cuz it will throw error due to bad depth_img resolution
             resolution_extent = win_size;
             try gc.dev.deviceWaitIdle();
             swapchain.recreate(resolution_extent) catch |err| {

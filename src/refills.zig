@@ -2,6 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan-zig");
 
 const m = @import("math.zig");
+const t = @import("types.zig");
 const sht = @import("shaders/types.zig");
 const addons = @import("addons.zig");
 const dset = @import("dset.zig");
@@ -10,24 +11,25 @@ const proto = @import("proto.zig");
 pub fn unifomRefil(
     uniforms: [*]sht.GroupData,
     total_s: f32,
-    camera: m.vec3,
     size: f32,
     screan: vk.Extent2D,
+    camera_ray: t.Ray,
 ) !void {
     var stack_mem: [4096 + 256]u8 = undefined;
     var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
     const local_a = provider.allocator();
 
+    // 16 unifom slots
     var scratchpad = try local_a.alloc(sht.GroupData, 16);
+
     for (0..scratchpad.len) |i| {
         scratchpad[i].osc_scale = .{ 0.1, 0.1 };
         scratchpad[i].scale = .{ size, size };
         scratchpad[i].temporal = .{ total_s, 0, 1, 2 };
     }
 
-    const target: m.vec3 = .{ 0, 0, 0 };
-    scratchpad[0].matrices = try addons.paramatricVariation(camera, target, .persp);
-    scratchpad[1].matrices = try addons.paramatricVariation(camera, target, .orthoside);
+    scratchpad[0].matrices = try addons.paramatricVariation(camera_ray.at, camera_ray.to, .persp);
+    scratchpad[1].matrices = try addons.paramatricVariation(camera_ray.at, camera_ray.to, .orthoside);
 
     const x: f32 = @as(f32, @floatFromInt(screan.width));
     const y: f32 = @as(f32, @floatFromInt(screan.height));
