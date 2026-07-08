@@ -76,12 +76,7 @@ const CmdHelper = struct {
 
     // TODO: use known PipeIndex
     pub fn use(self: *const CmdHelper, ptype: pipe.EBrush) void {
-        const brush = switch (ptype) {
-            .triangle => self.draw.pipeline[0],
-            .sprite => self.draw.pipeline[1],
-            .dsprite => self.draw.pipeline[2],
-            .fontsdf => self.draw.pipeline[3],
-        };
+        const brush = self.draw.brushSel(ptype);
         self.gc.dev.cmdBindPipeline(self.command, .graphics, brush);
     }
 };

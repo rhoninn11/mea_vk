@@ -9,6 +9,7 @@ const t = @import("types.zig");
 const m = @import("math.zig");
 const v = @import("vertex.zig");
 const u = @import("utils.zig");
+const pipe = @import("pipe.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -52,6 +53,15 @@ pub const DrawInfo = struct {
     uniform_dsets: std.ArrayList(vk.DescriptorSet),
     storage_dsets: std.ArrayList(vk.DescriptorSet),
     texture_dset: vk.DescriptorSet,
+
+    pub fn brushSel(self: *const DrawInfo, brush: pipe.EBrush) vk.Pipeline {
+        return switch (brush) {
+            .triangle => self.pipeline[0],
+            .sprite => self.pipeline[1],
+            .dsprite => self.pipeline[2],
+            .fontsdf => self.pipeline[3],
+        };
+    }
 };
 
 const imgs = @import("imgs.zig");

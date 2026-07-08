@@ -134,7 +134,9 @@ pub const Coords = struct {
         const off_min = (scr[minor] - sz_min) / 2.0;
 
         const sz_maj = sz_min;
-        const off_maj = (scr[major] - sz_maj) / 2.0;
+        // const off_maj = (scr[major] - sz_maj) / 2.0;
+        const off_maj = off_min;
+
         var scratch: [2]f32 = undefined;
         scratch[minor] = sz_min;
         scratch[major] = sz_maj;
