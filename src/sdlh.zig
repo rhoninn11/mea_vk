@@ -142,8 +142,7 @@ const Scroll = struct {
 
 var pointer: Pointer = .default;
 pub var wheel: Scroll = .default;
-pub fn peekPointer(extent: vk.Extent2D) m.vec2 {
-    _ = extent;
+pub fn peekPointer() m.vec2 {
     return .{
         pointer.x,
         -pointer.y,

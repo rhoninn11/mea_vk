@@ -1,4 +1,5 @@
 const std = @import("std");
+const vk = @import("vulkan-zig");
 const rmath = @import("rmath");
 
 pub const tau = std.math.tau;
@@ -507,4 +508,15 @@ pub inline fn v2One() vec2 {
 
 pub inline fn v2Zero() vec2 {
     return .{ 1, 1 };
+}
+
+pub fn vkextAsV2(vkext: vk.Extent2D) vec2 {
+    return .{
+        floaty(vkext.width),
+        floaty(vkext.height),
+    };
+}
+
+pub fn top(v: vec2) u8 {
+    return if (v[X] > v[Y]) X else Y;
 }

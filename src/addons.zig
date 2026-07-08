@@ -103,21 +103,19 @@ pub fn visible(a: vk.Extent2D) bool {
     return a.width != 0 and a.height != 0;
 }
 
-fn asAbsV2(vkext: vk.Extent2D) m.vec2 {
-    return .{
-        m.floaty(@abs(vkext.width)),
-        m.floaty(@abs(vkext.height)),
-    };
-}
-
 pub const Coords = struct {
     const Self = @This();
+    const HitResult = struct {
+        at: m.vec2,
+        hit: bool,
+    };
+
     sz_scr: m.vec2,
     sz_area: m.vec2,
     offset: m.vec2,
     pub fn init(screan: vk.Extent2D) Coords {
         var base: Self = .{
-            .sz_scr = asAbsV2(screan),
+            .sz_scr = m.vkextAsV2(screan),
             .sz_area = undefined,
             .offset = undefined,
         };
@@ -127,25 +125,13 @@ pub const Coords = struct {
 
     fn calcArea(self: *Coords, fill: f32) void {
         const scr: [2]f32 = self.sz_scr;
-        const major: u8 = if (scr[m.X] > scr[m.Y]) m.X else m.Y;
-        const minor: u8 = if (major == m.X) m.Y else m.X;
-
-        const sz_min = scr[minor] * fill;
-        const off_min = (scr[minor] - sz_min) / 2.0;
-
-        const sz_maj = sz_min;
-        const off_maj = (scr[major] - sz_maj) / 2.0;
-        var scratch: [2]f32 = undefined;
-        scratch[minor] = sz_min;
-        scratch[major] = sz_maj;
-        self.sz_area = scratch;
-
-        scratch[minor] = off_min;
-        scratch[major] = off_maj;
-        self.offset = scratch;
+        const smin = @min(scr[0], scr[1]);
+        const padding = smin * (1 - fill) / 2;
+        self.sz_area = .{ smin * fill, smin * fill };
+        self.offset = .{ padding, padding };
     }
 
-    pub fn update(self: *const Self, cursor: m.vec2) m.vec3 {
+    pub fn update(self: *const Self, cursor: m.vec2) HitResult {
         const axnum = 2;
         const axes: [axnum]u8 = .{ m.X, m.Y };
         var in_num: u8 = 0;
@@ -160,9 +146,16 @@ pub const Coords = struct {
                 in_num += 1;
             }
         }
-        const test_val: f32 = if (in_num == axnum) 1.0 else 0.0;
-        return .{ r[m.X], r[m.Y], test_val };
+        return HitResult{
+            .at = .{ r[m.X], r[m.Y] },
+            .hit = in_num == axnum,
+        };
     }
+};
+
+const UVMap = struct {
+    offset: m.vec2 = m.v2Zero(),
+    mult: m.vec2 = m.v2Zero(),
 };
 
 pub const Navig = struct {
@@ -172,8 +165,7 @@ pub const Navig = struct {
     scann_sz: m.vec2,
     scann_aspect: m.vec2 = undefined,
 
-    uv_mult: m.vec2,
-    uv_offset: m.vec2,
+    uv_map: UVMap,
 
     cursor_tex: u16,
     pub fn aspectScale(self: *const Navig) m.vec2 {
@@ -188,17 +180,15 @@ pub const Navig = struct {
     }
 
     pub fn scanPlacement(self: *const Navig) m.mat4 {
-        const x, const y, _ = self.aspectScale3();
-        _, const hs = self.screan;
+        const ws, const hs = self.screan;
 
-        const base = (hs / y);
-        const mult = base * 0.90;
-        const padding = base * 0.05;
-        const s: m.vec3 = .{ x * mult, y * mult, 1 };
+        const mmin = @min(ws, hs);
+
+        const padding = mmin * 0.05;
+        const s: m.vec3 = .{ mmin * 0.9, mmin * 0.9, 1 };
 
         const saled = m.matScale(s);
-        const side: f32 = @max(x, y);
-        const moved = m.matTrans(.{ side * padding, -y * padding, 0 });
+        const moved = m.matTrans(.{ padding, -padding, 0 });
         const combinde = m.matXmat(moved.mat, saled.mat).mat;
 
         return combinde;
@@ -208,8 +198,7 @@ pub const Navig = struct {
         .screan = .{ 128, 128 },
         .cursor = m.v2Zero(),
         .scann_sz = m.v2One(),
-        .uv_mult = m.v2One(),
-        .uv_offset = m.v2One(),
+        .uv_map = UVMap{},
         .cursor_tex = 0,
     };
 };

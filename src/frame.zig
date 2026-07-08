@@ -221,8 +221,8 @@ pub fn recordFrame(
                     .model = scann_mat,
                     .tex_base = 2,
                     .mode = 2, //sprite mode
-                    .scale2D = state.nav.uv_mult,
-                    .point2D = state.nav.uv_offset,
+                    .scale2D = state.nav.uv_map.mult,
+                    .point2D = state.nav.uv_map.offset,
                 };
                 hl_cmds.push(&scan_push);
                 hl_cmds.drawInsances(.quad, 1); // scann color map
@@ -240,8 +240,8 @@ pub fn recordFrame(
                     .model = delta_store,
                     .tex_base = 5,
                     .mode = 4, // sprite mode
-                    .scale2D = state.nav.uv_mult,
-                    .point2D = state.nav.uv_offset,
+                    .scale2D = state.nav.uv_map.mult,
+                    .point2D = state.nav.uv_map.offset,
                 };
                 hl_cmds.push(&scan_push_sdf);
                 hl_cmds.drawInsances(.quad, 1); // scann shaded

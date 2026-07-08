@@ -392,17 +392,21 @@ fn theDeepest(access: EasyAcces) !void {
 
         access.host.pollEvents();
         const win_size = try access.host.winExtent();
+
         if (!a.visible(win_size)) {
             try access.io.sleep(.fromMilliseconds(50), .real);
             continue;
         }
         // navig.pos = input.
-        navig.cursor = sdlh.peekPointer(win_size);
+
+        const win_f2 = m.vkextAsV2(win_size);
+        const coords: a.Coords = .init(win_size);
+        const cursor_f2 = sdlh.peekPointer();
+        navig.cursor = cursor_f2;
         navig.cursor_tex = OK_TEX_BASE + ok_slider.curr;
 
-        const coords: a.Coords = .init(win_size);
-        const on_area = coords.update(navig.cursor);
-        navig.screan = coords.sz_scr;
+        const interact = coords.update(cursor_f2);
+        navig.screan = win_f2;
 
         const img_idx = swapchain.image_index;
 
@@ -428,7 +432,7 @@ fn theDeepest(access: EasyAcces) !void {
 
         const scan_scale = smooth_scale.out() * 0.95 + 0.05;
         const uv_mult = @as(m.vec2, @splat(scan_scale)) / navig.scann_aspect;
-        navig.uv_mult = uv_mult;
+        navig.uv_map.mult = uv_mult;
 
         const xoff, const yoff = glass.frac();
         const scann_xoff = switch (xoff + scan_scale > 1) {
@@ -440,8 +444,8 @@ fn theDeepest(access: EasyAcces) !void {
             false => yoff,
         };
 
-        navig.uv_mult = @splat(scan_scale);
-        navig.uv_offset = .{ scann_xoff, scann_yoff };
+        navig.uv_map.mult = @splat(scan_scale);
+        navig.uv_map.offset = .{ scann_xoff, scann_yoff };
 
         const dbg_data = d.DbgMonitor.DbgVals{
             .phi = pamperek.p.phi,
@@ -477,9 +481,8 @@ fn theDeepest(access: EasyAcces) !void {
         var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 960);
         const px, const py = glass.pos;
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
-        if (on_area[m.Z] == 1.0) {
-            const x, const y, _ = on_area;
-            // try abc.charInfo(txta, &dyn_text, ok_slider.curr);
+        if (interact.hit) {
+            const x, const y = interact.at;
             try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
             const pan_ax = input.pan_input.value()[0];
             if (pan_ax.active()) {
