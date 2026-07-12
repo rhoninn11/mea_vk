@@ -9,12 +9,12 @@ pub const vec3 = @Vector(3, f32);
 pub const vec4 = @Vector(4, f32);
 pub const uvec4 = @Vector(4, u8);
 
+const glsl_alignment = 16;
 // glsl mat4 alignment is 16B
 test "allignment explorer" {
     const v4a = @alignOf(vec4);
     const v3a = @alignOf(vec3);
 
-    const glsl_alignment = 16;
     try std.testing.expect(v4a == glsl_alignment);
     try std.testing.expect(v3a == glsl_alignment);
 
@@ -38,8 +38,7 @@ test "union behav" {
         .view = m_I.arr,
     };
 
-    const like_glsl = @alignOf(mpa) == 16;
-    try std.testing.expect(like_glsl);
+    try std.testing.expectEqual(glsl_alignment, @alignOf(@TypeOf(mpa)));
 }
 
 pub const mat4 = [4]vec4;
@@ -95,6 +94,10 @@ pub fn zero(comptime w: u8) WResolveType(w) {
         4 => .{ 0, 0, 0, 0 },
         else => unreachable,
     };
+}
+
+test "well is this is zero" {
+    try std.testing.expectEqual(zero(3), zero3());
 }
 
 pub fn zero3() vec3 {
@@ -314,7 +317,7 @@ pub fn lookRotation(pos: vec3, target: vec3, ref_up: vec3) mat4u {
 pub fn mat_ortho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32) mat4u {
     const w = right - left;
     const h = down - up; // Vk has -Y axis
-    const d = (far - near) * 3; // we benefit from more depth right now
+    const d = (far - near);
     return mat4u{
         .mat = .{
             .{ 2 / w, 0, 0, 0 }, // column-major
@@ -323,6 +326,10 @@ pub fn mat_ortho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32)
             .{ -(right + left) / w, -(down + up) / h, -near / d, 1 },
         },
     };
+}
+pub fn matDeepOrtho(right: f32, left: f32, up: f32, down: f32) mat4u {
+    // depth enough is fine right now
+    return mat_ortho(right, left, up, down, 1000, -1000);
 }
 
 pub fn mat_ortho_default() mat4u {
@@ -335,10 +342,9 @@ pub fn mat_ortho_uniformed(scale: f32) mat4u {
     return mat_ortho(scale, -scale, scale, -scale, scale, -scale);
 }
 
-pub fn mat_ortho_shift(scale: f32, shift: vec3) mat4u {
-    const x, const y, const z = shift;
-
-    return mat_ortho(x + scale, x - scale, y + scale, y - scale, z + scale, z - scale);
+pub fn matOrthoShift(scale: f32, shift: vec3) mat4u {
+    const x, const y, _ = shift;
+    return matDeepOrtho(x + scale, x - scale, y + scale, y - scale);
 }
 
 test "|ortho_to_vulkan" {
@@ -431,15 +437,15 @@ test "is_matrix_looking" {
     const M = 0;
     const Ri = 1;
     const _U = 2;
-    const point_m = vec3{ 1, 0, 1 };
-    const point_r = vec3{ 1.1, 0, 1 };
-    const point_u = vec3{ 1, 0.1, 1 };
+    const target = vec3{ 1, 0, 1 };
+    const target_right = vec3{ 1.1, 0, 1 };
+    const target_upper = vec3{ 1, 0.1, 1 };
 
-    const mat = try mat_look_at(observ, point_m, UP);
-    const pts: [3]vec3 = .{ point_m, point_r, point_u };
+    const transform = try mat_look_at(observ, target, UP);
     var outs: [3]vec4 = undefined;
-    for (pts, 0..) |x, i| {
-        outs[i] = matXvec(mat.mat, stack4(x, 1));
+    const to_transform: [3]vec3 = .{ target, target_right, target_upper };
+    for (to_transform, 0..) |x, i| {
+        outs[i] = matXvec(transform.mat, stack4(x, 1));
     }
 
     std.debug.print("---\n", .{});

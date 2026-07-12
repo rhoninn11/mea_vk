@@ -51,7 +51,7 @@ pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: EPersp) !MatPack {
     const persp_window = switch (persp) {
         .ortho => m.mat_ortho_uniformed(10),
         .persp => m.mat_persp(1, 0.75, std.math.pi / 2.0, 0.1, 20),
-        .orthoside => m.mat_ortho_shift(10, .{ -5, 0, 0 }),
+        .orthoside => m.matOrthoShift(10, .{ -5, 0, 0 }),
     };
 
     const ref_up: m.vec3 = .{ 0, 1, 0 };
