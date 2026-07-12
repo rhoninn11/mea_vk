@@ -431,6 +431,11 @@ pub fn mat_look_at(pos: vec3, target: vec3, ref_up: vec3) !mat4u {
 }
 
 const UP = vec3{ 0, 1, 0 };
+
+fn rvec3(v3: vec3) rmath.struct_Vector3 {
+    return rmath.struct_Vector3{ .x = v3[0], .y = v3[1], .z = v3[2] };
+}
+
 test "is_matrix_looking" {
     const observ = vec3{ -1, 1, -1 };
 
@@ -442,6 +447,13 @@ test "is_matrix_looking" {
     const target_upper = vec3{ 1, 0.1, 1 };
 
     const transform = try mat_look_at(observ, target, UP);
+    const r_ref_transform = rmath.MatrixLookAt(
+        rvec3(observ),
+        rvec3(target),
+        rvec3(UP),
+    );
+    std.debug.print("custom look_at {any}\n", .{transform});
+    std.debug.print("raylib look_at {any}\n", .{r_ref_transform});
     var outs: [3]vec4 = undefined;
     const to_transform: [3]vec3 = .{ target, target_right, target_upper };
     for (to_transform, 0..) |x, i| {
