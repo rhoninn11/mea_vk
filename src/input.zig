@@ -56,15 +56,6 @@ pub var glass_input: DualHoldsAxis = undefined;
 pub var plr_input: DualHoldsAxis = undefined;
 pub var pan_input: DualHoldsAxis = undefined;
 
-pub var ok_vis_trigger: Trigger = .{};
-pub var shader_reset_trigger: Trigger = .{};
-pub var alt_projection_trigger: Trigger = .{};
-pub var slide_l_trig: Trigger = .{};
-pub var slide_r_trig: Trigger = .{};
-pub var dbg_trig: Trigger = .{};
-pub var sample_tirg: Trigger = .{};
-pub var inverse_tirg: Trigger = .{};
-
 const KeyActionSdl = motion.msdl.KeyAction;
 const Tied = struct {
     key: sdl.keycode.Keycode,
@@ -95,6 +86,16 @@ pub fn initS() !void {
     });
 }
 
+pub var ok_vis_trigger: Trigger = .{};
+pub var shader_reset_trigger: Trigger = .{};
+pub var alt_projection_trigger: Trigger = .{};
+pub var slide_l_trig: Trigger = .{};
+pub var slide_r_trig: Trigger = .{};
+pub var dbg_trig: Trigger = .{};
+pub var sample_tirg: Trigger = .{};
+pub var inverse_tirg: Trigger = .{};
+pub var persp_switch: Trigger = .{};
+
 const sdl_inputs: []const Tied = &.{
     .{ .key = sdl.keycode.Keycode.y, .trig = &ok_vis_trigger },
     .{ .key = sdl.keycode.Keycode.q, .trig = &shader_reset_trigger },
@@ -104,6 +105,7 @@ const sdl_inputs: []const Tied = &.{
     .{ .key = sdl.keycode.Keycode.two, .trig = &dbg_trig },
     .{ .key = sdl.keycode.Keycode.three, .trig = &time_stop_trig },
     .{ .key = sdl.keycode.Keycode.four, .trig = &inverse_tirg },
+    .{ .key = sdl.keycode.Keycode.five, .trig = &persp_switch },
 };
 
 const axesCheck = [_]*DualHoldsAxis{

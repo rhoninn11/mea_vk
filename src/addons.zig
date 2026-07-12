@@ -202,3 +202,20 @@ pub const Navig = struct {
         .cursor_tex = 0,
     };
 };
+
+pub fn testTracer(fast_phi: f32) t.Ray {
+    const phi = fast_phi * 0.1;
+    const from: m.vec3 = .{ 5, 5, 5 };
+    const center: m.vec3 = m.zero3();
+    const delta = m.vec3{ @cos(phi), 0, -@sin(phi) } * m.splat3d(2.3);
+
+    const test_trace = t.Ray{
+        .at = from,
+        .to = center + delta,
+    };
+    return test_trace;
+}
+
+pub fn toggle(b: bool) bool {
+    return !b;
+}

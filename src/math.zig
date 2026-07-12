@@ -80,6 +80,23 @@ pub fn stack(a: [2]f32, z: f32) [3]f32 {
     return .{ a[X], a[Y], z };
 }
 
+pub fn WResolveType(comptime w: u8) type {
+    return switch (w) {
+        2 => vec2,
+        3 => vec3,
+        4 => vec4,
+        else => unreachable,
+    };
+}
+pub fn zero(comptime w: u8) WResolveType(w) {
+    return switch (w) {
+        2 => .{ 0, 0 },
+        3 => .{ 0, 0, 0 },
+        4 => .{ 0, 0, 0, 0 },
+        else => unreachable,
+    };
+}
+
 pub fn zero3() vec3 {
     return .{ 0, 0, 0 };
 }
@@ -297,7 +314,7 @@ pub fn lookRotation(pos: vec3, target: vec3, ref_up: vec3) mat4u {
 pub fn mat_ortho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32) mat4u {
     const w = right - left;
     const h = down - up; // Vk has -Y axis
-    const d = far - near;
+    const d = (far - near) * 3; // we benefit from more depth right now
     return mat4u{
         .mat = .{
             .{ 2 / w, 0, 0, 0 }, // column-major
@@ -320,6 +337,7 @@ pub fn mat_ortho_uniformed(scale: f32) mat4u {
 
 pub fn mat_ortho_shift(scale: f32, shift: vec3) mat4u {
     const x, const y, const z = shift;
+
     return mat_ortho(x + scale, x - scale, y + scale, y - scale, z + scale, z - scale);
 }
 

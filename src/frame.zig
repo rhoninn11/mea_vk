@@ -15,6 +15,7 @@ pub const InstGroup = struct {
 };
 
 pub const FrameState = struct {
+    def_persp: bool,
     alt_proj: bool,
     alt_shader: bool,
     model_idx: u8,

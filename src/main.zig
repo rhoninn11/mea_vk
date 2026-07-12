@@ -67,6 +67,7 @@ const LYR_INST_BASE = 6144;
 var navig = a.Navig.default;
 
 var state: frame.FrameState = .{
+    .def_persp = true,
     .alt_proj = true,
     .alt_shader = false,
     .ok_tex_base = OK_TEX_BASE,
@@ -376,8 +377,9 @@ fn theDeepest(access: EasyAcces) !void {
     var dbgmonit = d.DbgMonitor{};
 
     //state
-    var okphi: f32 = 0;
-    var glyphphi: f32 = 0;
+    var ok_phi: f32 = 0;
+    var glyph_phi: f32 = 0;
+    var tracker_phi: f32 = 0;
     var ok_slider: u.Slider = .initMid(0, OK_SWEEP - 1);
 
     sdlh.wheel.up = .{ .a = &ok_slider, .f = u.Slider.incX5 };
@@ -418,8 +420,9 @@ fn theDeepest(access: EasyAcces) !void {
 
         const td = timeline.deltaS();
         const td1 = timeline1.deltaS();
-        okphi += td1 * 0.1;
-        glyphphi += td1 * 0.13;
+        ok_phi += td1 * 0.1;
+        glyph_phi += td1 * 0.13;
+        tracker_phi += td1 * 3;
 
         if (input.exit_trig.fired()) window.closeWindow();
         if (input.time_stop_trig.fired()) timeline1.passageToggle();
@@ -473,11 +476,15 @@ fn theDeepest(access: EasyAcces) !void {
         }
 
         if (input.dbg_trig.fired()) {
-            dbgmonit.enabled = !dbgmonit.enabled;
+            dbgmonit.enabled = a.toggle(dbgmonit.enabled);
         }
 
         if (input.inverse_tirg.fired()) {
-            glass.inverse = !glass.inverse;
+            glass.inverse = a.toggle(glass.inverse);
+        }
+
+        if (input.persp_switch.fired()) {
+            state.def_persp = a.toggle(state.def_persp);
         }
 
         var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 960);
@@ -503,9 +510,9 @@ fn theDeepest(access: EasyAcces) !void {
         const instances: [*]sht.PerInstance = @ptrCast(@alignCast(storage_mapping));
         const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
 
-        const camaera_ray = t.Ray{
-            .at = orbital.pos(),
-            .to = .{ 0, 0, 0 },
+        const virt_ray: t.Ray = switch (state.def_persp) {
+            true => t.Ray{ .at = orbital.pos(), .to = m.zero3() },
+            false => a.testTracer(tracker_phi),
         };
 
         {
@@ -514,8 +521,10 @@ fn theDeepest(access: EasyAcces) !void {
                 timeline1.total_s,
                 size,
                 win_size,
-                camaera_ray,
+                virt_ray,
             );
+
+            // PLAIN INSTANCES MAP:
             // cubes 0-4095
             // ok slices 4096-4223
             // glyphs 4224-4247
@@ -538,7 +547,7 @@ fn theDeepest(access: EasyAcces) !void {
                 instances,
                 state.ok_group.base,
                 state.ok_group.num,
-                okphi,
+                ok_phi,
             );
 
             state.char_group.num = try abc.BlitText(
