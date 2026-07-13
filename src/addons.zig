@@ -49,8 +49,8 @@ const EPersp = enum(u8) { ortho = 0, persp, orthoside };
 const MatPack = sht.MatPack;
 pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: EPersp) !MatPack {
     const persp_window = switch (persp) {
-        .ortho => m.mat_ortho_uniformed(10),
-        .persp => m.mat_persp(1, 0.75, std.math.pi / 2.0, 0.1, 20),
+        .ortho => m.matOrthoUni(10),
+        .persp => m.matPersp(1, 0.75, std.math.pi / 2.0, 0.1, 20),
         .orthoside => m.matOrthoShift(10, .{ -5, 0, 0 }),
     };
 
@@ -73,7 +73,7 @@ pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: EPersp) !MatPack {
 
 pub fn guiVisor(x: f32, y: f32) MatPack {
     const interm = MatPack{
-        .proj = m.mat_ortho(x, 0, 0, -y, 16, -16).arr,
+        .proj = m.matOrtho(x, 0, 0, -y, 16, -16).arr,
         .view = m.matIden().arr,
         .model = m.matIden().arr,
         // .view = m.mat_translate(-pos).arr,

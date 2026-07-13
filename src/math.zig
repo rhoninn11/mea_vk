@@ -37,8 +37,13 @@ test "union behav" {
         .proj = m_I.arr,
         .view = m_I.arr,
     };
+    const matpack_alignment = @alignOf(@TypeOf(mpa));
+    const unifompack_alignment = @alignOf(sht.GroupData);
 
-    try std.testing.expectEqual(glsl_alignment, @alignOf(@TypeOf(mpa)));
+    try std.testing.expectEqual(4, matpack_alignment);
+    try std.testing.expectEqual(16, glsl_alignment);
+    try std.testing.expectEqual(4, unifompack_alignment);
+    // TODO: Daaaymn, so how it alighns with mat4 gpu alignment?
 }
 
 pub const mat4 = [4]vec4;
@@ -314,7 +319,7 @@ pub fn lookRotation(pos: vec3, target: vec3, ref_up: vec3) mat4u {
     };
 }
 
-pub fn mat_ortho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32) mat4u {
+pub fn matOrtho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32) mat4u {
     const w = right - left;
     const h = down - up; // Vk has -Y axis
     const d = (far - near);
@@ -329,17 +334,17 @@ pub fn mat_ortho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32)
 }
 pub fn matDeepOrtho(right: f32, left: f32, up: f32, down: f32) mat4u {
     // depth enough is fine right now
-    return mat_ortho(right, left, up, down, 1000, -1000);
+    return matOrtho(right, left, up, down, 1000, -1000);
 }
 
 pub fn mat_ortho_default() mat4u {
     const scale = 1;
-    return mat_ortho_uniformed(scale);
+    return matOrthoUni(scale);
 }
 
-pub fn mat_ortho_uniformed(scale: f32) mat4u {
+pub fn matOrthoUni(scale: f32) mat4u {
     // from up down depends, y axis flip in vulkan
-    return mat_ortho(scale, -scale, scale, -scale, scale, -scale);
+    return matOrtho(scale, -scale, scale, -scale, scale, -scale);
 }
 
 pub fn matOrthoShift(scale: f32, shift: vec3) mat4u {
@@ -353,7 +358,7 @@ test "|ortho_to_vulkan" {
     const y0 = vec3{ 1, -1, 1 };
     const y1 = vec3{ -1, 1, 0 };
 
-    const M1 = mat_ortho(10, 5, 10, 5, 1, -1);
+    const M1 = matOrtho(10, 5, 10, 5, 1, -1);
     const v0 = matXvec(M1.mat, stack4(x0, 1));
     const v1 = matXvec(M1.mat, stack4(x1, 1));
     try std.testing.expect(len(y0 - trim3d(v0)) < 0.001);
@@ -370,7 +375,7 @@ test "|ortho_to_vulkan" {
     try std.testing.expect(len(y2 - trim3d(v2)) < 0.001);
     try std.testing.expect(len(y3 - trim3d(v3)) < 0.001);
 }
-pub fn mat_persp(width: f32, height: f32, fov: f32, near: f32, far: f32) mat4u {
+pub fn matPersp(width: f32, height: f32, fov: f32, near: f32, far: f32) mat4u {
     std.debug.assert(height != 0);
 
     const aspect = width / height;
@@ -386,15 +391,15 @@ pub fn mat_persp(width: f32, height: f32, fov: f32, near: f32, far: f32) mat4u {
     };
 }
 
-pub fn math_persp_def() mat4u {
-    return mat_persp(4, 3, std.math.pi / 2.0, 0.1, 10);
+pub fn matPerspDef() mat4u {
+    return matPersp(4, 3, std.math.pi / 2.0, 0.1, 10);
 }
 
 test "|persp_to_vulkan" {
     const x0 = .{ 1, 0, 1, 1 };
     const x1 = .{ 1, 0, 8, 1 };
 
-    const M1 = math_persp_def().mat;
+    const M1 = matPerspDef().mat;
 
     const y0 = matXvec(M1, x0);
     const y1 = matXvec(M1, x1);
@@ -424,10 +429,25 @@ pub fn abs(a: f32) f32 {
 
 const minus_vec3 = @as(vec3, @splat(-1));
 
-pub fn mat_look_at(pos: vec3, target: vec3, ref_up: vec3) !mat4u {
-    const trans = matTrans(-pos);
-    const rot = lookRotation(pos, target, ref_up);
-    return matXmat(rot.mat, trans.mat);
+pub fn matLookAt(pos: vec3, target: vec3, ref_up: vec3) !mat4u {
+    const alt = true;
+    switch (alt) {
+        true => {
+            const from_rl = rmath.MatrixLookAt(
+                rvec3(pos),
+                rvec3(target),
+                rvec3(ref_up),
+            );
+
+            const alt_result: mat4u = .{ .rmat = from_rl };
+            return alt_result;
+        },
+        false => {
+            const trans = matTrans(-pos);
+            const rot = lookRotation(pos, target, ref_up);
+            return matXmat(rot.mat, trans.mat);
+        },
+    }
 }
 
 const UP = vec3{ 0, 1, 0 };
@@ -446,13 +466,13 @@ test "is_matrix_looking" {
     const target_right = vec3{ 1.1, 0, 1 };
     const target_upper = vec3{ 1, 0.1, 1 };
 
-    const transform = try mat_look_at(observ, target, UP);
+    const transform = try matLookAt(observ, target, UP);
     const r_ref_transform = rmath.MatrixLookAt(
         rvec3(observ),
         rvec3(target),
         rvec3(UP),
     );
-    std.debug.print("custom look_at {any}\n", .{transform});
+    std.debug.print("custom look_at {any}\n", .{transform.arr});
     std.debug.print("raylib look_at {any}\n", .{r_ref_transform});
     var outs: [3]vec4 = undefined;
     const to_transform: [3]vec3 = .{ target, target_right, target_upper };
