@@ -428,28 +428,31 @@ fn theDeepest(access: EasyAcces) !void {
         if (input.time_stop_trig.fired()) timeline1.passageToggle();
 
         if (input.shader_reset_trigger.fired()) state.alt_shader = true;
-        if (glass.update(&input.glass_input)) state.alt_shader = false;
+
+        const refresh_cond = glass.update(&input.glass_input, td);
+        if (refresh_cond) state.alt_shader = false;
 
         // orbit control
         orbital.update(td, &input.plr_input);
 
         smooth_scale.update(td, ok_slider.frac());
 
-        const scan_scale = smooth_scale.out() * 0.95 + 0.05;
-        const uv_mult = @as(m.vec2, @splat(scan_scale)) / navig.scann_aspect;
-        navig.uv_map.mult = uv_mult;
+        const zoom_scale = smooth_scale.out() * 0.95 + 0.05;
+        const scann_scale = m.splat2d(zoom_scale) * m.vec2{ 1, shu.gridAspect(glass.img_sz) };
 
-        const xoff, const yoff = glass.frac();
-        const scann_xoff = switch (xoff + scan_scale > 1) {
-            true => 1.0 - scan_scale,
+        const glass_frac = glass.frac();
+        const xoff, const yoff = glass_frac;
+        const scann_xoff = switch (xoff + scann_scale[0] > 1) {
+            true => 1.0 - scann_scale[0],
             false => xoff,
         };
-        const scann_yoff = switch (yoff + scan_scale > 1) {
-            true => 1.0 - scan_scale,
+        const scann_yoff = switch (yoff + scann_scale[1] > 1) {
+            true => 1.0 - scann_scale[1],
             false => yoff,
         };
 
-        navig.uv_map.mult = @splat(scan_scale);
+        // navig.uv_map.mult = @splat(scan_scale);
+        navig.uv_map.mult = scann_scale;
         navig.uv_map.offset = .{ scann_xoff, scann_yoff };
 
         const dbg_data = d.DbgMonitor.DbgVals{
@@ -492,13 +495,20 @@ fn theDeepest(access: EasyAcces) !void {
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
         if (interact.hit) {
             const x, const y = interact.at;
+            const mlt_x, const mlt_y = navig.uv_map.mult * interact.at + navig.uv_map.offset;
+
+            const p_x = mlt_x * m.floaty(glass.img_sz.w);
+            const p_y = mlt_y * m.floaty(glass.img_sz.h);
+            try dyn_text.print(txta, "{s:<16} | x:{d:>6} y:{d:>6}\n", .{ "pixel pos", m.uinty(p_x), m.uinty(p_y) });
             try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
-            const pan_ax = input.pan_input.value()[0];
-            if (pan_ax.active()) {
-                try dyn_text.print(txta, "blooop\n", .{});
-                const gx, const gy = glass.frac();
-                try dyn_text.print(txta, "{s:<14} | gx:{d:>6.2} gy:{d:>6.2}\n", .{ "glass cord", gx, gy });
-            }
+            // try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "glass frac", xoff, yoff });
+
+            // const pan_ax = input.pan_input.value()[0];
+            // if (pan_ax.active()) {
+            //     try dyn_text.print(txta, "blooop\n", .{});
+            //     const gx, const gy = glass.frac();
+            //     try dyn_text.print(txta, "{s:<14} | gx:{d:>6.2} gy:{d:>6.2}\n", .{ "glass cord", gx, gy });
+            // }
         } else {
             _ = input.sample_tirg.fired();
         }

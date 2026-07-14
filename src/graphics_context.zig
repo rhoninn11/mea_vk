@@ -265,7 +265,7 @@ pub const GraphicsContext = struct {
         };
 
         return vk.ValidationFeaturesEXT{
-            .enabled_validation_feature_count = m.uinty(v_enables.len),
+            .enabled_validation_feature_count = m.u32cast(v_enables.len),
             .p_enabled_validation_features = v_enables.ptr,
         };
     }

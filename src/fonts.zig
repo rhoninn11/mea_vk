@@ -191,8 +191,8 @@ pub const Alphabet = struct {
 
             const mem_off = y_off + x_off;
 
-            const w = m.uinty(sz.w);
-            const h = m.uinty(sz.h);
+            const w = m.u32cast(sz.w);
+            const h = m.u32cast(sz.h);
             for (0..h) |jj| {
                 const src_off = jj * w * pix_w;
                 const dst_off = mem_off + jj * font_atlas_w * pix_w;

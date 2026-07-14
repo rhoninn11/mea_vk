@@ -195,9 +195,10 @@ pub const LookingGlass = struct {
     pos: @Vector(2, i32),
     sliders: [2]utils.Slider,
     win_sz: sht.GridSize,
+
+    img_sz: sht.GridSize,
     scan_raw: *meagen.Image,
     scan_lyr: *meagen.Image,
-    img_sz: sht.GridSize,
     inverse: bool = false,
 
     pub fn init(from: *DualImageData, g_sz: sht.GridSize) LookingGlass {
@@ -215,8 +216,8 @@ pub const LookingGlass = struct {
             .sliders = undefined,
         };
 
-        self.sliders[m.X] = .init(0, m.u16ty(self.limX(self.scan_raw)));
-        self.sliders[m.Y] = .init(0, m.u16ty(self.limY(self.scan_raw)));
+        self.sliders[m.X] = .init(0, m.u16cast(self.limX(self.scan_raw)));
+        self.sliders[m.Y] = .init(0, m.u16cast(self.limY(self.scan_raw)));
 
         return self;
     }
@@ -229,11 +230,20 @@ pub const LookingGlass = struct {
         return @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.win_sz.h)) - 1;
     }
 
-    pub fn update(self: *LookingGlass, axes: *const input.DualHoldsAxis) bool {
+    pub fn update(self: *LookingGlass, axes: *const input.DualHoldsAxis, td: f32) bool {
         const ax: [2]u8 = .{ m.X, m.Y };
         const ax_val = axes.value();
-        inline for (ax) |slot|
-            self.pos[slot] = self.sliders[slot].drive(ax_val[slot]);
+
+        const px_speed: f32 = 400;
+        // const px_speed_boost: f32 = 800;
+
+        const times = @max(1, m.uinty(px_speed * td));
+
+        for (0..times) |_| {
+            inline for (ax) |slot| {
+                self.pos[slot] = self.sliders[slot].drive(ax_val[slot]);
+            }
+        }
 
         const is_moveing = ax_val[m.X] != motion.Axis.none or ax_val[m.Y] != motion.Axis.none;
         return is_moveing;

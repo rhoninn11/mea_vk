@@ -92,7 +92,7 @@ void main() {
         // model[3][0] = 0;
         gl_Position = mvp.proj * mvp.view * _pc.data.model * base;
         v_tex_idx = _pc.data.tex_base;
-        float s = _pc.data.scale2D.x;
+        vec2 s = _pc.data.scale2D.xy;
         v_uv = a_color.xy * s + _pc.data.point2D;
     }else {
         // per instance transform matrix

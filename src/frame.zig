@@ -144,7 +144,7 @@ pub fn recordFrame(
             .render_pass = render_pass,
             .framebuffer = framebuffers[rec.id],
             .render_area = render_area,
-            .clear_value_count = m.uinty(m_clears.len),
+            .clear_value_count = m.u32cast(m_clears.len),
             .p_clear_values = m_clears.ptr,
         }, .@"inline");
         {
@@ -224,23 +224,24 @@ pub fn recordFrame(
                 hl_cmds.drawInsances(.quad, 1); // scann color map
 
                 var closer = m.matTrans(.{ 0, 0, -0.1 });
+                _ = &closer;
                 scan_push.model = m.matXmat(closer.mat, scann_mat).mat;
                 scan_push.tex_base = 3;
                 hl_cmds.push(&scan_push);
                 hl_cmds.drawInsances(.quad, 1); // scann layers
 
-                closer = m.matTrans(.{ 0, 0, -0.05 });
-                const delta_store = m.matXmat(closer.mat, scann_mat).mat;
-                // delta_store[0][3] = 0.5;
-                var scan_push_sdf = gm.PushConstant.PCBlob{
-                    .model = delta_store,
-                    .tex_base = 5,
-                    .mode = 4, // sprite mode
-                    .scale2D = state.nav.uv_map.mult,
-                    .point2D = state.nav.uv_map.offset,
-                };
-                hl_cmds.push(&scan_push_sdf);
-                hl_cmds.drawInsances(.quad, 1); // scann shaded
+                // closer = m.matTrans(.{ 0, 0, -0.05 });
+                // const delta_store = m.matXmat(closer.mat, scann_mat).mat;
+                // // delta_store[0][3] = 0.5;
+                // var scan_push_sdf = gm.PushConstant.PCBlob{
+                //     .model = delta_store,
+                //     .tex_base = 5,
+                //     .mode = 4, // sprite mode
+                //     .scale2D = state.nav.uv_map.mult,
+                //     .point2D = state.nav.uv_map.offset,
+                // };
+                // hl_cmds.push(&scan_push_sdf);
+                // hl_cmds.drawInsances(.quad, 1); // scann shaded
             }
 
             {

@@ -535,15 +535,18 @@ pub fn rotMatX(part: f32) mat3 {
 }
 
 // conversions
-pub inline fn uinty(val: anytype) u32 {
+pub inline fn u32cast(val: anytype) u32 {
     return @as(u32, @intCast(val));
 }
-pub inline fn u16ty(val: anytype) u16 {
+pub inline fn u16cast(val: anytype) u16 {
     return @as(u16, @intCast(val));
 }
 
 pub inline fn floaty(usz: anytype) f32 {
     return @as(f32, @floatFromInt(usz));
+}
+pub inline fn uinty(val: anytype) u32 {
+    return @as(u32, @intFromFloat(val));
 }
 
 pub inline fn radial(phi: f32, r: f32) vec2 {

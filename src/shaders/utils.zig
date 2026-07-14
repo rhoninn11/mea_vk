@@ -1,5 +1,6 @@
 const sht = @import("types.zig");
 const std = @import("std");
+const m = @import("../math.zig");
 
 pub fn gridI(grid: sht.GridSize, x: usize, y: usize) usize {
     const cols = @as(usize, @intCast(grid.w));
@@ -17,6 +18,10 @@ pub fn xyGrid(x: u16, y: u16) sht.GridSize {
         .w = x,
         .h = y,
     };
+}
+
+pub fn gridAspect(grid: sht.GridSize) f32 {
+    return m.floaty(grid.w) / m.floaty(grid.h);
 }
 
 pub fn printGrid(g: *const sht.GridSize, prefix: []const u8) void {
