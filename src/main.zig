@@ -173,39 +173,41 @@ fn theDeepest(access: EasyAcces) !void {
         .{ storage_a_sz, storage_b_sz },
     );
 
-    var dset_uniform = try hl_dset.init(
-        swapchain_len,
-        gm.baked.uniform_frag_vert_dyn,
-        &.{.{ .binding = 0, .element_size = ubo_sz, .num = 16 }},
-        null,
-    );
-    defer hl_dset.deinit(&dset_uniform);
-
-    var storage = try hl_dset.init(
-        swapchain_len,
-        gm.baked.storage_frag_vert,
-        &.{
-            .{ .binding = 0, .element_size = storage_a_sz, .num = 1 },
-            // .{ .binding = 1, .element_size = storage_b_sz, .num = 1 },
-        },
-        null,
-    );
-    defer hl_dset.deinit(&storage);
-
     const ATLAS_MAX = 256;
-    var dset_atlas = try hl_dset.init(
-        1,
-        gm.baked.texture_frag,
-        &.{.{ .binding = 0 }},
-        ATLAS_MAX,
-    );
-    defer hl_dset.deinit(&dset_atlas);
+    var lazy_shady: dset.ShadyGroup = undefined;
+    {
+        var dset_uniform = try hl_dset.init(
+            swapchain_len,
+            gm.baked.uniform_frag_vert_dyn,
+            &.{.{ .binding = 0, .element_size = ubo_sz, .num = 16 }},
+            null,
+        );
+        errdefer hl_dset.deinit(&dset_uniform);
 
-    const desc_sets = [_]vk.DescriptorSetLayout{
-        dset_uniform._d_set_layout.?,
-        storage._d_set_layout.?,
-        dset_atlas._d_set_layout.?,
-    };
+        var storage = try hl_dset.init(
+            swapchain_len,
+            gm.baked.storage_frag_vert,
+            &.{
+                .{ .binding = 0, .element_size = storage_a_sz, .num = 1 },
+                // .{ .binding = 1, .element_size = storage_b_sz, .num = 1 },
+            },
+            null,
+        );
+        errdefer hl_dset.deinit(&storage);
+
+        var dset_atlas = try hl_dset.init(
+            1,
+            gm.baked.texture_frag,
+            &.{.{ .binding = 0 }},
+            ATLAS_MAX,
+        );
+        errdefer hl_dset.deinit(&dset_atlas);
+
+        lazy_shady.uniforms = dset_uniform;
+        lazy_shady.storage = storage;
+        lazy_shady.omnitex = dset_atlas;
+    }
+    defer lazy_shady.drop(&hl_dset);
 
     // rendering & pipelines
     const render_pass = try pipe.createRenderPass(
@@ -215,6 +217,7 @@ fn theDeepest(access: EasyAcces) !void {
     );
     defer gc.dev.destroyRenderPass(render_pass, null);
 
+    const desc_sets = lazy_shady.layout();
     const push_const_ranges = gm.PushConstant.Ranges();
     const pipeline_layout = try gc.dev.createPipelineLayout(&.{
         .flags = .{},
@@ -258,16 +261,16 @@ fn theDeepest(access: EasyAcces) !void {
         .instance_count = grid.total, // TODO: something like "InstanceMapping"...
         .pipeline = pipelines,
         .pipeline_layout = pipeline_layout,
-        .uniform_dsets = dset_uniform.d_set_arr,
-        .storage_dsets = storage.d_set_arr,
-        .texture_dset = dset_atlas.d_set_arr.items[0],
+        .uniform_dsets = lazy_shady.uniforms.d_set_arr,
+        .storage_dsets = lazy_shady.storage.d_set_arr,
+        .texture_dset = lazy_shady.omnitex.d_set_arr.items[0],
         .models = &repo,
     };
 
     // grid saved
     const spacing = 0.1;
     const size = 0.04;
-    try refils.gridPrefil(storage, grid, spacing);
+    try refils.gridPrefil(lazy_shady.storage, grid, spacing);
 
     // textures
     const g64 = sht.GridSize.g64;
@@ -286,7 +289,7 @@ fn theDeepest(access: EasyAcces) !void {
         inline for (0.., basic_tex_set) |i, risky_rgba| {
             const rgba = try risky_rgba;
             try all_imgs.append(&rgba);
-            dset_atlas.updateTexture(0, &rgba, basic_idx + i);
+            lazy_shady.omnitex.updateTexture(0, &rgba, basic_idx + i);
         }
     }
 
@@ -297,14 +300,14 @@ fn theDeepest(access: EasyAcces) !void {
     try imgs.texPrep(&pic, g_abc, abc.char_atlas, &char_atlas, .default);
 
     // const sdf_atlas = try imgs.vulkanTexture(&pic, g_abc, abc.char_atlas, false);
-    dset_atlas.updateTexture(0, &char_atlas, 4);
+    lazy_shady.omnitex.updateTexture(0, &char_atlas, 4);
     try all_imgs.append(&char_atlas);
 
-    var mono = try imgs.U16Image.init(pic.gc, glass.img_sz);
     {
+        var mono = try imgs.U16Image.init(pic.gc, glass.img_sz);
         errdefer mono.deinit();
         try imgs.texPrep(&pic, glass.img_sz, glass.scan_raw.pixels, &mono, .nearest);
-        dset_atlas.updateTexture(0, &mono, 5);
+        lazy_shady.omnitex.updateTexture(0, &mono, 5);
         try all_imgs.append(&mono);
     }
 
@@ -322,7 +325,7 @@ fn theDeepest(access: EasyAcces) !void {
         defer gpa.free(pixels);
 
         const rgba = try imgs.vulkanTexture(&pic, tex_grid_ok, pixels, .nearest);
-        dset_atlas.updateTexture(0, &rgba, ok_atlas_idx);
+        lazy_shady.omnitex.updateTexture(0, &rgba, ok_atlas_idx);
         try all_imgs.append(&rgba);
 
         ok_atlas_idx += 1;
@@ -473,13 +476,11 @@ fn theDeepest(access: EasyAcces) !void {
         }
 
         if (input.slide_r_trig.fired()) {
-            const last = state.model_idx == repo.head - 1;
-            state.model_idx = if (last) 0 else state.model_idx + 1;
+            state.model_idx = a.wrapUp(state.model_idx, repo.head);
         }
 
         if (input.slide_l_trig.fired()) {
-            const first = state.model_idx == 0;
-            state.model_idx = if (first) repo.head - 1 else state.model_idx - 1;
+            state.model_idx = a.wrapDown(state.model_idx, repo.head);
         }
 
         if (input.dbg_trig.fired()) {
@@ -524,8 +525,8 @@ fn theDeepest(access: EasyAcces) !void {
 
         //minimalized
         try swapchain.waitCurrentFrame();
-        const storage_mapping = storage.buff_arr.items[img_idx].?.mapping.?;
-        const uniform_mapping = dset_uniform.buff_arr.items[img_idx].?.mapping.?;
+        const storage_mapping = lazy_shady.storage.buff_arr.items[img_idx].?.mapping.?;
+        const uniform_mapping = lazy_shady.uniforms.buff_arr.items[img_idx].?.mapping.?;
         const instances: [*]sht.PerInstance = @ptrCast(@alignCast(storage_mapping));
         const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
 

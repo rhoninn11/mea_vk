@@ -2,6 +2,31 @@ const std = @import("std");
 const vk = @import("vulkan-zig");
 const gm = @import("graphics_context.zig");
 const m = @import("math.zig");
+
+pub const ShadyGroup = struct {
+    const Self = @This();
+    const sets = 3;
+    uniforms: DescriptorPrep,
+    storage: DescriptorPrep,
+    omnitex: DescriptorPrep,
+
+    mayby_something_for_compute: DescriptorPrep = undefined,
+
+    pub fn drop(self: *ShadyGroup, hld: *const HLDSetPrep) void {
+        defer hld.deinit(&self.uniforms);
+        defer hld.deinit(&self.storage);
+        defer hld.deinit(&self.omnitex);
+    }
+
+    pub fn layout(self: *const Self) [sets]vk.DescriptorSetLayout {
+        return .{
+            self.uniforms._d_set_layout.?,
+            self.storage._d_set_layout.?,
+            self.omnitex._d_set_layout.?,
+        };
+    }
+};
+
 pub const HLDSetPrep = struct {
     gc: *const gm.GraphicsContext,
     gpa: std.mem.Allocator,

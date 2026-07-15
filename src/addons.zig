@@ -219,3 +219,13 @@ pub fn testTracer(fast_phi: f32) t.Ray {
 pub fn toggle(b: bool) bool {
     return !b;
 }
+
+pub fn wrapUp(val: u8, total: u8) u8 {
+    const last = val == total - 1;
+    return if (last) 0 else val + 1;
+}
+
+pub fn wrapDown(val: u8, total: u8) u8 {
+    const first = val == 0;
+    return if (first) total - 1 else val - 1;
+}
