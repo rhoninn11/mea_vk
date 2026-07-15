@@ -386,6 +386,9 @@ fn theDeepest(access: EasyAcces) !void {
     sdlh.wheel.down = .{ .a = &ok_slider, .f = u.Slider.decX5 };
     var smooth_scale: u.Smooth = .{};
 
+    var last_mouse_pos: m.ivec2 = .{ 0, 0 };
+    var panner = proto.Panner.init(&glass);
+
     // main loop
     var text_stack: [1024]u8 = undefined;
     while (!window.shoudClose()) {
@@ -433,6 +436,7 @@ fn theDeepest(access: EasyAcces) !void {
         if (refresh_cond) state.alt_shader = false;
 
         // orbit control
+        panner.update(&input.pan_input, last_mouse_pos);
         orbital.update(td, &input.plr_input);
 
         smooth_scale.update(td, ok_slider.frac());
@@ -494,21 +498,26 @@ fn theDeepest(access: EasyAcces) !void {
         const px, const py = glass.pos;
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
         if (interact.hit) {
-            const x, const y = interact.at;
-            const mlt_x, const mlt_y = navig.uv_map.mult * interact.at + navig.uv_map.offset;
+            // const x, const y = interact.at;
+            const scale_frac = navig.uv_map.mult * interact.at;
+            const s_x, const s_y = scale_frac;
+            const mlt_x, const mlt_y = scale_frac + navig.uv_map.offset;
 
+            const p_x_s = s_x * m.floaty(glass.img_sz.w);
+            const p_y_s = s_y * m.floaty(glass.img_sz.h);
             const p_x = mlt_x * m.floaty(glass.img_sz.w);
             const p_y = mlt_y * m.floaty(glass.img_sz.h);
-            try dyn_text.print(txta, "{s:<16} | x:{d:>6} y:{d:>6}\n", .{ "pixel pos", m.uinty(p_x), m.uinty(p_y) });
-            try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
-            // try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "glass frac", xoff, yoff });
 
-            // const pan_ax = input.pan_input.value()[0];
-            // if (pan_ax.active()) {
-            //     try dyn_text.print(txta, "blooop\n", .{});
-            //     const gx, const gy = glass.frac();
-            //     try dyn_text.print(txta, "{s:<14} | gx:{d:>6.2} gy:{d:>6.2}\n", .{ "glass cord", gx, gy });
-            // }
+            last_mouse_pos = m.ivec2{
+                @intCast(m.uinty(p_x_s)),
+                @intCast(m.uinty(p_y_s)),
+            };
+
+            const pd = panner.pan_delta_total_prev;
+
+            try dyn_text.print(txta, "{s:<16} | x:{d:>6} y:{d:>6}\n", .{ "pixel pos", m.uinty(p_x), m.uinty(p_y) });
+            try dyn_text.print(txta, "{s:<16} | x:{d:>6} y:{d:>6}\n", .{ "pan delta", pd[0], pd[1] });
+            // try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
         } else {
             _ = input.sample_tirg.fired();
         }

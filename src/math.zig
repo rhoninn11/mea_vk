@@ -7,7 +7,9 @@ pub const tau = std.math.tau;
 pub const vec2 = @Vector(2, f32);
 pub const vec3 = @Vector(3, f32);
 pub const vec4 = @Vector(4, f32);
-pub const uvec4 = @Vector(4, u8);
+pub const pixRgba = @Vector(4, u8);
+pub const uvec2 = @Vector(2, u16);
+pub const ivec2 = @Vector(2, i16);
 
 const glsl_alignment = 16;
 // glsl mat4 alignment is 16B
@@ -116,7 +118,7 @@ pub fn stack4(a: vec3, b: f32) vec4 {
     return .{ a[0], a[1], a[2], b };
 }
 
-pub fn asPix(srgb: vec3) uvec4 {
+pub fn asPix(srgb: vec3) pixRgba {
     const srgb_ar: [3]f32 = srgb;
     return .{
         @intFromFloat(srgb_ar[0] * 255),

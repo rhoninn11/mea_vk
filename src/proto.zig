@@ -191,6 +191,58 @@ pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator) !DualImageData {
     return try DualImageData.initProto(io, gpa, zip.file_sets[0]);
 }
 
+pub const Panner = struct {
+    const Self = @This();
+    glass: *LookingGlass,
+    start_at: m.ivec2,
+    pan_delta_total_prev: m.ivec2 = .{ 0, 0 },
+    pan_delta_total: m.ivec2 = .{ 0, 0 },
+    active: bool = false,
+
+    pub fn init(glass: *LookingGlass) Self {
+        return Panner{
+            .glass = glass,
+            .start_at = .{ 0, 0 },
+        };
+    }
+
+    fn grab(self: *Self, hold_active: bool, img_pos: m.ivec2) void {
+        if (!self.active and hold_active) {
+            self.active = true;
+            self.start_at = img_pos;
+            self.pan_delta_total_prev = .{ 0, 0 };
+            self.pan_delta_total = .{ 0, 0 };
+        }
+    }
+
+    pub fn update(self: *Self, axes: *const input.DualHoldsAxis, scann_pos: m.ivec2) void {
+        const activation = axes.value();
+
+        const input_active = activation[0].active();
+        self.grab(input_active, scann_pos);
+
+        if (self.active) {
+            self.pan_delta_total = scann_pos - self.start_at;
+            defer self.pan_delta_total_prev = self.pan_delta_total;
+            const move_delta = self.pan_delta_total - self.pan_delta_total_prev;
+
+            inline for (0..2) |i| {
+                var movemnt: motion.Axis = .none;
+                const val = move_delta[i];
+                // inverse for panning motion
+                if (val > 0) movemnt = .negative;
+                if (val < 0) movemnt = .positive;
+                for (0..@abs(val)) |_| _ = self.glass.sliders[i].drive(movemnt);
+            }
+        }
+
+        // release
+        if (!input_active and self.active) {
+            self.active = false;
+        }
+    }
+};
+
 pub const LookingGlass = struct {
     pos: @Vector(2, i32),
     sliders: [2]utils.Slider,
@@ -248,6 +300,7 @@ pub const LookingGlass = struct {
         const is_moveing = ax_val[m.X] != motion.Axis.none or ax_val[m.Y] != motion.Axis.none;
         return is_moveing;
     }
+
     pub fn frac(self: *const LookingGlass) m.vec2 {
         return .{
             m.floaty(self.pos[m.X]) / m.floaty(self.img_sz.w),
