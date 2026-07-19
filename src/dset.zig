@@ -12,6 +12,49 @@ pub const ShadyGroup = struct {
 
     mayby_something_for_compute: DescriptorPrep = undefined,
 
+    pub const Options = struct {
+        atlas_size: u16,
+        swapchain_lan: u8,
+        ubo_size: u32,
+        storag_size: u32,
+    };
+
+    pub fn init(hl_dset: *const HLDSetPrep, opt: Options) !Self {
+        var self: Self = undefined;
+
+        var dset_uniform = try hl_dset.init(
+            opt.swapchain_lan,
+            gm.baked.uniform_frag_vert_dyn,
+            &.{.{ .binding = 0, .element_size = opt.ubo_size, .num = 16 }},
+            null,
+        );
+        errdefer hl_dset.deinit(&dset_uniform);
+
+        var storage = try hl_dset.init(
+            opt.swapchain_lan,
+            gm.baked.storage_frag_vert,
+            &.{
+                .{ .binding = 0, .element_size = opt.storag_size, .num = 1 },
+                // .{ .binding = 1, .element_size = storage_b_sz, .num = 1 },
+            },
+            null,
+        );
+        errdefer hl_dset.deinit(&storage);
+
+        var dset_atlas = try hl_dset.init(
+            1,
+            gm.baked.texture_frag,
+            &.{.{ .binding = 0 }},
+            opt.atlas_size,
+        );
+        errdefer hl_dset.deinit(&dset_atlas);
+
+        self.uniforms = dset_uniform;
+        self.storage = storage;
+        self.omnitex = dset_atlas;
+        return self;
+    }
+
     pub fn drop(self: *ShadyGroup, hld: *const HLDSetPrep) void {
         defer hld.deinit(&self.uniforms);
         defer hld.deinit(&self.storage);

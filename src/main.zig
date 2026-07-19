@@ -164,49 +164,18 @@ fn theDeepest(access: EasyAcces) !void {
     const _8k = 1 << 13;
     std.debug.assert(grid.total * 2 == _8k);
 
-    const ubo_sz = @sizeOf(sht.GroupData);
-    const instpool_num = grid.total * 2;
-    const storage_a_sz = @sizeOf(sht.PerInstance) * instpool_num;
-    const storage_b_sz = @sizeOf(sht.SmolInst) * instpool_num;
-    std.debug.print(
-        "+++ storage_med {d: >12}B | storage_small {d: >12}B",
-        .{ storage_a_sz, storage_b_sz },
-    );
-
     const ATLAS_MAX = 256;
-    var lazy_shady: dset.ShadyGroup = undefined;
-    {
-        var dset_uniform = try hl_dset.init(
-            swapchain_len,
-            gm.baked.uniform_frag_vert_dyn,
-            &.{.{ .binding = 0, .element_size = ubo_sz, .num = 16 }},
-            null,
-        );
-        errdefer hl_dset.deinit(&dset_uniform);
+    const instpool_num = grid.total * 2;
 
-        var storage = try hl_dset.init(
-            swapchain_len,
-            gm.baked.storage_frag_vert,
-            &.{
-                .{ .binding = 0, .element_size = storage_a_sz, .num = 1 },
-                // .{ .binding = 1, .element_size = storage_b_sz, .num = 1 },
-            },
-            null,
-        );
-        errdefer hl_dset.deinit(&storage);
-
-        var dset_atlas = try hl_dset.init(
-            1,
-            gm.baked.texture_frag,
-            &.{.{ .binding = 0 }},
-            ATLAS_MAX,
-        );
-        errdefer hl_dset.deinit(&dset_atlas);
-
-        lazy_shady.uniforms = dset_uniform;
-        lazy_shady.storage = storage;
-        lazy_shady.omnitex = dset_atlas;
-    }
+    const storage_b_sz = @sizeOf(sht.SmolInst) * instpool_num;
+    _ = storage_b_sz;
+    const lazy_opt: dset.ShadyGroup.Options = .{
+        .swapchain_lan = swapchain_len,
+        .atlas_size = ATLAS_MAX,
+        .ubo_size = @sizeOf(sht.GroupData),
+        .storag_size = @sizeOf(sht.PerInstance) * instpool_num,
+    };
+    var lazy_shady: dset.ShadyGroup = try .init(&hl_dset, lazy_opt);
     defer lazy_shady.drop(&hl_dset);
 
     // rendering & pipelines
@@ -393,7 +362,7 @@ fn theDeepest(access: EasyAcces) !void {
     var panner = proto.Panner.init(&glass);
 
     // main loop
-    var text_stack: [1024]u8 = undefined;
+    var text_stack: [1024 + 512]u8 = undefined;
     while (!window.shoudClose()) {
         var fba: std.heap.FixedBufferAllocator = .init(text_stack[0..]);
         const txta = fba.allocator();
@@ -495,7 +464,7 @@ fn theDeepest(access: EasyAcces) !void {
             state.def_persp = a.toggle(state.def_persp);
         }
 
-        var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 960);
+        var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 1024);
         const px, const py = glass.pos;
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
         if (interact.hit) {

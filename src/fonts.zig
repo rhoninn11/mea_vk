@@ -74,7 +74,11 @@ pub fn getCodepointBitmap(
     );
 }
 
+const hash_len = std.crypto.hash.Sha1.digest_length;
+const TtfHash = [hash_len]u8;
+
 pub const FontRendering = struct {
+    content_sh1: TtfHash,
     content: []u8,
     info: tt.stbtt_fontinfo,
 
@@ -89,6 +93,7 @@ pub const FontRendering = struct {
         if (tt.stbtt_InitFont(&self.info, self.content.ptr, 0) == 0) {
             return error.FontInitFailed;
         }
+        std.crypto.hash.Sha1.hash(self.content, &self.content_sh1, .{});
         return self;
     }
 
@@ -231,7 +236,7 @@ pub const Alphabet = struct {
         for (ascii_chars) |char| {
             const idx: u8 = @as(u8, @intCast(count));
             try char_map.put(char, idx);
-            switch (char != ' ') { // TODO: tutaj spacja najprowdopodobnej bruździ
+            switch (char != ' ') {
                 true => {
                     tex_data_arr[idx] = try font.sampleCodepoint(gpa, char, &gly_sz);
                 },
