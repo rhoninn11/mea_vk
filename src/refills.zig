@@ -89,7 +89,9 @@ pub fn gridPrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spacing
         fresh_one.new_usage[1] = dist;
         fresh_one.new_usage[2] = g_idx[m.X];
         fresh_one.new_usage[3] = delt[m.X];
-        fresh_one.offset_4d = m.stack4(pos_1, 1);
+
+        const pos_l_x_inv: m.vec3 = .{ -pos_1[0], pos_1[1], pos_1[2] };
+        fresh_one.offset_4d = m.stack4(pos_l_x_inv, 1);
 
         fresh_one.depth_ctrl[0] = 0;
         fresh_one.depth_ctrl[1] = 0;

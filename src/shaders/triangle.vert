@@ -63,6 +63,7 @@ layout(location = 0) out vec2 v_uv;
 layout(location = 1) out float v_progress;
 layout(location = 2) out vec2 v_depth_shading;
 layout(location = 4) out vec2 v_color_rest;
+layout(location = 5) out vec3 v_marker_color;
 
 
 // group locked at the middle of the screan
@@ -106,7 +107,10 @@ void main() {
     } else {
         base = a_pos;
     }
-
+    if (_pc.data.mode == 1) {
+        // TODO: read from instance
+        v_marker_color = vec3(0.9, 0.1, 0.2);
+    }
 
     vec4 before_transform = vec4(base, 1.0);
     gl_Position = ems.proj * ems.view * _pc.data.model * before_transform;

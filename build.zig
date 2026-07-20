@@ -312,11 +312,14 @@ fn protoGen(b: *std.Build, dep: *Dependency, target: std.Build.ResolvedTarget) v
         target,
         .{
             .destination_directory = b.path("src/gen"),
-            .source_files = &.{b.path("proto/comfy.proto")},
-            .include_directories = &.{},
+            .source_files = &.{
+                b.path("./proto/comfy.proto"),
+                b.path("./proto/cache.proto"),
+            },
+            .include_directories = &.{b.path("./proto")},
         },
     );
-    const cmdname: []const u8 = "proto_gen";
+    const cmdname: []const u8 = "proto";
     std.debug.print("You can always call {s}! (wink, wink)\n", .{cmdname});
     const run_step = b.step(cmdname, "compilation of .proto file in proto/");
     run_step.dependOn(&gen_step.step);

@@ -8,6 +8,7 @@ const sht = @import("shaders/types.zig");
 const shu = @import("shaders/utils.zig");
 const dset = @import("dset.zig");
 const m = @import("math.zig");
+const meagen = @import("gen/meagen.pb.zig");
 
 // TODO: ok, now i know what is this sizing for, so i can name it better
 // tylko jaką nazwę tutaj dać?
@@ -146,6 +147,7 @@ pub const Alphabet = struct {
     char_texd_arr: [][]u8,
     char_atlas: []u8,
     char_uvd_arr: []m.vec4,
+    font_hash: TtfHash,
 
     pub fn deinit(self: *Alphabet, gpa: std.mem.Allocator) void {
         for (0..self.num) |i| {
@@ -212,9 +214,7 @@ pub const Alphabet = struct {
         self.char_uvd_arr = atlas_uv_data;
     }
 
-    pub fn init(io: std.Io, gpa: std.mem.Allocator, font: *const FontRendering, cache_file: []const u8) !Alphabet {
-        _ = cache_file;
-        _ = io;
+    pub fn init(io: std.Io, gpa: std.mem.Allocator, font: *const FontRendering, cache_at: []const u8) !Alphabet {
         // TODO: would like to find out if atlas stored aleady on fs
         const ascii_len = ascii_chars.len;
 
@@ -254,10 +254,31 @@ pub const Alphabet = struct {
         self.char_texd_arr = tex_data_arr;
         self.char_sz_arr = how_big;
         self.num = @intCast(how_big.len);
+        self.font_hash = font.content_sh1;
 
         const sdf_byte_per_pix = 1;
         try self.naiveAtlas(gpa, sdf_byte_per_pix);
+        errdefer @panic("TODO: in case of cache store failed");
+        try self.storeAsCache(io, gpa, cache_at);
+
+        // _ = cache_at;
+        // _ = io;
         return self;
+    }
+
+    pub fn storeAsCache(self: *const Alphabet, io: std.Io, gpa: std.mem.Allocator, cache_at: []const u8) !void {
+        var basic_cache = meagen.FontAtlas{
+            .hash = self.font_hash[0..],
+        };
+
+        var some_space: [1024]u8 = undefined;
+        var cache_file = try std.Io.Dir.cwd().openFile(io, cache_at, .{ .mode = .read_write });
+        defer cache_file.close(io);
+        var writer = cache_file.writer(io, some_space[0..]);
+        const iowriter = &writer.interface;
+        try basic_cache.encode(iowriter, gpa);
+
+        // std.debug.print("+++ font cached as %s with hash %s\n", .{ cache_at, self.font_hash[0..] });
     }
 
     pub fn charInfo(self: *const Alphabet, gpa: std.mem.Allocator, write_to: *std.ArrayList(u8), idx: u16) !void {

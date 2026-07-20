@@ -521,15 +521,10 @@ fn theDeepest(access: EasyAcces) !void {
             // layers 6144-?
 
             if (state.alt_shader) {
-                try glass.bakeScann(instances, false);
+                try glass.recoverKinecticDemo(instances);
             } else {
-                try glass.bakeScann(instances, true);
-                const lnum = try glass.bakeRidges(
-                    instances,
-                    state.layer_group.base,
-                    false,
-                );
-                state.layer_group.num = lnum;
+                try glass.bakeScannData(instances);
+                try glass.bakeRidges(instances, &state.layer_group);
             }
 
             try oklab.OkUnderstanding.labSpliced(

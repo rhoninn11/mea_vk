@@ -29,6 +29,7 @@ layout(location = 0) in vec2 v_uv;
 layout(location = 1) in float v_progress;
 layout(location = 2) in vec2 v_depth_shading;
 layout(location = 4) in vec2 v_color_rest;
+layout(location = 5) in vec3 v_marker_color;
 
 layout(location = 0) out vec4 f_color;
 
@@ -49,8 +50,8 @@ vec3 inferno(float t) {
 
 void main() {
     
-    float progress = v_progress;
     vec2 uv = v_uv.rg;
+    float progress = v_progress;
     float spread = v_color_rest.r;
     float dim_lvl = v_color_rest.g;
     
@@ -77,18 +78,15 @@ void main() {
     if (gate > 1.5) {
         level_color = vec3(1,0.9,0.7);
     }
-    // if (gl_FrontFacing) {
-        f_color = vec4(level_color, 1.0);
-    
+
+    // modes
     if (_pc.data.mode == 1) {
-        f_color = vec4(0.1, 0.3, 0.7, 1.0);
+        f_color = vec4(v_marker_color, 1.0);
     } else if (_pc.data.mode == 2) {
         f_color = vec4(0.5, 0.1, 0.6, 1.0);
     } else if (_pc.data.mode == 3) {
         f_color = texture(tex_bindless[nonuniformEXT(_pc.data.tex_base)], uv);
+    } else {
+        f_color = vec4(level_color, 1.0);
     }
-    
-    // } else {
-    //     f_color = vec4(0, 1.0, 1.0, 1.0);
-    // } 
 }

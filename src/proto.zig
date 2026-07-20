@@ -7,6 +7,7 @@ const motion = @import("motion.zig");
 const sht = @import("shaders/types.zig");
 const shu = @import("shaders/utils.zig");
 
+const f = @import("frame.zig");
 const m = @import("math.zig");
 const input = @import("input.zig");
 const files = @import("files.zig");
@@ -35,7 +36,6 @@ pub fn spawnMonoImg(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
             pixels[gdx] = randval;
         }
     }
-
     return meagen.Image{
         .info = info(g, meagen.ImgType.MONO),
         .pixels = pixels,
@@ -75,7 +75,7 @@ pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     }
 
     return meagen.Image{
-        .info = info(g, meagen.ImgType.DUO),
+        .info = info(g, meagen.ImgType.HDR),
         .pixels = pixels,
     };
 }
@@ -254,7 +254,7 @@ pub const LookingGlass = struct {
     inverse: bool = false,
 
     pub fn init(from: *DualImageData, g_sz: sht.GridSize) LookingGlass {
-        std.debug.assert(from.raw_data.info.?.img_type == meagen.ImgType.DUO);
+        std.debug.assert(from.raw_data.info.?.img_type == meagen.ImgType.HDR);
         std.debug.assert(from.layer_data.info.?.img_type == meagen.ImgType.MONO);
 
         const src = &from.raw_data.info.?;
@@ -355,6 +355,14 @@ pub const LookingGlass = struct {
 
     const TRIM_FACTOR = 0.4;
     const INST_LIM = 8096 + 4096;
+
+    pub fn bakeScannData(self: *LookingGlass, instances: [*]sht.PerInstance) !void {
+        return bakeScann(self, instances, true);
+    }
+    pub fn recoverKinecticDemo(self: *LookingGlass, instances: [*]sht.PerInstance) !void {
+        return bakeScann(self, instances, false);
+    }
+
     pub fn bakeScann(self: *LookingGlass, instances: [*]sht.PerInstance, enabled: bool) !void {
         const total = self.win_sz.total;
 
@@ -386,9 +394,8 @@ pub const LookingGlass = struct {
     pub fn bakeRidges(
         self: *LookingGlass,
         instances: [*]sht.PerInstance,
-        first_layer_instance: u32,
-        debug_info: bool,
-    ) !u16 {
+        group: *f.InstGroup,
+    ) !void {
         const total_cells = self.win_sz.total;
         const layer_inst_total = self.win_sz.total / 2;
 
@@ -415,7 +422,7 @@ pub const LookingGlass = struct {
             if (layer_val == 0) continue;
 
             const spot = self.lookingSpot(i);
-            if (debug_info) try dbg_info.print(fba, "i({d}) x({d}) y({d})\n", .{ i, spot.x, spot.y });
+            _ = spot;
 
             src_inst.depth_ctrl[1] = tresholded_h;
 
@@ -423,13 +430,10 @@ pub const LookingGlass = struct {
             inst_idx += 1;
         }
 
-        if (debug_info) std.debug.print("+++ layer debug | \n{s}\n+++ layer debug\n", .{dbg_info.items});
-
         if (inst_idx > 0) {
-            @memcpy(instances + first_layer_instance, scratchpad[0..inst_idx]);
+            @memcpy(instances + group.base, scratchpad[0..inst_idx]);
+            group.num = inst_idx;
         }
-
-        return inst_idx;
     }
 
     // TODO: making some space
