@@ -214,8 +214,12 @@ pub const Alphabet = struct {
         self.char_uvd_arr = atlas_uv_data;
     }
 
-    pub fn init(io: std.Io, gpa: std.mem.Allocator, font: *const FontRendering, cache_at: []const u8) !Alphabet {
+    pub fn init(io: std.Io, gpa: std.mem.Allocator, font: *const FontRendering, path_cache: []const u8) !Alphabet {
         // TODO: would like to find out if atlas stored aleady on fs
+        var self: Alphabet = undefined;
+        self.font_hash = font.content_sh1;
+        try self.cacheCheck(io, gpa, path_cache);
+
         const ascii_len = ascii_chars.len;
 
         var char_map: CharLocMap = .init(gpa);
@@ -249,36 +253,71 @@ pub const Alphabet = struct {
             count += 1;
         }
 
-        var self: Alphabet = undefined;
         self.char_map = char_map;
         self.char_texd_arr = tex_data_arr;
         self.char_sz_arr = how_big;
         self.num = @intCast(how_big.len);
-        self.font_hash = font.content_sh1;
 
         const sdf_byte_per_pix = 1;
         try self.naiveAtlas(gpa, sdf_byte_per_pix);
         errdefer @panic("TODO: in case of cache store failed");
-        try self.storeAsCache(io, gpa, cache_at);
+        try self.cacheStore(io, gpa, path_cache);
 
         // _ = cache_at;
         // _ = io;
         return self;
     }
 
-    pub fn storeAsCache(self: *const Alphabet, io: std.Io, gpa: std.mem.Allocator, cache_at: []const u8) !void {
+    pub fn cacheStore(self: *const Alphabet, io: std.Io, gpa: std.mem.Allocator, cache_path: []const u8) !void {
         var basic_cache = meagen.FontAtlas{
             .hash = self.font_hash[0..],
         };
 
         var some_space: [1024]u8 = undefined;
-        var cache_file = try std.Io.Dir.cwd().openFile(io, cache_at, .{ .mode = .read_write });
+        std.debug.print("+++ Path for cache: {s}\n", .{cache_path});
+
+        // var cache_file = try std.Io.Dir.cwd().openFile(io, cache_path, .{ .mode = .read_write });
+        var cache_file = try std.Io.Dir.cwd().createFile(io, cache_path, .{});
+
         defer cache_file.close(io);
         var writer = cache_file.writer(io, some_space[0..]);
         const iowriter = &writer.interface;
         try basic_cache.encode(iowriter, gpa);
+        try iowriter.flush();
+        std.debug.print("+++ Font cache saved: | {s}\n", .{cache_path});
 
         // std.debug.print("+++ font cached as %s with hash %s\n", .{ cache_at, self.font_hash[0..] });
+    }
+
+    pub fn cacheCheck(self: *const Alphabet, io: std.Io, gpa: std.mem.Allocator, cache_path: []const u8) !void {
+        var cache_file = std.Io.Dir.cwd().openFile(
+            io,
+            cache_path,
+            .{ .mode = .read_only },
+        ) catch |err| {
+            std.debug.print("||| cache read failed but its okey | {s}\n", .{@errorName(err)});
+            return;
+        };
+        defer cache_file.close(io);
+
+        var scratch_space: [1024]u8 = undefined;
+        var reader = cache_file.reader(io, scratch_space[0..]);
+        const ioreader = &reader.interface;
+        var atlas = try meagen.FontAtlas.decode(ioreader, gpa);
+        defer atlas.deinit(gpa);
+
+        const match = std.mem.eql(u8, self.font_hash[0..], atlas.hash);
+        if (!match) {
+            std.debug.print("||| cache miss\n", .{});
+            return;
+        }
+        const mark: []const u8 = "  <+> ";
+        std.debug.print("{s} cache hit {s}\n", .{ mark, mark });
+
+        // --- TODO: fill this data ---
+        // self.char_atlas = ???;
+        // self.char_uvd_arr = ???;
+
     }
 
     pub fn charInfo(self: *const Alphabet, gpa: std.mem.Allocator, write_to: *std.ArrayList(u8), idx: u16) !void {

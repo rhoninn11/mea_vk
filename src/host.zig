@@ -69,6 +69,8 @@ pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
     defer sdlh.exitSDL();
 
     const sdl_ctx = sdlh.getContext();
+    // sdl_ctx.should_close = true; // DEBUG SPOT
+
     const vkctx_sdl = try gm.GraphicsContext.initUnderSdl(init.gpa, sdl_name, sdl_ctx.window.?);
     defer vkctx_sdl.deinit();
 
