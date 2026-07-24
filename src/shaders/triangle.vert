@@ -109,7 +109,7 @@ void main() {
     }
     if (_pc.data.mode == 1) {
         // TODO: read from instance
-        v_marker_color = vec3(0.9, 0.1, 0.2);
+        v_marker_color = m_inst.srgb.xyz;
     }
 
     vec4 before_transform = vec4(base, 1.0);

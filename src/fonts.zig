@@ -127,6 +127,25 @@ pub const FontRendering = struct {
         @memcpy(tex_gray, sdf);
         return tex_gray;
     }
+
+    pub fn sampleSave(
+        self: *const FontRendering,
+        gpa: std.mem.Allocator,
+        char: u8,
+        gly_sz: *GlyphSz,
+    ) ![]u8 {
+        var hey: []u8 = undefined;
+        switch (char != ' ') {
+            true => {
+                hey = try self.sampleCodepoint(gpa, char, gly_sz);
+            },
+            false => {
+                hey = try gpa.alloc(u8, 16);
+                gly_sz.* = GlyphSz{};
+            },
+        }
+        return hey;
+    }
 };
 
 pub const font_g = shu.xyGrid(font_atlas_w, font_atlas_h);
@@ -141,26 +160,20 @@ pub const Alphabet = struct {
         " _.,;:|0123456789()<>{}[]+-?\"!";
 
     const CharLocMap = std.AutoHashMap(u8, u16);
-    num: u16,
     char_map: CharLocMap,
     char_sz_arr: []GlyphSz,
-    char_texd_arr: [][]u8,
     char_atlas: []u8,
     char_uvd_arr: []m.vec4,
     font_hash: TtfHash,
 
     pub fn deinit(self: *Alphabet, gpa: std.mem.Allocator) void {
-        for (0..self.num) |i| {
-            gpa.free(self.char_texd_arr[i]);
-        }
-        gpa.free(self.char_texd_arr);
         gpa.free(self.char_sz_arr);
         gpa.free(self.char_atlas);
         gpa.free(self.char_uvd_arr);
         self.char_map.deinit();
     }
 
-    fn naiveAtlas(self: *Alphabet, gpa: std.mem.Allocator, pix_w: u8) !void {
+    fn naiveAtlas(self: *Alphabet, gpa: std.mem.Allocator, pix_w: u8, pix: []const []const u8) !void {
         var max_w: u8 = 0;
         var max_h: u8 = 0;
         for (self.char_sz_arr) |*sz| {
@@ -181,7 +194,7 @@ pub const Alphabet = struct {
         @memset(atlas, 0);
         for (0..self.char_sz_arr.len) |i| {
             const sz = self.char_sz_arr[i];
-            const data = self.char_texd_arr[i];
+            const data = pix[i];
 
             const x_start = (i % nx) * max_w;
             const y_start = (i / nx) * max_h;
@@ -218,48 +231,40 @@ pub const Alphabet = struct {
         // TODO: would like to find out if atlas stored aleady on fs
         var self: Alphabet = undefined;
         self.font_hash = font.content_sh1;
-        try self.cacheCheck(io, gpa, path_cache);
-
-        const ascii_len = ascii_chars.len;
+        const hit = try self.cacheCheck(io, gpa, path_cache);
+        if (hit) {
+            std.debug.print("+++ sdf font atlas cache hit !!!\n", .{});
+            return self;
+        }
 
         var char_map: CharLocMap = .init(gpa);
         try char_map.ensureTotalCapacity(ascii_chars.len);
         errdefer char_map.deinit();
 
-        var how_big = try gpa.alloc(GlyphSz, ascii_len);
+        var how_big = try gpa.alloc(GlyphSz, ascii_chars.len);
         errdefer gpa.free(how_big);
 
         var count: u16 = 0;
-        var tex_data_arr = try gpa.alloc([]u8, ascii_len);
-        errdefer {
-            for (0..count) |i| gpa.free(tex_data_arr[i]);
-            gpa.free(tex_data_arr);
+        var individual_sdf_data = try gpa.alloc([]u8, ascii_chars.len);
+        defer {
+            for (0..count) |i| gpa.free(individual_sdf_data[i]);
+            gpa.free(individual_sdf_data);
         }
 
         var gly_sz: GlyphSz = undefined;
         for (ascii_chars) |char| {
             const idx: u8 = @as(u8, @intCast(count));
             try char_map.put(char, idx);
-            switch (char != ' ') {
-                true => {
-                    tex_data_arr[idx] = try font.sampleCodepoint(gpa, char, &gly_sz);
-                },
-                false => {
-                    tex_data_arr[idx] = try gpa.alloc(u8, 16);
-                    gly_sz = GlyphSz{};
-                },
-            }
+            individual_sdf_data[idx] = try font.sampleSave(gpa, char, &gly_sz);
             how_big[idx] = gly_sz;
             count += 1;
         }
 
         self.char_map = char_map;
-        self.char_texd_arr = tex_data_arr;
         self.char_sz_arr = how_big;
-        self.num = @intCast(how_big.len);
 
         const sdf_byte_per_pix = 1;
-        try self.naiveAtlas(gpa, sdf_byte_per_pix);
+        try self.naiveAtlas(gpa, sdf_byte_per_pix, individual_sdf_data);
         errdefer @panic("TODO: in case of cache store failed");
         try self.cacheStore(io, gpa, path_cache);
 
@@ -269,64 +274,93 @@ pub const Alphabet = struct {
     }
 
     pub fn cacheStore(self: *const Alphabet, io: std.Io, gpa: std.mem.Allocator, cache_path: []const u8) !void {
-        var basic_cache = meagen.FontAtlas{
+        var font_cache = meagen.FontCache{
             .hash = self.font_hash[0..],
+            .alphabet = ascii_chars,
+            .sz_arr = undefined,
+            .uv_arr = undefined,
+            .tex = self.char_atlas,
         };
 
-        var some_space: [1024]u8 = undefined;
-        std.debug.print("+++ Path for cache: {s}\n", .{cache_path});
+        var sz_store: std.ArrayList(meagen.GlyphSz) = try .initCapacity(gpa, self.char_sz_arr.len);
+        defer sz_store.deinit(gpa);
+        var uvd_store: std.ArrayList(meagen.UVLoc) = try .initCapacity(gpa, self.char_uvd_arr.len);
+        defer uvd_store.deinit(gpa);
 
-        // var cache_file = try std.Io.Dir.cwd().openFile(io, cache_path, .{ .mode = .read_write });
+        for (self.char_sz_arr) |*sz|
+            try sz_store.append(gpa, .{ .value = std.mem.asBytes(sz) });
+
+        for (self.char_uvd_arr) |*uvd|
+            try uvd_store.append(gpa, .{ .value = std.mem.asBytes(uvd) });
+
+        font_cache.sz_arr = sz_store;
+        font_cache.uv_arr = uvd_store;
+
         var cache_file = try std.Io.Dir.cwd().createFile(io, cache_path, .{});
-
         defer cache_file.close(io);
+
+        var some_space: [1024]u8 = undefined;
         var writer = cache_file.writer(io, some_space[0..]);
         const iowriter = &writer.interface;
-        try basic_cache.encode(iowriter, gpa);
+        try font_cache.encode(iowriter, gpa);
         try iowriter.flush();
         std.debug.print("+++ Font cache saved: | {s}\n", .{cache_path});
-
-        // std.debug.print("+++ font cached as %s with hash %s\n", .{ cache_at, self.font_hash[0..] });
     }
 
-    pub fn cacheCheck(self: *const Alphabet, io: std.Io, gpa: std.mem.Allocator, cache_path: []const u8) !void {
+    pub fn cacheCheck(self: *Alphabet, io: std.Io, gpa: std.mem.Allocator, cache_path: []const u8) !bool {
         var cache_file = std.Io.Dir.cwd().openFile(
             io,
             cache_path,
             .{ .mode = .read_only },
         ) catch |err| {
             std.debug.print("||| cache read failed but its okey | {s}\n", .{@errorName(err)});
-            return;
+            return false;
         };
         defer cache_file.close(io);
 
         var scratch_space: [1024]u8 = undefined;
         var reader = cache_file.reader(io, scratch_space[0..]);
         const ioreader = &reader.interface;
-        var atlas = try meagen.FontAtlas.decode(ioreader, gpa);
-        defer atlas.deinit(gpa);
+        var cache = try meagen.FontCache.decode(ioreader, gpa);
+        defer cache.deinit(gpa);
 
-        const match = std.mem.eql(u8, self.font_hash[0..], atlas.hash);
-        if (!match) {
+        const match_a = std.mem.eql(u8, self.font_hash[0..], cache.hash);
+        const match_b = std.mem.eql(u8, ascii_chars, cache.alphabet);
+
+        const cond = match_a and match_b;
+        if (!cond) {
             std.debug.print("||| cache miss\n", .{});
-            return;
+            return false;
         }
+
         const mark: []const u8 = "  <+> ";
         std.debug.print("{s} cache hit {s}\n", .{ mark, mark });
 
-        // --- TODO: fill this data ---
-        // self.char_atlas = ???;
-        // self.char_uvd_arr = ???;
+        self.char_map = .init(gpa);
+        try self.char_map.ensureTotalCapacity(ascii_chars.len);
+        errdefer self.char_map.deinit();
+        for (0.., ascii_chars) |i, char| try self.char_map.put(char, m.u16cast(i));
 
-    }
+        self.char_sz_arr = try gpa.alloc(GlyphSz, ascii_chars.len);
+        errdefer gpa.free(self.char_sz_arr);
+        for (0.., cache.sz_arr.items) |i, item| {
+            self.char_sz_arr[i] = std.mem.bytesToValue(GlyphSz, item.value);
+        }
 
-    pub fn charInfo(self: *const Alphabet, gpa: std.mem.Allocator, write_to: *std.ArrayList(u8), idx: u16) !void {
-        const valid_idx = if (idx >= self.num) self.num - 1 else idx;
-        const char = ascii_chars[valid_idx];
-        const sz = self.char_sz_arr[valid_idx];
+        self.char_uvd_arr = try gpa.alloc(m.vec4, ascii_chars.len);
+        errdefer gpa.free(self.char_uvd_arr);
+        for (0.., cache.uv_arr.items) |i, item| {
+            self.char_uvd_arr[i] = std.mem.bytesToValue(m.vec4, item.value);
+        }
 
-        try write_to.print(gpa, "char: \"{c}\" | x{d} : y{d} | x{d} : y{d} |\n", //
-            .{ char, sz.w, sz.h, sz.x_off, sz.y_off });
+        self.char_atlas = try gpa.dupe(u8, cache.tex);
+
+        var content_hash: [hash_len]u8 = undefined;
+        std.crypto.hash.Sha1.hash(self.char_atlas, &content_hash, .{});
+
+        // std.debug.print("load", args: anytype)
+
+        return true;
     }
 
     pub fn BlitText(

@@ -424,7 +424,9 @@ pub const LookingGlass = struct {
             const spot = self.lookingSpot(i);
             _ = spot;
 
+            const color = selectLayerColor(layer_val);
             src_inst.depth_ctrl[1] = tresholded_h;
+            src_inst.srgb = color;
 
             scratchpad[inst_idx] = src_inst;
             inst_idx += 1;
@@ -472,18 +474,32 @@ pub const LookingGlass = struct {
         return sample;
     }
 
-    const colors: []const []const u8 = &.{
-        &.{ 255, 0, 0, 255 },
-        &.{ 0, 255, 0, 255 },
-        &.{ 0, 0, 255, 255 },
-        &.{ 255, 128, 0, 255 },
-        &.{ 255, 0, 128, 255 },
-        &.{ 255, 128, 128, 255 },
-        &.{ 128, 255, 0, 255 },
-        &.{ 0, 255, 128, 255 },
-        &.{ 128, 255, 128, 255 },
+    const colors: []const [4]u8 = &.{
+        .{ 255, 0, 0, 255 },
+        .{ 0, 255, 0, 255 },
+        .{ 0, 0, 255, 255 },
+        .{ 255, 128, 0, 255 },
+        .{ 255, 0, 128, 255 },
+        .{ 255, 128, 128, 255 },
+        .{ 128, 255, 0, 255 },
+        .{ 0, 255, 128, 255 },
     };
     const discard: []const u8 = &.{ 0, 0, 0, 0 };
+
+    pub fn selectLayerColor(layer_val: u8) m.vec4 {
+        var layer_color: [4]u8 = .{ 0, 0, 0, 255 };
+        for (0.., colors) |jj, color| {
+            const shift: u3 = @as(u3, @intCast(jj));
+            const mask: u8 = @as(u8, 1) << shift;
+            if (layer_val & mask == mask) {
+                layer_color = color;
+            }
+        }
+
+        var outty: m.vec4 = undefined;
+        inline for (0.., layer_color) |i, v| outty[i] = m.floaty(v) / 255;
+        return layer_color;
+    }
 
     pub fn sampleLayers(self: *const LookingGlass, gpa: std.mem.Allocator) !LookingOk {
         const isz = self.img_sz;
@@ -527,7 +543,7 @@ pub const LookingGlass = struct {
                     const depth = depths[depth_at];
                     inline for (0..line_depth) |margin| {
                         if (depth + margin == x) {
-                            @memmove(write_slot, colors[i]);
+                            @memmove(write_slot, colors[i][0..]);
                             blanc = false;
                         }
                     }
