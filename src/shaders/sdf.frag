@@ -27,18 +27,15 @@ layout(location = 0) out vec4 f_color; //out
 void main() {
     if (_pc.data.mode == 1) {
         vec4 tex_color = texture(tex_bindless[nonuniformEXT(v_tex_idx)], v_uv);
-        // f_color = vec4(vec3(tex_color.r), 1);
-        
-        if (tex_color.r <= 0.0) {
-            discard;
-        } else if (tex_color.r <= 0.95 ) {
+
+        if (tex_color.r < 1 ) {
             f_color = vec4(vec3(0), 1);
         } else {
             f_color = vec4(1);
         }
+        float v = smoothstep(0.7, 1.0, tex_color.r);
+        float a = smoothstep(0.0, 0.3, tex_color.r);
+        f_color = vec4(vec3(v), a);
 
-        if (tex_color.a < 0.5) {
-            discard;
-        }
     }
 }

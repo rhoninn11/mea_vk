@@ -68,15 +68,15 @@ pub const Moduler = struct {
     pub fn createPipeline(
         self: *const Moduler,
         render_pass: vk.RenderPass,
-        pt: EBrush,
+        brush: EBrush,
     ) !vk.Pipeline {
-        const src: [slot_len]EmbedSpirv = switch (pt) {
+        const src: [slot_len]EmbedSpirv = switch (brush) {
             .triangle => .{ vert_triangle[0..], frag_triangle[0..] },
             .sprite => .{ vert_sprite[0..], frag_sprite[0..] },
             .dsprite => .{ vert_sprite[0..], frag_sprite[0..] },
             .fontsdf => .{ vert_sdf[0..], frag_sdf[0..] },
         };
-        const depth_test = switch (pt) {
+        const depth_test = switch (brush) {
             .triangle => true,
             .sprite => false,
             .dsprite => true,
@@ -92,6 +92,7 @@ pub const Moduler = struct {
             self.gc,
             self.layout,
             render_pass,
+            brush,
             depth_test,
         );
     }
@@ -101,11 +102,44 @@ pub const Moduler = struct {
     }
 };
 
+fn blending(brush: EBrush) vk.PipelineColorBlendAttachmentState {
+    const color_components = vk.ColorComponentFlags{
+        .r_bit = true,
+        .g_bit = true,
+        .b_bit = true,
+        .a_bit = true,
+    };
+    const blend_config = switch (brush) {
+        .triangle, .sprite, .dsprite => vk.PipelineColorBlendAttachmentState{
+            .blend_enable = .false,
+            .src_color_blend_factor = .one,
+            .dst_color_blend_factor = .zero,
+            .color_blend_op = .add,
+            .src_alpha_blend_factor = .one,
+            .dst_alpha_blend_factor = .zero,
+            .alpha_blend_op = .add,
+            .color_write_mask = color_components,
+        },
+        .fontsdf => vk.PipelineColorBlendAttachmentState{
+            .blend_enable = .true,
+            .src_color_blend_factor = .src_alpha,
+            .dst_color_blend_factor = .one_minus_src_alpha,
+            .color_blend_op = .add,
+            .src_alpha_blend_factor = .one,
+            .dst_alpha_blend_factor = .one_minus_src_alpha,
+            .alpha_blend_op = .add,
+            .color_write_mask = color_components,
+        },
+    };
+    return blend_config;
+}
+
 fn restOfPipeline(
     pssci: []const vk.PipelineShaderStageCreateInfo,
     gc: *const gm.GraphicsContext,
     layout: vk.PipelineLayout,
     render_pass: vk.RenderPass,
+    brush: EBrush,
     depth_test: bool,
 ) !vk.Pipeline {
     const pvisci = vk.PipelineVertexInputStateCreateInfo{
@@ -148,16 +182,7 @@ fn restOfPipeline(
         .alpha_to_one_enable = .false,
     };
 
-    const pcbas = vk.PipelineColorBlendAttachmentState{
-        .blend_enable = .false,
-        .src_color_blend_factor = .one,
-        .dst_color_blend_factor = .zero,
-        .color_blend_op = .add,
-        .src_alpha_blend_factor = .one,
-        .dst_alpha_blend_factor = .zero,
-        .alpha_blend_op = .add,
-        .color_write_mask = .{ .r_bit = true, .g_bit = true, .b_bit = true, .a_bit = true },
-    };
+    const pcbas = blending(brush);
 
     const pcbsci = vk.PipelineColorBlendStateCreateInfo{
         .logic_op_enable = .false,

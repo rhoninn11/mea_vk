@@ -9,6 +9,7 @@ const shu = @import("shaders/utils.zig");
 const dset = @import("dset.zig");
 const m = @import("math.zig");
 const meagen = @import("gen/meagen.pb.zig");
+const f = @import("frame.zig");
 
 // TODO: ok, now i know what is this sizing for, so i can name it better
 // tylko jaką nazwę tutaj dać?
@@ -78,6 +79,7 @@ pub fn getCodepointBitmap(
 const hash_len = std.crypto.hash.Sha1.digest_length;
 const TtfHash = [hash_len]u8;
 
+const res = 128;
 pub const FontRendering = struct {
     content_sh1: TtfHash,
     content: []u8,
@@ -111,10 +113,10 @@ pub const FontRendering = struct {
         var cdp_sz: GlyphSz = undefined;
         cdp_sz.w = 0;
         cdp_sz.h = 0;
-        const bitmap = getCodepointBitmap(&self.info, @intCast(codepnt), 128, sdf_sz);
+        const bitmap = getCodepointBitmap(&self.info, @intCast(codepnt), res, sdf_sz);
         defer tt.stbtt_FreeBitmap(bitmap, null);
 
-        const sdf = getGlyphSDF(&self.info, @intCast(codepnt), 128, 8, 255, &cdp_sz);
+        const sdf = getGlyphSDF(&self.info, @intCast(codepnt), res, 8, 255, &cdp_sz);
         defer tt.stbtt_FreeSDF(sdf, null);
         std.debug.print("a: {d}x{d} | b: {d}x{d}\n", .{ cdp_sz.w, cdp_sz.h, sdf_sz.w, sdf_sz.h });
         // std.debug.assert(sdf_sz.w == cdp_sz.w and //
@@ -366,9 +368,10 @@ pub const Alphabet = struct {
     pub fn BlitText(
         self: *Alphabet,
         instances: [*]sht.PerInstance,
-        first_inst: u16,
+        inst_group: *f.InstGroup,
+        text_sz: TextSz,
         text: []const u8,
-    ) !u16 {
+    ) !BlitMetrics {
         const MAX_LETTERS = 256;
         std.debug.assert(text.len < MAX_LETTERS);
 
@@ -379,20 +382,36 @@ pub const Alphabet = struct {
         const fba = provider.allocator();
         const scratchpad: []sht.PerInstance = try fba.alloc(sht.PerInstance, text.len);
 
-        const inst_num = try self.blitInstances(text, scratchpad);
-        @memcpy(instances + first_inst, scratchpad[0..inst_num]);
+        const blit = try self.blitInstances(
+            scratchpad,
+            text_sz,
+            text,
+        );
+        @memcpy(instances + inst_group.base, scratchpad[0..blit.n]);
+        inst_group.num = blit.n;
 
-        return inst_num;
+        return blit;
     }
 
-    fn blitInstances(self: *Alphabet, text: []const u8, dst: []sht.PerInstance) !u16 {
+    fn blitInstances(
+        self: *Alphabet,
+        dst: []sht.PerInstance,
+        text_sz: TextSz,
+        text: []const u8,
+    ) !BlitMetrics {
+        var metrics: BlitMetrics = .{};
+
         var inst_num: u16 = 0;
         var cursor: u16 = 0;
         var line: u8 = 0;
-        const char_w: f32 = 32;
-        const line_h: f32 = 42;
+
         for (text) |letter| {
             if (letter == '\n') {
+                const line_w = cursor * text_sz.char_w;
+                if (line_w > metrics.w) {
+                    metrics.w = line_w;
+                }
+
                 line += 1;
                 cursor = 0;
                 continue;
@@ -405,12 +424,12 @@ pub const Alphabet = struct {
                 continue;
             }
 
-            const l_xpos: f32 = m.floaty(cursor) * char_w;
-            const l_ypos: f32 = m.floaty(line) * line_h;
-            const w = m.floaty(gly_sz.w) / 128;
-            const h = m.floaty(gly_sz.h) / 128;
-            const x_off = m.floaty(gly_sz.x_off) / 128;
-            const y_off = m.floaty(gly_sz.y_off) / 128;
+            const l_xpos: f32 = m.floaty(cursor) * text_sz.char_w;
+            const l_ypos: f32 = m.floaty(line) * text_sz.line_h;
+            const w = m.floaty(gly_sz.w) / res;
+            const h = m.floaty(gly_sz.h) / res;
+            const x_off = m.floaty(gly_sz.x_off) / res;
+            const y_off = m.floaty(gly_sz.y_off) / res;
 
             const val = sht.PerInstance{
                 .offset_2d = .{ l_xpos, -l_ypos }, //screan placement
@@ -422,6 +441,32 @@ pub const Alphabet = struct {
             inst_num += 1;
             cursor += 1;
         }
-        return inst_num;
+        {
+            const line_w = cursor * text_sz.char_w;
+            if (line_w > metrics.w) {
+                metrics.w = line_w;
+            }
+            metrics.h = text_sz.line_h * line;
+            metrics.n = inst_num;
+        }
+        return metrics;
+    }
+};
+
+pub const BlitMetrics = struct {
+    w: f32 = 0,
+    h: f32 = 0,
+    n: u16 = 0,
+};
+
+pub const TextSz = struct {
+    char_w: f32 = 32,
+    line_h: f32 = 42,
+
+    pub fn scaled(base: TextSz, scale: f32) TextSz {
+        return TextSz{
+            .char_w = base.char_w * scale,
+            .line_h = base.line_h * scale,
+        };
     }
 };

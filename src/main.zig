@@ -266,7 +266,7 @@ fn theDeepest(access: EasyAcces) !void {
     try d.ppmU8Debug(access.io, abc.char_atlas, g_abc);
 
     var char_atlas = try imgs.U8Image.init(access.gm, g_abc);
-    try imgs.texPrep(&pic, g_abc, abc.char_atlas, &char_atlas, .default);
+    try imgs.texPrep(&pic, g_abc, abc.char_atlas, &char_atlas, .font);
 
     // const sdf_atlas = try imgs.vulkanTexture(&pic, g_abc, abc.char_atlas, false);
     lazy_shady.omnitex.updateTexture(0, &char_atlas, 4);
@@ -352,6 +352,7 @@ fn theDeepest(access: EasyAcces) !void {
     var ok_phi: f32 = 0;
     var glyph_phi: f32 = 0;
     var tracker_phi: f32 = 0;
+    var font_phi: f32 = 0;
     var ok_slider: u.Slider = .initMid(0, OK_SWEEP - 1);
 
     sdlh.wheel.up = .{ .a = &ok_slider, .f = u.Slider.incX5 };
@@ -362,7 +363,9 @@ fn theDeepest(access: EasyAcces) !void {
     var panner = proto.Panner.init(&glass);
 
     // main loop
+    const text_sz_base: fonts.TextSz = .{};
     var text_stack: [1024 + 512]u8 = undefined;
+    var blit_rect: fonts.BlitMetrics = .{};
     while (!window.shoudClose()) {
         var fba: std.heap.FixedBufferAllocator = .init(text_stack[0..]);
         const txta = fba.allocator();
@@ -398,6 +401,7 @@ fn theDeepest(access: EasyAcces) !void {
         ok_phi += td1 * 0.1;
         glyph_phi += td1 * 0.13;
         tracker_phi += td1 * 3;
+        font_phi += td1 * 0.2;
 
         if (input.exit_trig.fired()) window.closeWindow();
         if (input.time_stop_trig.fired()) timeline1.passageToggle();
@@ -467,6 +471,7 @@ fn theDeepest(access: EasyAcces) !void {
         var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 1024);
         const px, const py = glass.pos;
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
+        try dyn_text.print(txta, "blit info x:{d:>6.2}|y:{d:>6.2}\n", .{ blit_rect.w, blit_rect.h });
         if (interact.hit) {
             // const x, const y = interact.at;
             const scale_frac = navig.uv_map.mult * interact.at;
@@ -529,14 +534,14 @@ fn theDeepest(access: EasyAcces) !void {
 
             try oklab.OkUnderstanding.labSpliced(
                 instances,
-                state.ok_group.base,
-                state.ok_group.num,
+                state.ok_group,
                 ok_phi,
             );
 
-            state.char_group.num = try abc.BlitText(
+            blit_rect = try abc.BlitText(
                 instances,
-                state.char_group.base,
+                &state.char_group,
+                text_sz_base.scaled(1 + @sin(font_phi) * 0.45),
                 dyn_text.items,
             );
         }

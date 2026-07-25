@@ -225,6 +225,7 @@ pub const VkImage = struct {
 
     const ESamplerMode = enum(u8) {
         nearest = 0,
+        font,
         default,
     };
 
@@ -232,6 +233,7 @@ pub const VkImage = struct {
         const props = gc.instance.getPhysicalDeviceProperties(gc.pdev);
         const filter = switch (mode) {
             .nearest => vk.Filter.nearest,
+            .font => vk.Filter.linear,
             .default => vk.Filter.linear,
         };
         const sample_create_info: vk.SamplerCreateInfo = .{

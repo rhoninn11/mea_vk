@@ -74,7 +74,8 @@ void main() {
     vec3 char_offset = vec3(m_inst.offset_4d.zw, 0);
     // char_offset = vec3(0);
     vec4 delta = vec4(m_inst.offset_2d.x, m_inst.offset_2d.y, 0, 0);
-    vec4 base = vec4((a_pos*char_scale + char_offset)*scale, 1);
+    vec3 pos_scaled = a_pos*char_scale;
+    vec4 base = vec4((pos_scaled + char_offset)*scale, 1);
     
     gl_Position = mvp.proj * mvp.view * _pc.data.model * (base + delta);
     // v_tex_idx = _pc.data.tex_base + floatBitsToUint(m_inst.other_offsets.x);

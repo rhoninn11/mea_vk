@@ -61,17 +61,15 @@ pub const OkUnderstanding = struct {
         return val;
     }
 
-    pub fn labSpliced(instances: [*]sht.PerInstance, inst_base: u16, inst_num: u16, phi: f32) !void {
+    pub fn labSpliced(instances: [*]sht.PerInstance, group: frame.InstGroup, phi: f32) !void {
         const lim_num = 8096;
-        std.debug.assert(inst_num <= lim_num);
-
         const stack_size = lim_num * @sizeOf(sht.PerInstance);
         var stack_mem: [stack_size]u8 = undefined;
 
         var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
         const local_a = provider.allocator();
 
-        var scratchpad: []sht.PerInstance = try local_a.alloc(sht.PerInstance, inst_num);
+        var scratchpad: []sht.PerInstance = try local_a.alloc(sht.PerInstance, group.num);
         const denominator = @as(f32, @floatFromInt(scratchpad.len - 1));
         const r = 2.5;
         for (0..scratchpad.len) |i| {
@@ -95,7 +93,7 @@ pub const OkUnderstanding = struct {
 
             scratchpad[i] = edit;
         }
-        @memcpy(instances + inst_base, scratchpad);
+        @memcpy(instances + group.base, scratchpad);
     }
 
     pub fn labAtInfinitum(self: *const OkUnderstanding, storage_dset: dset.DescriptorPrep) !void {

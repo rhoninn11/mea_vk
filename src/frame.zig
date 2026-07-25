@@ -251,6 +251,7 @@ pub fn recordFrame(
                     .inst_base = state.char_group.base,
                     .tex_base = 4,
                     .mode = 1, //sdf mode
+                    .scale2D = m.splat2d(0.5),
                 };
                 hl_cmds.push(&letter_push);
                 hl_cmds.drawInsances(.quad, state.char_group.num); // text
