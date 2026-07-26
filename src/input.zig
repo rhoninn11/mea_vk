@@ -9,52 +9,11 @@ const Trigger = motion.Trigger;
 pub var exit_trig: Trigger = .{};
 pub var time_stop_trig: Trigger = .{};
 
-const KeyAction = motion.mglfw.KeyAction;
+pub const IHoldAx = motion.msdl.HoldAx;
 
-const SysLayer = enum {
-    layerG,
-    layerS,
-};
-
-const DulaKeyAction = union(SysLayer) {
-    layerG: *const motion.mglfw.KeyAction,
-    layerS: *const motion.msdl.KeyAction,
-};
-
-pub const DualHoldsAxis = union(SysLayer) {
-    const GAxis = motion.mglfw.HoldsAxis;
-    const SAxis = motion.msdl.HoldsAxis;
-    layerG: GAxis,
-    layerS: SAxis,
-
-    pub fn initS(hmm: []const []const SAxis.BasedOn) !DualHoldsAxis {
-        return .{ .layerS = try SAxis.init(hmm) };
-    }
-    pub fn reciveInput(self: *DualHoldsAxis, duka: DulaKeyAction) void {
-        switch (self.*) {
-            .layerS => self.layerS.reciveInput(duka.layerS),
-            else => {},
-        }
-    }
-    pub fn update(self: *DualHoldsAxis) void {
-        switch (self.*) {
-            .layerS => self.layerS.update(),
-            else => {},
-        }
-    }
-
-    pub fn value(self: *const DualHoldsAxis) []const motion.Axis {
-        return switch (self.*) {
-            .layerS => &self.layerS.axes,
-            else => &.{.none},
-        };
-    }
-};
-
-const HoldsAxis = motion.mglfw.HoldsAxis;
-pub var glass_input: DualHoldsAxis = undefined;
-pub var plr_input: DualHoldsAxis = undefined;
-pub var pan_input: DualHoldsAxis = undefined;
+pub var glass_input: IHoldAx = undefined;
+pub var plr_input: IHoldAx = undefined;
+pub var pan_input: IHoldAx = undefined;
 
 const KeyActionSdl = motion.msdl.KeyAction;
 const Tied = struct {
@@ -63,13 +22,13 @@ const Tied = struct {
 };
 
 pub fn initS() !void {
-    glass_input = try DualHoldsAxis.initS(&.{
+    glass_input = try IHoldAx.init(&.{
         &.{
             sdl.keycode.Keycode.h, sdl.keycode.Keycode.l, //
             sdl.keycode.Keycode.k, sdl.keycode.Keycode.j,
         },
     });
-    plr_input = try DualHoldsAxis.initS(&.{
+    plr_input = try IHoldAx.init(&.{
         &.{
             sdl.keycode.Keycode.a, sdl.keycode.Keycode.d, //
             sdl.keycode.Keycode.s, sdl.keycode.Keycode.w,
@@ -81,7 +40,8 @@ pub fn initS() !void {
             sdl.keycode.Keycode.f,    sdl.keycode.Keycode.r,
         },
     });
-    pan_input = try DualHoldsAxis.initS(&.{
+    pan_input = try IHoldAx.init(&.{
+        // TODO: mouse hold for dragging
         &.{ sdl.keycode.Keycode.space, sdl.keycode.Keycode.tab },
     });
 }
@@ -108,7 +68,7 @@ const sdl_inputs: []const Tied = &.{
     .{ .key = sdl.keycode.Keycode.five, .trig = &persp_switch },
 };
 
-const axesCheck = [_]*DualHoldsAxis{
+const axesCheck = [_]*IHoldAx{
     &glass_input,
     &plr_input,
     &pan_input,
@@ -123,10 +83,10 @@ pub fn sdlKeyDown(key: sdl.keycode.Keycode) void {
         if (x.down(bind.key)) bind.trig.activated = true;
     }
 
-    for (axesCheck) |hld_ax| hld_ax.reciveInput(.{ .layerS = &x });
+    for (axesCheck) |hld_ax| hld_ax.reciveInput(&x);
 }
 
 pub fn sdlKeyUp(key: sdl.keycode.Keycode) void {
     const x: KeyActionSdl = .{ .key = key, .action = glfw.Release };
-    for (axesCheck) |hld_ax| hld_ax.reciveInput(.{ .layerS = &x });
+    for (axesCheck) |hld_ax| hld_ax.reciveInput(&x);
 }

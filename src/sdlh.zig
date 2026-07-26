@@ -197,8 +197,10 @@ pub const SdlContext = struct {
 
             switch (ev) {
                 .key_up, .key_down => |kb| key = kb.key.?,
-                .mouse_button_down => {
+                .mouse_button_down => |mbtn| {
+                    // TODO: mouse hold for dragging
                     input.sample_tirg.activated = true;
+                    _ = mbtn;
                 },
                 .mouse_motion => |*mm| pointer.update(mm),
                 .mouse_wheel => |*mw| wheel.update(mw),

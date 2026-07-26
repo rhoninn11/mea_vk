@@ -57,7 +57,7 @@ pub fn HostMotion(keytype: type) type {
             }
         };
 
-        pub const HoldsAxis = struct {
+        pub const HoldAx = struct {
             pub const BasedOn = keytype;
             holds: [max_holds]Hold = undefined,
             keys: [max_holds]keytype = undefined,
@@ -65,7 +65,7 @@ pub fn HostMotion(keytype: type) type {
             keyn: u8,
             setn: u8,
 
-            pub fn init(sets: []const []const keytype) !HoldsAxis {
+            pub fn init(sets: []const []const keytype) !HoldAx {
                 const set_num = sets.len;
                 std.debug.assert(set_num > 0);
 
@@ -77,7 +77,7 @@ pub fn HostMotion(keytype: type) type {
                     return MoveErrs.HoldSizeExceded;
                 }
 
-                var self = HoldsAxis{
+                var self = HoldAx{
                     .keyn = @intCast(key_num),
                     .setn = @intCast(set_num),
                 };
@@ -96,7 +96,7 @@ pub fn HostMotion(keytype: type) type {
                 return self;
             }
 
-            pub fn reciveInput(self: *HoldsAxis, ka: *const KeyAction) void {
+            pub fn reciveInput(self: *HoldAx, ka: *const KeyAction) void {
                 axis: for (0..self.keyn) |ii| {
                     for (0..self.setn) |s| {
                         const j = s * self.keyn + ii;
@@ -108,7 +108,7 @@ pub fn HostMotion(keytype: type) type {
                 }
             }
 
-            pub fn update(self: *HoldsAxis) void {
+            pub fn update(self: *HoldAx) void {
                 for (0..(self.keyn / 2)) |i| {
                     const neq = self.holds[i * 2].active;
                     const pos = self.holds[i * 2 + 1].active;
@@ -116,6 +116,10 @@ pub fn HostMotion(keytype: type) type {
                     if (pos) self.axes[i] = .positive;
                     if (neq == pos) self.axes[i] = .none;
                 }
+            }
+
+            pub fn value(self: *const HoldAx) []const Axis {
+                return &self.axes;
             }
         };
     };

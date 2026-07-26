@@ -215,30 +215,31 @@ pub const Panner = struct {
         }
     }
 
-    pub fn update(self: *Self, axes: *const input.DualHoldsAxis, scann_pos: m.ivec2) void {
+    pub fn update(self: *Self, axes: *const input.IHoldAx, scann_pos: m.ivec2) void {
         const activation = axes.value();
-
         const input_active = activation[0].active();
-        self.grab(input_active, scann_pos);
+        {
+            self.grab(input_active, scann_pos);
 
-        if (self.active) {
-            self.pan_delta_total = scann_pos - self.start_at;
-            defer self.pan_delta_total_prev = self.pan_delta_total;
-            const move_delta = self.pan_delta_total - self.pan_delta_total_prev;
+            if (self.active) {
+                self.pan_delta_total = scann_pos - self.start_at;
+                defer self.pan_delta_total_prev = self.pan_delta_total;
+                const move_delta = self.pan_delta_total - self.pan_delta_total_prev;
 
-            inline for (0..2) |i| {
-                var movemnt: motion.Axis = .none;
-                const val = move_delta[i];
-                // inverse for panning motion
-                if (val > 0) movemnt = .negative;
-                if (val < 0) movemnt = .positive;
-                for (0..@abs(val)) |_| _ = self.glass.sliders[i].drive(movemnt);
+                inline for (0..2) |i| {
+                    var movemnt: motion.Axis = .none;
+                    const val = move_delta[i];
+                    // inverse for panning motion
+                    if (val > 0) movemnt = .negative;
+                    if (val < 0) movemnt = .positive;
+                    for (0..@abs(val)) |_| _ = self.glass.sliders[i].drive(movemnt);
+                }
             }
-        }
 
-        // release
-        if (!input_active and self.active) {
-            self.active = false;
+            // release
+            if (!input_active and self.active) {
+                self.active = false;
+            }
         }
     }
 };
@@ -282,7 +283,7 @@ pub const LookingGlass = struct {
         return @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.win_sz.h)) - 1;
     }
 
-    pub fn update(self: *LookingGlass, axes: *const input.DualHoldsAxis, td: f32) bool {
+    pub fn update(self: *LookingGlass, axes: *const input.IHoldAx, td: f32) bool {
         const ax: [2]u8 = .{ m.X, m.Y };
         const ax_val = axes.value();
 

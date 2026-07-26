@@ -114,7 +114,7 @@ pub const CappedPlayer = struct {
         return -phi_moved; //why minus
     }
 
-    pub fn update(self: *CappedPlayer, td: f32, input: *const in.DualHoldsAxis) void {
+    pub fn update(self: *CappedPlayer, td: f32, input: *const in.IHoldAx) void {
         const phi_spead: f32 = 1;
         const phi_delt = aroundAxis(input.value()[0]) * td * std.math.tau * phi_spead;
         self.phi_raw += phi_delt;
@@ -133,7 +133,7 @@ pub fn playerPos(p: *t.Player) m.vec3 {
     return m.orbit_r(p.phi, p.r) + m.vec3{ 0, p.h, 0 };
 }
 
-pub fn playerApplyInput(player: *t.Player, input: *const in.DualHoldsAxis, td: f32) void {
+pub fn playerApplyInput(player: *t.Player, input: *const in.IHoldAx, td: f32) void {
     const plr = player;
 
     const r_speed: f32 = 3;
