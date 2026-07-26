@@ -352,7 +352,8 @@ fn theDeepest(access: EasyAcces) !void {
     var ok_phi: f32 = 0;
     var glyph_phi: f32 = 0;
     var tracker_phi: f32 = 0;
-    var font_phi: f32 = 0;
+    var font_x_phi: f32 = 0;
+    var font_young_phi: f32 = 0;
     var ok_slider: u.Slider = .initMid(0, OK_SWEEP - 1);
 
     sdlh.wheel.up = .{ .a = &ok_slider, .f = u.Slider.incX5 };
@@ -365,7 +366,7 @@ fn theDeepest(access: EasyAcces) !void {
     // main loop
     const text_sz_base: fonts.TextSz = .{};
     var text_stack: [1024 + 512]u8 = undefined;
-    var blit_rect: fonts.BlitMetrics = .{};
+    var blit_x: fonts.BlitMetrics = .{};
     while (!window.shoudClose()) {
         var fba: std.heap.FixedBufferAllocator = .init(text_stack[0..]);
         const txta = fba.allocator();
@@ -401,7 +402,8 @@ fn theDeepest(access: EasyAcces) !void {
         ok_phi += td1 * 0.1;
         glyph_phi += td1 * 0.13;
         tracker_phi += td1 * 3;
-        font_phi += td1 * 0.2;
+        font_x_phi += td1 * 0.2;
+        font_young_phi += td1 * 0.3;
 
         if (input.exit_trig.fired()) window.closeWindow();
         if (input.time_stop_trig.fired()) timeline1.passageToggle();
@@ -470,8 +472,9 @@ fn theDeepest(access: EasyAcces) !void {
 
         var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 1024);
         const px, const py = glass.pos;
+        try dyn_text.print(txta, "\n\n", .{}); //young blit space
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
-        try dyn_text.print(txta, "blit info x:{d:>6.2}|y:{d:>6.2}\n", .{ blit_rect.w, blit_rect.h });
+        try dyn_text.print(txta, "blit info x:{d:>6.2}|y:{d:>6.2}\n", .{ blit_x.w, blit_x.h });
         if (interact.hit) {
             // const x, const y = interact.at;
             const scale_frac = navig.uv_map.mult * interact.at;
@@ -504,6 +507,7 @@ fn theDeepest(access: EasyAcces) !void {
         const instances: [*]sht.PerInstance = @ptrCast(@alignCast(storage_mapping));
         const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
 
+        // TODO: alt projection could be included and def_persp zdefiniowana jako enum
         const virt_ray: t.Ray = switch (state.def_persp) {
             true => t.Ray{ .at = orbital.pos(), .to = m.zero3() },
             false => a.testTracer(tracker_phi),
@@ -538,12 +542,25 @@ fn theDeepest(access: EasyAcces) !void {
                 ok_phi,
             );
 
-            blit_rect = try abc.BlitText(
-                instances,
-                &state.char_group,
-                text_sz_base.scaled(1 + @sin(font_phi) * 0.45),
-                dyn_text.items,
-            );
+            {
+                var texting_g = state.char_group;
+                blit_x = try abc.BlitText(
+                    instances,
+                    &texting_g,
+                    text_sz_base.scaled(1 + @sin(font_x_phi) * 0.45),
+                    dyn_text.items,
+                );
+
+                texting_g.base += blit_x.n;
+                const young_blit = try abc.BlitText(
+                    instances,
+                    &texting_g,
+                    text_sz_base.scaled(1 + @sin(font_young_phi) * 0.45),
+                    "will it cover prev text?. Yes it will:D",
+                );
+
+                state.char_group.num = blit_x.n + young_blit.n;
+            }
         }
 
         try frame.recordFrame(
