@@ -547,7 +547,10 @@ fn theDeepest(access: EasyAcces) !void {
                 blit_x = try abc.BlitText(
                     instances,
                     &texting_g,
-                    text_sz_base.scaled(1 + @sin(font_x_phi) * 0.45),
+                    .{
+                        .corner = .upleft,
+                        .sz = text_sz_base.scaled(1 + @sin(font_x_phi) * 0.45),
+                    },
                     dyn_text.items,
                 );
 
@@ -555,8 +558,11 @@ fn theDeepest(access: EasyAcces) !void {
                 const young_blit = try abc.BlitText(
                     instances,
                     &texting_g,
-                    text_sz_base.scaled(1 + @sin(font_young_phi) * 0.45),
-                    "will it cover prev text?. Yes it will:D",
+                    .{
+                        .corner = .downright,
+                        .sz = text_sz_base.scaled(1 + @sin(font_x_phi) * 0.45),
+                    },
+                    "will it land in corner? almost xD",
                 );
 
                 state.char_group.num = blit_x.n + young_blit.n;

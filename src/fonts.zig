@@ -365,11 +365,23 @@ pub const Alphabet = struct {
         return true;
     }
 
+    const Corner = enum(u8) {
+        upleft = 0,
+        upright,
+        downright,
+        downleft,
+    };
+
+    const TextInfo = struct {
+        sz: TextSz,
+        corner: Corner,
+    };
+
     pub fn BlitText(
         self: *Alphabet,
         instances: [*]sht.PerInstance,
         inst_group: *f.InstGroup,
-        text_sz: TextSz,
+        info: TextInfo,
         text: []const u8,
     ) !BlitMetrics {
         const MAX_LETTERS = 256;
@@ -384,9 +396,20 @@ pub const Alphabet = struct {
 
         const blit = try self.blitInstances(
             scratchpad,
-            text_sz,
+            info.sz,
             text,
         );
+        // TODO: shift to corners
+        const glob_mod = switch (info.corner) {
+            .upleft => m.zero4(),
+            else => .{ 0, 0, 4, -16 },
+        };
+
+        for (scratchpad[0..blit.n]) |*inst| {
+            const char_pose: m.vec4 = inst.offset_4d;
+            inst.offset_4d = char_pose + glob_mod;
+        }
+
         @memcpy(instances + inst_group.base, scratchpad[0..blit.n]);
         inst_group.num = blit.n;
 
