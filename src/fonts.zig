@@ -30,6 +30,14 @@ pub const GlyphSz = struct {
     pub inline fn empty(self: *const GlyphSz) bool {
         return self.w == 0 or self.h == 0;
     }
+
+    pub fn xy(self: *const GlyphSz) m.vec2 {
+        return .{ m.floaty(self.w), m.floaty(self.h) };
+    }
+
+    pub fn zw(self: *const GlyphSz) m.vec2 {
+        return .{ m.floaty(self.x_off), m.floaty(self.y_off) };
+    }
 };
 
 pub fn getGlyphSDF(
@@ -79,7 +87,7 @@ pub fn getCodepointBitmap(
 const hash_len = std.crypto.hash.Sha1.digest_length;
 const TtfHash = [hash_len]u8;
 
-const res = 128;
+const per_glyph_res = 128;
 pub const FontRendering = struct {
     content_sh1: TtfHash,
     content: []u8,
@@ -113,10 +121,10 @@ pub const FontRendering = struct {
         var cdp_sz: GlyphSz = undefined;
         cdp_sz.w = 0;
         cdp_sz.h = 0;
-        const bitmap = getCodepointBitmap(&self.info, @intCast(codepnt), res, sdf_sz);
+        const bitmap = getCodepointBitmap(&self.info, @intCast(codepnt), per_glyph_res, sdf_sz);
         defer tt.stbtt_FreeBitmap(bitmap, null);
 
-        const sdf = getGlyphSDF(&self.info, @intCast(codepnt), res, 8, 255, &cdp_sz);
+        const sdf = getGlyphSDF(&self.info, @intCast(codepnt), per_glyph_res, 8, 255, &cdp_sz);
         defer tt.stbtt_FreeSDF(sdf, null);
         std.debug.print("a: {d}x{d} | b: {d}x{d}\n", .{ cdp_sz.w, cdp_sz.h, sdf_sz.w, sdf_sz.h });
         // std.debug.assert(sdf_sz.w == cdp_sz.w and //
@@ -377,12 +385,17 @@ pub const Alphabet = struct {
         corner: Corner,
     };
 
+    fn downRightScaler(screan: m.vec2, scale: f32) m.vec4 {
+        return m.vec4{ 0, 0, screan[0] / scale, -screan[1] / scale };
+    }
+
     pub fn BlitText(
         self: *Alphabet,
         instances: [*]sht.PerInstance,
         inst_group: *f.InstGroup,
         info: TextInfo,
         text: []const u8,
+        screan: m.vec2,
     ) !BlitMetrics {
         const MAX_LETTERS = 256;
         std.debug.assert(text.len < MAX_LETTERS);
@@ -400,14 +413,14 @@ pub const Alphabet = struct {
             text,
         );
         // TODO: shift to corners
-        const glob_mod = switch (info.corner) {
+        const corner_offset = switch (info.corner) {
             .upleft => m.zero4(),
-            else => .{ 0, 0, 4, -16 },
+            else => downRightScaler(screan, 100),
         };
 
         for (scratchpad[0..blit.n]) |*inst| {
             const char_pose: m.vec4 = inst.offset_4d;
-            inst.offset_4d = char_pose + glob_mod;
+            inst.offset_4d = char_pose + corner_offset;
         }
 
         @memcpy(instances + inst_group.base, scratchpad[0..blit.n]);
@@ -425,51 +438,50 @@ pub const Alphabet = struct {
         var metrics: BlitMetrics = .{};
 
         var inst_num: u16 = 0;
-        var cursor: u16 = 0;
-        var line: u8 = 0;
+        var cursor_glyph: u16 = 0;
+        var cursor_line: u8 = 0;
 
         for (text) |letter| {
             if (letter == '\n') {
-                const line_w = cursor * text_sz.char_w;
+                const line_w = cursor_glyph * text_sz.char_w;
                 if (line_w > metrics.w) {
                     metrics.w = line_w;
                 }
 
-                line += 1;
-                cursor = 0;
+                cursor_line += 1;
+                cursor_glyph = 0;
                 continue;
             }
 
             const tid = self.char_map.get(letter) orelse return error.charMissing;
             const gly_sz = self.char_sz_arr[tid];
-            if (gly_sz.empty()) { //skips " "
-                cursor += 1;
+            if (gly_sz.empty()) { //skips " " spaces
+                cursor_glyph += 1;
                 continue;
             }
 
-            const l_xpos: f32 = m.floaty(cursor) * text_sz.char_w;
-            const l_ypos: f32 = m.floaty(line) * text_sz.line_h;
-            const w = m.floaty(gly_sz.w) / res;
-            const h = m.floaty(gly_sz.h) / res;
-            const x_off = m.floaty(gly_sz.x_off) / res;
-            const y_off = m.floaty(gly_sz.y_off) / res;
+            const l_xpos: f32 = m.floaty(cursor_glyph) * text_sz.char_w;
+            const l_ypos: f32 = m.floaty(cursor_line) * text_sz.line_h;
+
+            const wh = gly_sz.xy() / m.splat2d(per_glyph_res);
+            const xoyo = gly_sz.zw() / m.splat2d(per_glyph_res);
 
             const val = sht.PerInstance{
                 .offset_2d = .{ l_xpos, -l_ypos }, //screan placement
-                .offset_4d = .{ w, h, x_off, -y_off },
+                .offset_4d = .{ wh[0], wh[1], xoyo[0], -xoyo[1] },
                 .new_usage = self.char_uvd_arr[tid],
                 .other_offsets = .{ @bitCast(@as(u32, tid)), 0 },
             };
             dst[inst_num] = val;
             inst_num += 1;
-            cursor += 1;
+            cursor_glyph += 1;
         }
         {
-            const line_w = cursor * text_sz.char_w;
+            const line_w = cursor_glyph * text_sz.char_w;
             if (line_w > metrics.w) {
                 metrics.w = line_w;
             }
-            metrics.h = text_sz.line_h * line;
+            metrics.h = text_sz.line_h * cursor_line;
             metrics.n = inst_num;
         }
         return metrics;

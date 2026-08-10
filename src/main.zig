@@ -543,26 +543,28 @@ fn theDeepest(access: EasyAcces) !void {
             );
 
             {
-                var texting_g = state.char_group;
+                var texting_group = state.char_group;
                 blit_x = try abc.BlitText(
                     instances,
-                    &texting_g,
+                    &texting_group,
                     .{
                         .corner = .upleft,
                         .sz = text_sz_base.scaled(1 + @sin(font_x_phi) * 0.45),
                     },
                     dyn_text.items,
+                    win_f2,
                 );
 
-                texting_g.base += blit_x.n;
+                texting_group.base += blit_x.n;
                 const young_blit = try abc.BlitText(
                     instances,
-                    &texting_g,
+                    &texting_group,
                     .{
                         .corner = .downright,
                         .sz = text_sz_base.scaled(1 + @sin(font_x_phi) * 0.45),
                     },
                     "will it land in corner? almost xD",
+                    win_f2,
                 );
 
                 state.char_group.num = blit_x.n + young_blit.n;
