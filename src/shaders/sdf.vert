@@ -69,16 +69,15 @@ void main() {
     MatPack mvp = _ubo.data.matrices;
     Instance m_inst = _storage.arr[inst_idx];
 
-    float scale = 48;
     vec3 char_scale = vec3(m_inst.offset_4d.xy, 1);
     vec3 char_offset = vec3(m_inst.offset_4d.zw, 0);
 
-    vec3 vert_pos = a_pos;
-    vec3 vert_char = a_pos*char_scale + char_offset;
+    //contained in (0,0) (1,-1)? YES
+    vec3 vert_char = a_pos*char_scale + char_offset; //ax + b
 
-    vec4 screan_delta = vec4(m_inst.offset_2d.xy, 0, 0); //cpu calculated spot - important for future kerning
-    vec4 screan_base = vec4(vert_char*scale, 1);
-    gl_Position = mvp.proj * mvp.view * (screan_base + screan_delta);
+    float font_scale = m_inst.other_offsets.x * 1.6;
+    vec3 screan_placement = vert_char*font_scale + vec3(m_inst.offset_2d.xy, 1); // ax + b
+    gl_Position = mvp.proj * mvp.view * vec4(screan_placement, 1);
 
     // v_tex_idx = _pc.data.tex_base + floatBitsToUint(m_inst.other_offsets.x);
     v_uv = (a_color.xy*m_inst.new_usage.zw) + m_inst.new_usage.xy;

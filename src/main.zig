@@ -353,7 +353,6 @@ fn theDeepest(access: EasyAcces) !void {
     var glyph_phi: f32 = 0;
     var tracker_phi: f32 = 0;
     var font_x_phi: f32 = 0;
-    var font_young_phi: f32 = 0;
     var ok_slider: u.Slider = .initMid(0, OK_SWEEP - 1);
 
     sdlh.wheel.up = .{ .a = &ok_slider, .f = u.Slider.incX5 };
@@ -402,8 +401,7 @@ fn theDeepest(access: EasyAcces) !void {
         ok_phi += td1 * 0.1;
         glyph_phi += td1 * 0.13;
         tracker_phi += td1 * 3;
-        font_x_phi += td1 * 0.2;
-        font_young_phi += td1 * 0.3;
+        font_x_phi += td1 * 0.67;
 
         if (input.exit_trig.fired()) window.closeWindow();
         if (input.time_stop_trig.fired()) timeline1.passageToggle();
@@ -554,20 +552,44 @@ fn theDeepest(access: EasyAcces) !void {
                     dyn_text.items,
                     win_f2,
                 );
-
                 texting_group.base += blit_x.n;
+
                 const young_blit = try abc.BlitText(
                     instances,
                     &texting_group,
                     .{
-                        .corner = .downright,
-                        .sz = text_sz_base.scaled(1 + @sin(font_x_phi) * 0.45),
+                        .corner = .upright,
+                        .sz = text_sz_base.scaled(1 + @sin(font_x_phi + std.math.tau * 0.25) * 0.45),
                     },
-                    "will it land in corner? almost xD",
+                    "\nwill it land in corner? Yes it does!",
+                    win_f2,
+                );
+                texting_group.base += young_blit.n;
+
+                const corner_a_blit = try abc.BlitText(
+                    instances,
+                    &texting_group,
+                    .{
+                        .corner = .downright,
+                        .sz = text_sz_base.scaled(1 + @sin(font_x_phi + std.math.tau * 0.5) * 0.45),
+                    },
+                    "CORNER: A",
+                    win_f2,
+                );
+                texting_group.base += corner_a_blit.n;
+
+                const corner_b_blit = try abc.BlitText(
+                    instances,
+                    &texting_group,
+                    .{
+                        .corner = .downleft,
+                        .sz = text_sz_base.scaled(1 + @sin(font_x_phi + std.math.tau * 0.75) * 0.45),
+                    },
+                    "CORNER: essa67",
                     win_f2,
                 );
 
-                state.char_group.num = blit_x.n + young_blit.n;
+                state.char_group.num = blit_x.n + young_blit.n + corner_a_blit.n + corner_b_blit.n;
             }
         }
 

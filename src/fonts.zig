@@ -385,8 +385,8 @@ pub const Alphabet = struct {
         corner: Corner,
     };
 
-    fn downRightScaler(screan: m.vec2, scale: f32) m.vec4 {
-        return m.vec4{ 0, 0, screan[0] / scale, -screan[1] / scale };
+    fn downRightScaler(screan: m.vec2, blit: BlitMetrics) m.vec2 {
+        return m.vec2{ screan[0] - blit.w, -screan[1] + blit.h };
     }
 
     pub fn BlitText(
@@ -414,13 +414,15 @@ pub const Alphabet = struct {
         );
         // TODO: shift to corners
         const corner_offset = switch (info.corner) {
-            .upleft => m.zero4(),
-            else => downRightScaler(screan, 100),
+            .upleft => m.zero(2),
+            .upright => m.vec2{ screan[0] - blit.w, 0 },
+            .downleft => m.vec2{ 0, -screan[1] + blit.h },
+            .downright => m.vec2{ screan[0] - blit.w, -screan[1] + blit.h },
         };
 
         for (scratchpad[0..blit.n]) |*inst| {
-            const char_pose: m.vec4 = inst.offset_4d;
-            inst.offset_4d = char_pose + corner_offset;
+            const char_pose: m.vec2 = inst.offset_2d;
+            inst.offset_2d = char_pose + corner_offset;
         }
 
         @memcpy(instances + inst_group.base, scratchpad[0..blit.n]);
@@ -470,7 +472,7 @@ pub const Alphabet = struct {
                 .offset_2d = .{ l_xpos, -l_ypos }, //screan placement
                 .offset_4d = .{ wh[0], wh[1], xoyo[0], -xoyo[1] },
                 .new_usage = self.char_uvd_arr[tid],
-                .other_offsets = .{ @bitCast(@as(u32, tid)), 0 },
+                .other_offsets = .{ text_sz.char_w, 0 },
             };
             dst[inst_num] = val;
             inst_num += 1;
