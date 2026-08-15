@@ -24,14 +24,14 @@ const Tied = struct {
 pub fn initS() !void {
     glass_input = try IHoldAx.init(&.{
         &.{
-            sdl.keycode.Keycode.h, sdl.keycode.Keycode.l, //
-            sdl.keycode.Keycode.k, sdl.keycode.Keycode.j,
+            sdl.keycode.Keycode.a, sdl.keycode.Keycode.d, //
+            sdl.keycode.Keycode.w, sdl.keycode.Keycode.s,
         },
     });
     plr_input = try IHoldAx.init(&.{
         &.{
-            sdl.keycode.Keycode.a, sdl.keycode.Keycode.d, //
-            sdl.keycode.Keycode.s, sdl.keycode.Keycode.w,
+            sdl.keycode.Keycode.h, sdl.keycode.Keycode.l, //
+            sdl.keycode.Keycode.k, sdl.keycode.Keycode.j,
             sdl.keycode.Keycode.f, sdl.keycode.Keycode.r,
         },
         &.{

@@ -238,17 +238,59 @@ pub const SdlContext = struct {
         defer sdl3.free(gamepads);
 
         std.debug.print("+++ SDL | gamepads found ({d})\n", .{gamepads.len});
+        var selected_id: sdl3.joystick.Id = undefined;
+        var guid: [33:0]u8 = undefined;
+
         for (gamepads, 0..) |jid, i| {
+            _ = i;
+
             const name = try jid.getName();
+            jid.getGuid().toString(&guid);
+
             // const char *type_str = SDL_GetGamepadStringForType(type);
             // Uint16 vendor = SDL_GetGamepadVendorForID(id);
             // Uint16 product = SDL_GetGamepadProductForID(id);
 
-            std.debug.print("|   Pad Id: +++ pad({d}) name: {s}\n", .{ i + 1, name });
+            std.debug.print("|   Pad Id: +++ pad {d} | {s} | name: {s}\n", .{ jid.value, guid, name });
             // std.debug.print("|      typ: +++ {s}\n", .{@tagName(g_type)});
             // printf("       vendor:  0x%04X\n", vendor);
             // printf("       product: 0x%04X\n\n", product);
+
+            if (std.mem.count(u8, name, "Steam Controller") > 0) {
+                selected_id = jid;
+                std.debug.print("selecting: {d}\n", .{selected_id.value});
+            }
         }
+
+        const pad = sdl3.gamepad.Gamepad.init(selected_id) catch {
+            std.debug.print("| !!! no gamepad at the moment\n", .{});
+
+            const err_info = sdl3.errors.get();
+            if (err_info) |err| std.debug.print("| error was: {s}\n", .{err});
+
+            return;
+        };
+        defer pad.deinit();
+
+        const props = try pad.getProperties();
+        inline for (@typeInfo(@TypeOf(props)).@"struct".fields) |field| {
+            const val = @field(props, field.name);
+            std.debug.print("+++ property: {s:20} | {any}\n", .{ field.name, val });
+        }
+
+        const touchpad_num = pad.getNumTouchpads();
+        std.debug.print("+++ has {d} touchpads\n", .{touchpad_num});
+
+        const SensorType = sdl3.sensor.Type;
+        inline for (std.meta.fields(SensorType)) |field| {
+            const key = @field(SensorType, field.name);
+            const presence = pad.sensorEnabled(key);
+            std.debug.print("+++ pad has sensor {s:20} | {any}\n", .{ field.name, presence });
+        }
+
+        // pad.sendEffect(data: []const u8)
+
+        // std.debug.print("|   we have gamepad now \n", .{});
     }
 };
 

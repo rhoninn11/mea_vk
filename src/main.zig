@@ -547,49 +547,25 @@ fn theDeepest(access: EasyAcces) !void {
                     &texting_group,
                     .{
                         .corner = .upleft,
-                        .sz = text_sz_base.scaled(1 + @sin(font_x_phi) * 0.45),
+                        .sz = text_sz_base.scaled(0.6),
                     },
                     dyn_text.items,
                     win_f2,
                 );
                 texting_group.base += blit_x.n;
 
-                const young_blit = try abc.BlitText(
-                    instances,
-                    &texting_group,
-                    .{
-                        .corner = .upright,
-                        .sz = text_sz_base.scaled(1 + @sin(font_x_phi + std.math.tau * 0.25) * 0.45),
-                    },
-                    "\nwill it land in corner? Yes it does!",
-                    win_f2,
-                );
-                texting_group.base += young_blit.n;
-
-                const corner_a_blit = try abc.BlitText(
-                    instances,
-                    &texting_group,
-                    .{
-                        .corner = .downright,
-                        .sz = text_sz_base.scaled(1 + @sin(font_x_phi + std.math.tau * 0.5) * 0.45),
-                    },
-                    "CORNER: A",
-                    win_f2,
-                );
-                texting_group.base += corner_a_blit.n;
-
-                const corner_b_blit = try abc.BlitText(
+                const corner_blit = try abc.BlitText(
                     instances,
                     &texting_group,
                     .{
                         .corner = .downleft,
-                        .sz = text_sz_base.scaled(1 + @sin(font_x_phi + std.math.tau * 0.75) * 0.45),
+                        .sz = text_sz_base.scaled(0.4),
                     },
-                    "CORNER: essa67",
+                    " move with: w|s|a|d\n",
                     win_f2,
                 );
 
-                state.char_group.num = blit_x.n + young_blit.n + corner_a_blit.n + corner_b_blit.n;
+                state.char_group.num = blit_x.n + corner_blit.n;
             }
         }
 
