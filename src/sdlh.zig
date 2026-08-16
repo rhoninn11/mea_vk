@@ -153,21 +153,28 @@ pub fn pointerInfo(prefix: []const u8, iowriter: *std.Io.Writer) !u8 {
 }
 
 pub const SdlContext = struct {
+    const Self = SdlContext;
+
     const system: sdl3.InitFlags = .{
         .video = true,
         .gamepad = true,
+        .sensor = true,
+        .haptic = true,
     };
 
     window: ?sdl3.video.Window = null,
+    gamepad: ?sdl3.gamepad.Gamepad = null,
     ev_capture: EvCapture = .init(),
     should_close: bool = false,
 
-    pub fn getWindow(self: *const SdlContext) sdl3.video.Window {
+    pub fn getWindow(self: *const Self) sdl3.video.Window {
         return self.window.?;
     }
 
-    fn init(name: [:0]const u8) !SdlContext {
-        var self: SdlContext = .{};
+    fn init(name: [:0]const u8) !Self {
+        var self: Self = .{};
+
+        // sdl3.log.setAllPriorities(.verbose);
 
         try sdl3.init(system);
         errdefer self.deinit();
@@ -182,15 +189,19 @@ pub const SdlContext = struct {
         try input.initS();
         return self;
     }
-    fn deinit(self: *SdlContext) void {
+    fn deinit(self: *Self) void {
         std.debug.print("+++ sdl deinit\n", .{});
         if (self.window) |win| {
             self.window = null;
             win.deinit();
         }
+        if (self.gamepad) |gpad| {
+            self.gamepad = null;
+            gpad.deinit();
+        }
         sdl3.quit(system);
     }
-    pub fn pollEvents(self: *SdlContext) void {
+    pub fn pollEvents(self: *Self) void {
         while (sdl3.events.poll()) |ev| {
             self.ev_capture.inc(ev);
             var key: sdl3.keycode.Keycode = undefined;
@@ -231,9 +242,7 @@ pub const SdlContext = struct {
             }
         }
     }
-    const Me = SdlContext;
-    fn _gamepadProbe(self: *Me) !void {
-        _ = self;
+    fn _gamepadProbe(self: *Self) !void {
         const gamepads: []sdl3.joystick.Id = try sdl3.gamepad.getGamepads();
         defer sdl3.free(gamepads);
 
@@ -241,56 +250,47 @@ pub const SdlContext = struct {
         var selected_id: sdl3.joystick.Id = undefined;
         var guid: [33:0]u8 = undefined;
 
-        for (gamepads, 0..) |jid, i| {
-            _ = i;
-
+        for (gamepads) |jid| {
             const name = try jid.getName();
             jid.getGuid().toString(&guid);
-
-            // const char *type_str = SDL_GetGamepadStringForType(type);
-            // Uint16 vendor = SDL_GetGamepadVendorForID(id);
-            // Uint16 product = SDL_GetGamepadProductForID(id);
-
             std.debug.print("|   Pad Id: +++ pad {d} | {s} | name: {s}\n", .{ jid.value, guid, name });
-            // std.debug.print("|      typ: +++ {s}\n", .{@tagName(g_type)});
-            // printf("       vendor:  0x%04X\n", vendor);
-            // printf("       product: 0x%04X\n\n", product);
 
-            if (std.mem.count(u8, name, "Steam Controller") > 0) {
+            if (std.mem.count(u8, name, "Steam Deck") > 0) {
                 selected_id = jid;
-                std.debug.print("selecting: {d}\n", .{selected_id.value});
             }
         }
 
-        const pad = sdl3.gamepad.Gamepad.init(selected_id) catch {
+        const gamepad = sdl3.gamepad.Gamepad.init(selected_id) catch {
             std.debug.print("| !!! no gamepad at the moment\n", .{});
-
             const err_info = sdl3.errors.get();
             if (err_info) |err| std.debug.print("| error was: {s}\n", .{err});
-
             return;
         };
-        defer pad.deinit();
 
-        const props = try pad.getProperties();
+        if (self.gamepad) |gepad| gepad.deinit();
+        self.gamepad = gamepad;
+
+        const name_str = try gamepad.getName();
+        std.debug.print("+++ connected to gamepad: {s}\n", .{name_str});
+
+        const props = try gamepad.getProperties();
         inline for (@typeInfo(@TypeOf(props)).@"struct".fields) |field| {
             const val = @field(props, field.name);
             std.debug.print("+++ property: {s:20} | {any}\n", .{ field.name, val });
         }
 
-        const touchpad_num = pad.getNumTouchpads();
+        const touchpad_num = gamepad.getNumTouchpads();
         std.debug.print("+++ has {d} touchpads\n", .{touchpad_num});
 
         const SensorType = sdl3.sensor.Type;
         inline for (std.meta.fields(SensorType)) |field| {
             const key = @field(SensorType, field.name);
-            const presence = pad.sensorEnabled(key);
+            const presence = gamepad.sensorEnabled(key);
             std.debug.print("+++ pad has sensor {s:20} | {any}\n", .{ field.name, presence });
         }
 
-        // pad.sendEffect(data: []const u8)
-
-        // std.debug.print("|   we have gamepad now \n", .{});
+        const mapping_what = try gamepad.getMapping();
+        std.debug.print("+++ connected to gamepad: {s}\n", .{mapping_what});
     }
 };
 
