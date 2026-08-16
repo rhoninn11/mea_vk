@@ -98,7 +98,7 @@ fn deeper(access: EasyAcces) host.OnHostErrors!void {
 fn theDeepest(access: EasyAcces) !void {
     const pages = std.heap.page_allocator;
     // font
-    var a_font: fonts.FontRendering = try fonts.FontRendering.init(access.io, pages, "fs/roboto.ttf");
+    var a_font: fonts.FontRendering = try fonts.FontRendering.init(access.io, pages, "fs/opensans.ttf");
     defer a_font.deinit(pages);
 
     var abc = try fonts.Alphabet.init(

@@ -255,7 +255,7 @@ pub const SdlContext = struct {
             jid.getGuid().toString(&guid);
             std.debug.print("|   Pad Id: +++ pad {d} | {s} | name: {s}\n", .{ jid.value, guid, name });
 
-            if (std.mem.count(u8, name, "Steam Deck") > 0) {
+            if (std.mem.count(u8, name, "Steam Control") > 0) {
                 selected_id = jid;
             }
         }

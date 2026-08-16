@@ -1,4 +1,5 @@
 fs
+!fs/opensans.ttf
 tmp
 zig-out
 zig-pkg
