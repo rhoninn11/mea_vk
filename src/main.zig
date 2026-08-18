@@ -67,7 +67,7 @@ const LYR_INST_BASE = 6144;
 var navig = a.Navig.default;
 
 var state: frame.FrameState = .{
-    .def_persp = true,
+    .persp = .observer,
     .alt_proj = true,
     .alt_shader = false,
     .ok_tex_base = OK_TEX_BASE,
@@ -365,7 +365,6 @@ fn theDeepest(access: EasyAcces) !void {
     // main loop
     const text_sz_base: fonts.TextSz = .{};
     var text_stack: [1024 + 512]u8 = undefined;
-    var blit_x: fonts.BlitMetrics = .{};
     while (!window.shoudClose()) {
         var fba: std.heap.FixedBufferAllocator = .init(text_stack[0..]);
         const txta = fba.allocator();
@@ -465,14 +464,17 @@ fn theDeepest(access: EasyAcces) !void {
         }
 
         if (input.persp_switch.fired()) {
-            state.def_persp = a.toggle(state.def_persp);
+            state.persp = switch (state.persp) {
+                .movable => .observer,
+                .observer => .movable,
+            };
         }
 
         var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 1024);
         const px, const py = glass.pos;
         try dyn_text.print(txta, "\n\n", .{}); //young blit space
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
-        try dyn_text.print(txta, "blit info x:{d:>6.2}|y:{d:>6.2}\n", .{ blit_x.w, blit_x.h });
+        // try dyn_text.print(txta, "blit info x:{d:>6.2}|y:{d:>6.2}\n", .{ blit_x.w, blit_x.h });
         if (interact.hit) {
             // const x, const y = interact.at;
             const scale_frac = navig.uv_map.mult * interact.at;
@@ -506,9 +508,9 @@ fn theDeepest(access: EasyAcces) !void {
         const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
 
         // TODO: alt projection could be included and def_persp zdefiniowana jako enum
-        const virt_ray: t.Ray = switch (state.def_persp) {
-            true => t.Ray{ .at = orbital.pos(), .to = m.zero3() },
-            false => a.testTracer(tracker_phi),
+        const virt_ray: t.Ray = switch (state.persp) {
+            .movable => t.Ray{ .at = orbital.pos(), .to = m.zero3() },
+            .observer => a.testTracer(tracker_phi),
         };
 
         {
@@ -540,33 +542,9 @@ fn theDeepest(access: EasyAcces) !void {
                 ok_phi,
             );
 
-            {
-                var texting_group = state.char_group;
-                blit_x = try abc.BlitText(
-                    instances,
-                    &texting_group,
-                    .{
-                        .corner = .upleft,
-                        .sz = text_sz_base.scaled(0.6),
-                    },
-                    dyn_text.items,
-                    win_f2,
-                );
-                texting_group.base += blit_x.n;
-
-                const corner_blit = try abc.BlitText(
-                    instances,
-                    &texting_group,
-                    .{
-                        .corner = .downleft,
-                        .sz = text_sz_base.scaled(0.4),
-                    },
-                    " move with: w|s|a|d\n",
-                    win_f2,
-                );
-
-                state.char_group.num = blit_x.n + corner_blit.n;
-            }
+            try fonts.TextBlitter //
+                .init(&abc, &state, text_sz_base)
+                .contentBlit(instances, win_f2, dyn_text.items);
         }
 
         try frame.recordFrame(

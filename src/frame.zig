@@ -14,8 +14,13 @@ pub const InstGroup = struct {
     num: u16,
 };
 
+pub const PerspE = enum(u8) {
+    observer = 0,
+    movable,
+};
+
 pub const FrameState = struct {
-    def_persp: bool,
+    persp: PerspE,
     alt_proj: bool,
     alt_shader: bool,
     model_idx: u8,

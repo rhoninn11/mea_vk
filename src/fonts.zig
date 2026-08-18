@@ -9,7 +9,7 @@ const shu = @import("shaders/utils.zig");
 const dset = @import("dset.zig");
 const m = @import("math.zig");
 const meagen = @import("gen/meagen.pb.zig");
-const f = @import("frame.zig");
+const frame = @import("frame.zig");
 
 // TODO: ok, now i know what is this sizing for, so i can name it better
 // tylko jaką nazwę tutaj dać?
@@ -390,9 +390,9 @@ pub const Alphabet = struct {
     }
 
     pub fn BlitText(
-        self: *Alphabet,
+        self: *const Alphabet,
         instances: [*]sht.PerInstance,
-        inst_group: *f.InstGroup,
+        inst_group: *frame.InstGroup,
         info: TextInfo,
         text: []const u8,
         screan: m.vec2,
@@ -432,7 +432,7 @@ pub const Alphabet = struct {
     }
 
     fn blitInstances(
-        self: *Alphabet,
+        self: *const Alphabet,
         dst: []sht.PerInstance,
         text_sz: TextSz,
         text: []const u8,
@@ -505,5 +505,56 @@ pub const TextSz = struct {
             .char_w = base.char_w * scale,
             .line_h = base.line_h * scale,
         };
+    }
+};
+
+pub const TextBlitter = struct {
+    abc: *const Alphabet,
+    state_ref: *frame.FrameState,
+    text_sz: TextSz,
+
+    pub fn init(
+        abc: *const Alphabet,
+        state_ref: *frame.FrameState,
+        text_sz: TextSz,
+    ) TextBlitter {
+        return .{
+            .state_ref = state_ref,
+            .abc = abc,
+            .text_sz = text_sz,
+        };
+    }
+
+    pub fn contentBlit(
+        self: *const TextBlitter,
+        instances: [*]sht.PerInstance,
+        screen: m.vec2,
+        content: []const u8,
+    ) !void {
+        var blit_group = self.state_ref.char_group;
+        const main_info = try self.abc.BlitText(
+            instances,
+            &blit_group,
+            .{
+                .corner = .upleft,
+                .sz = self.text_sz.scaled(0.6),
+            },
+            content,
+            screen,
+        );
+
+        blit_group.base += main_info.n;
+        const side_blit = try self.abc.BlitText(
+            instances,
+            &blit_group,
+            .{
+                .corner = .downleft,
+                .sz = self.text_sz.scaled(0.4),
+            },
+            " move with: w|s|a|d\n",
+            screen,
+        );
+
+        self.state_ref.char_group.num = main_info.n + side_blit.n;
     }
 };
