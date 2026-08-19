@@ -507,7 +507,6 @@ fn theDeepest(access: EasyAcces) !void {
         const instances: [*]sht.PerInstance = @ptrCast(@alignCast(storage_mapping));
         const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
 
-        // TODO: alt projection could be included and def_persp zdefiniowana jako enum
         const virt_ray: t.Ray = switch (state.persp) {
             .movable => t.Ray{ .at = orbital.pos(), .to = m.zero3() },
             .observer => a.testTracer(tracker_phi),

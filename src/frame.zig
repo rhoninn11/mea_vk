@@ -189,7 +189,7 @@ pub fn recordFrame(
                 hl_cmds.use(.dsprite);
 
                 const okpush = gm.PushConstant.PCBlob{
-                    .model = m.matTrans(.{ 0, -3, 0 }).mat,
+                    .model = m.matTrans(.{ 0, -6, 0 }).mat,
                     .inst_base = state.ok_group.base,
                     .tex_base = state.ok_tex_base,
                     // triangle mode ???

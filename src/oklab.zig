@@ -61,6 +61,24 @@ pub const OkUnderstanding = struct {
         return val;
     }
 
+    fn trajectoryPoints(radius: f32, phi: f32) [2]m.vec3 {
+        const h = 0.77;
+        const poles = 3;
+        const p0: m.vec3 = .{
+            radius * @cos(phi),
+            radius * @sin(phi * poles) * h,
+            radius * @sin(phi),
+        };
+        const phi_next = phi + 0.05;
+        const phi_next_plus = phi * poles + 0.05;
+        const p1: m.vec3 = .{
+            radius * @cos(phi_next),
+            radius * @sin(phi_next_plus) * h,
+            radius * @sin(phi_next),
+        };
+        return .{ p0, p1 };
+    }
+
     pub fn labSpliced(instances: [*]sht.PerInstance, group: frame.InstGroup, phi: f32) !void {
         const lim_num = 8096;
         const stack_size = lim_num * @sizeOf(sht.PerInstance);
@@ -71,22 +89,26 @@ pub const OkUnderstanding = struct {
 
         var scratchpad: []sht.PerInstance = try local_a.alloc(sht.PerInstance, group.num);
         const denominator = @as(f32, @floatFromInt(scratchpad.len - 1));
-        const r = 2.5;
+        const radius_base = 2.5;
+
         for (0..scratchpad.len) |i| {
             var edit: sht.PerInstance = scratchpad[i];
             const i_f: f32 = @as(f32, @floatFromInt(i));
             const progress = i_f / denominator;
 
             const amp = 0.2;
-            const phi0 = (progress + phi) * 5;
-            const r0 = r + @sin(phi0 * 4) * amp;
-            const p0: m.vec3 = .{ r0 * @cos(phi0), 0, r0 * @sin(phi0) };
-            edit.offset_4d = m.stack4(p0, i_f);
+            const fill = std.math.tau * 0.77;
+            const phi0 = (progress + phi) * fill;
 
-            const phi1 = phi0 + 0.05;
-            const p1: m.vec3 = .{ r0 * @cos(phi1), 0, r0 * @sin(phi1) };
+            const radius_delta = @sin(phi0 * 4) * amp;
+            const radius_total = radius_base + radius_delta;
 
-            const front: m.vec3 = m.norm(p1 - p0);
+            const ab = trajectoryPoints(radius_total, phi0);
+
+            edit.offset_4d = m.stack4(ab[0], i_f);
+
+            const front: m.vec3 = m.norm(ab[1] - ab[0]);
+
             const up: m.vec3 = .{ 0, 1, 0 };
             edit.new_usage = m.stack4(front, 0);
             edit.depth_ctrl = m.stack4(up, 0);

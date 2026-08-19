@@ -205,8 +205,11 @@ pub const Navig = struct {
 
 pub fn testTracer(fast_phi: f32) t.Ray {
     const phi = fast_phi * 0.1;
-    const from: m.vec3 = .{ -2, 5, 5 };
-    const center: m.vec3 = m.zero3();
+
+    const lower = m.vec3{ 0, -3, 0 };
+
+    const from = m.vec3{ -2, 5, 5 } + lower;
+    const center: m.vec3 = m.zero3() + lower;
     // const delta = m.vec3{ @cos(phi), 0, -@sin(phi) } * m.splat3d(2.3);
     _ = phi;
 
