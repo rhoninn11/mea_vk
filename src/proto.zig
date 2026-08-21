@@ -360,7 +360,7 @@ pub const LookingGlass = struct {
     pub fn bakeScannData(self: *LookingGlass, instances: [*]sht.PerInstance) !void {
         return bakeScann(self, instances, true);
     }
-    pub fn recoverKinecticDemo(self: *LookingGlass, instances: [*]sht.PerInstance) !void {
+    pub fn recoverKinecticDefault(self: *LookingGlass, instances: [*]sht.PerInstance) !void {
         return bakeScann(self, instances, false);
     }
 

@@ -19,6 +19,8 @@ const vertex = @import("vertex.zig");
 const m = @import("math.zig");
 const t = @import("types.zig");
 const u = @import("utils.zig");
+
+const map = @import("map.zig");
 const phys = @import("phys.zig");
 const imgs = @import("imgs.zig");
 const refils = @import("refills.zig");
@@ -60,21 +62,18 @@ pub fn main(init: std.process.Init) !void {
 
 const OK_SWEEP: u8 = 128;
 const OK_TEX_BASE: u8 = 32;
-const OK_INST_BASE: u16 = sht.GridSize.g64.total;
-const CHAR_INST_BASE: u16 = 4608;
-const LYR_INST_BASE = 6144;
 
 var navig = a.Navig.default;
 
 var state: frame.FrameState = .{
+    .model_idx = 0,
     .persp = .observer,
     .alt_proj = true,
     .alt_shader = false,
     .ok_tex_base = OK_TEX_BASE,
-    .model_idx = 0,
-    .ok_group = .{ .base = OK_INST_BASE, .num = OK_SWEEP },
-    .char_group = .{ .base = CHAR_INST_BASE, .num = 0 },
-    .layer_group = .{ .base = LYR_INST_BASE, .num = 0 },
+    .ok_group = .{ .base = map.instablo.get(.okg).beg, .num = OK_SWEEP },
+    .char_group = .{ .base = map.instablo.get(.text).beg, .num = 0 },
+    .layer_group = .{ .base = map.instablo.get(.layer).beg, .num = 0 },
     .nav = &navig,
 };
 
@@ -520,16 +519,10 @@ fn theDeepest(access: EasyAcces) !void {
                 win_size,
                 virt_ray,
             );
-
-            // PLAIN INSTANCES MAP:
-            // cubes 0-4095
-            // ok slices 4096-4223
-            // glyphs 4224-4247
-            // text 4608-?
-            // layers 6144-?
+            _ = map.instablo;
 
             if (state.alt_shader) {
-                try glass.recoverKinecticDemo(instances);
+                try glass.recoverKinecticDefault(instances);
             } else {
                 try glass.bakeScannData(instances);
                 try glass.bakeRidges(instances, &state.layer_group);

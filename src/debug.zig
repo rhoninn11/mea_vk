@@ -27,30 +27,37 @@ pub const DbgMonitor = struct {
     ) !void {
         if (!self.enabled) return;
 
-        var buffer: [1024]u8 = undefined;
-        const stdout: std.Io.File = .stderr();
-        var w = stdout.writer(io, &buffer);
-
-        //const pointer to interface was the right way on windows
-        const iowriter: *std.Io.Writer = &w.interface;
-
-        try self.clearPrev(iowriter);
+        // as intemediate text
+        var b0: [2048]u8 = undefined;
+        var scratchpad = std.Io.Writer.fixed(&b0);
 
         var lines: u8 = 9;
-        try iowriter.print("---------------\n", .{});
-        try iowriter.print("--- {s: <12}: \x1b[31m{d}\x1b[0m\n", .{ "phi", current.phi });
-        try iowriter.print("--- {s: <12}: \x1b[32m{d}\x1b[0m\n", .{ "inst_num", current.inst_num });
-        try iowriter.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "observer", current.observer_pos });
-        try iowriter.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "window w", current.win_size.width });
-        try iowriter.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "window h", current.win_size.height });
-        try iowriter.print("---------------\n", .{});
-        lines += try sdlh.pointerInfo("---", iowriter);
-        try iowriter.print("---------------\n", .{});
-        lines += try sdlh.getEvCounter().info("--- ", iowriter);
-        try iowriter.print("---------------\n", .{});
-        try iowriter.flush();
 
+        try scratchpad.print("---------------\n", .{});
+        try scratchpad.print("--- {s: <12}: \x1b[31m{d}\x1b[0m\n", .{ "phi", current.phi });
+        try scratchpad.print("--- {s: <12}: \x1b[32m{d}\x1b[0m\n", .{ "inst_num", current.inst_num });
+        try scratchpad.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "observer", current.observer_pos });
+        try scratchpad.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "window w", current.win_size.width });
+        try scratchpad.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "window h", current.win_size.height });
+        try scratchpad.print("---------------\n", .{});
+        lines += try sdlh.pointerInfo("---", &scratchpad);
+        try scratchpad.print("---------------\n", .{});
+        lines += try sdlh.getEvCounter().info("--- ", &scratchpad);
+        try scratchpad.print("---------------\n", .{});
+        try scratchpad.flush();
+
+        // const info = scratchpad.buffered();
+        // std.debug.print("info length {d}\n", .{info.len});
+
+        // to console
+        var b1: [1024]u8 = undefined;
+        var stdout = std.Io.File.stderr().writer(io, &b1);
+        const console: *std.Io.Writer = &stdout.interface;
+
+        try self.clearPrev(console);
         self.linecount = lines;
+        try console.writeAll(scratchpad.buffered());
+        try console.flush();
     }
 };
 
