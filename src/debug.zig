@@ -24,12 +24,13 @@ pub const DbgMonitor = struct {
         self: *DbgMonitor,
         io: std.Io,
         current: *const DbgVals,
+        _text_external: *std.Io.Writer,
+        on_console: bool,
     ) !void {
         if (!self.enabled) return;
 
         // as intemediate text
-        var b0: [2048]u8 = undefined;
-        var scratchpad = std.Io.Writer.fixed(&b0);
+        var scratchpad = _text_external;
 
         var lines: u8 = 9;
 
@@ -40,17 +41,16 @@ pub const DbgMonitor = struct {
         try scratchpad.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "window w", current.win_size.width });
         try scratchpad.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "window h", current.win_size.height });
         try scratchpad.print("---------------\n", .{});
-        lines += try sdlh.pointerInfo("---", &scratchpad);
+        lines += try sdlh.pointerInfo("---", scratchpad);
         try scratchpad.print("---------------\n", .{});
-        lines += try sdlh.getEvCounter().info("--- ", &scratchpad);
+        lines += try sdlh.getEvCounter().info("--- ", scratchpad);
         try scratchpad.print("---------------\n", .{});
         try scratchpad.flush();
 
-        // const info = scratchpad.buffered();
-        // std.debug.print("info length {d}\n", .{info.len});
-
         // to console
-        var b1: [1024]u8 = undefined;
+        if (on_console == false) return;
+
+        var b1: [2048]u8 = undefined;
         var stdout = std.Io.File.stderr().writer(io, &b1);
         const console: *std.Io.Writer = &stdout.interface;
 

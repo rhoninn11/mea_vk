@@ -104,7 +104,7 @@ fn theDeepest(access: EasyAcces) !void {
         access.io,
         access.gpa,
         &a_font,
-        "fs/roboto.serdes",
+        "fs/opensans.serdes",
     );
     defer abc.deinit(access.gpa);
 
@@ -246,58 +246,65 @@ fn theDeepest(access: EasyAcces) !void {
     var all_imgs: imgs.ManyImages = try .init(access.gpa);
     defer all_imgs.deinit();
 
-    const basic_idx = 0;
-    const basic_tex_set: [4]anyerror!imgs.VkImage = .{
-        imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb, .default),
-        imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_r, .default),
-        imgs.vulkanTexture(&pic, looking_vol.grid, looking_vol.pix, .nearest),
-        imgs.vulkanTexture(&pic, looking_lyr.grid, looking_lyr.pix, .nearest),
-    };
     {
+        // 0 - 3 few, mostly test textures
+        const basic_tex_set: [4]anyerror!imgs.VkImage = .{
+            imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb, .default),
+            imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_r, .default),
+            imgs.vulkanTexture(&pic, looking_vol.grid, looking_vol.pix, .nearest),
+            imgs.vulkanTexture(&pic, looking_lyr.grid, looking_lyr.pix, .nearest),
+        };
+        const basic_idx = 0;
         inline for (0.., basic_tex_set) |i, risky_rgba| {
             const rgba = try risky_rgba;
             try all_imgs.append(&rgba);
             lazy_shady.omnitex.updateTexture(0, &rgba, basic_idx + i);
         }
     }
+    {
+        // 4 for atlas
+        const gridsz_abc = fonts.font_g;
+        var vki_glyph_atlas = try imgs.U8Image.init(access.gm, gridsz_abc);
+        try imgs.texPrep(&pic, gridsz_abc, abc.char_atlas, &vki_glyph_atlas, .font);
+        try all_imgs.append(&vki_glyph_atlas);
 
-    const g_abc = fonts.font_g;
-    try d.ppmU8Debug(access.io, abc.char_atlas, g_abc);
-
-    var char_atlas = try imgs.U8Image.init(access.gm, g_abc);
-    try imgs.texPrep(&pic, g_abc, abc.char_atlas, &char_atlas, .font);
-
-    // const sdf_atlas = try imgs.vulkanTexture(&pic, g_abc, abc.char_atlas, false);
-    lazy_shady.omnitex.updateTexture(0, &char_atlas, 4);
-    try all_imgs.append(&char_atlas);
+        lazy_shady.omnitex.updateTexture(0, &vki_glyph_atlas, 4);
+        try d.ppmU8Debug(access.io, abc.char_atlas, gridsz_abc);
+    }
 
     {
+        // 5 scan data
         var mono = try imgs.U16Image.init(pic.gc, glass.img_sz);
         errdefer mono.deinit();
         try imgs.texPrep(&pic, glass.img_sz, glass.scan_raw.pixels, &mono, .nearest);
-        lazy_shady.omnitex.updateTexture(0, &mono, 5);
         try all_imgs.append(&mono);
+
+        lazy_shady.omnitex.updateTexture(0, &mono, 5);
     }
 
-    const L_delt: f32 = 1.0 / @as(f32, @floatFromInt(OK_SWEEP - 1));
-    var ok_atlas_idx: u8 = OK_TEX_BASE;
-    var L: f32 = 0.0;
+    {
+        // 32 gradient
+        // 33 - 159 ok slices
+        const tex_grid_ok = sht.GridSize.g128;
+        const L_delt: f32 = 1.0 / @as(f32, @floatFromInt(OK_SWEEP - 1));
+        var ok_atlas_idx: u8 = OK_TEX_BASE;
+        var L: f32 = 0.0;
 
-    const tex_grid_ok = sht.GridSize.g128;
-    for (0..OK_SWEEP) |i| {
-        std.debug.assert(ok_atlas_idx < ATLAS_MAX);
-        const pixels = switch (i) {
-            0 => try oklab.sampleInfernoAlt(gpa, &tex_grid_ok),
-            else => try oklab.OkUnderstanding.sampleSpace(gpa, L, &tex_grid_ok),
-        };
-        defer gpa.free(pixels);
+        for (0..OK_SWEEP) |i| {
+            std.debug.assert(ok_atlas_idx < ATLAS_MAX);
+            const pixels = switch (i) {
+                0 => try oklab.sampleInfernoAlt(gpa, &tex_grid_ok),
+                else => try oklab.OkUnderstanding.sampleSpace(gpa, L, &tex_grid_ok),
+            };
+            defer gpa.free(pixels);
 
-        const rgba = try imgs.vulkanTexture(&pic, tex_grid_ok, pixels, .nearest);
-        lazy_shady.omnitex.updateTexture(0, &rgba, ok_atlas_idx);
-        try all_imgs.append(&rgba);
+            const rgba = try imgs.vulkanTexture(&pic, tex_grid_ok, pixels, .nearest);
+            lazy_shady.omnitex.updateTexture(0, &rgba, ok_atlas_idx);
+            try all_imgs.append(&rgba);
 
-        ok_atlas_idx += 1;
-        L += L_delt;
+            ok_atlas_idx += 1;
+            L += L_delt;
+        }
     }
 
     // For frame recording
@@ -308,9 +315,10 @@ fn theDeepest(access: EasyAcces) !void {
     var slot: u8 = 0;
     var inflight_stack: [1024]u8 = undefined;
     var loc_stack: std.heap.FixedBufferAllocator = .init(inflight_stack[0..1024]);
-    const cmdbufs: []vk.CommandBuffer = try loc_stack.allocator().alloc(vk.CommandBuffer, swapchain_len);
-    const pools: []vk.CommandPool = try loc_stack.allocator().alloc(vk.CommandPool, swapchain_len);
-    const recorders: []gm.FrameRecorder = try loc_stack.allocator().alloc(gm.FrameRecorder, swapchain_len);
+    var loc_fba = loc_stack.allocator();
+    const cmdbufs: []vk.CommandBuffer = try loc_fba.alloc(vk.CommandBuffer, swapchain_len);
+    const pools: []vk.CommandPool = try loc_fba.alloc(vk.CommandPool, swapchain_len);
+    const recorders: []gm.FrameRecorder = try loc_fba.alloc(gm.FrameRecorder, swapchain_len);
     const frame_cmd_pool_cfg: vk.CommandPoolCreateInfo = .{
         .queue_family_index = gc.graphics_queue.family,
         .flags = .{ .transient_bit = true },
@@ -365,6 +373,7 @@ fn theDeepest(access: EasyAcces) !void {
     const text_sz_base: fonts.TextSz = .{};
     var text_stack: [1024 + 512]u8 = undefined;
     while (!window.shoudClose()) {
+        errdefer std.debug.print("!?! problem in main loop\n", .{});
         var fba: std.heap.FixedBufferAllocator = .init(text_stack[0..]);
         const txta = fba.allocator();
 
@@ -372,17 +381,17 @@ fn theDeepest(access: EasyAcces) !void {
         const win_size = try access.host.winExtent();
 
         if (!a.visible(win_size)) {
+            // while minimalized.
             try access.io.sleep(.fromMilliseconds(50), .real);
             continue;
         }
-        // navig.pos = input.
 
         const win_f2 = m.vkextAsV2(win_size);
-        const coords: a.Coords = .init(win_size);
         const cursor_f2 = sdlh.peekPointer();
         navig.cursor = cursor_f2;
         navig.cursor_tex = OK_TEX_BASE + ok_slider.curr;
 
+        const coords: a.Coords = .init(win_size);
         const interact = coords.update(cursor_f2);
         navig.screan = win_f2;
 
@@ -440,7 +449,10 @@ fn theDeepest(access: EasyAcces) !void {
             .win_size = win_size,
         };
 
-        try dbgmonit.update(access.io, &dbg_data);
+        const debug_on_console = false;
+        var dbg_scratch: [2048]u8 = undefined;
+        var dbg_write = std.Io.Writer.fixed(&dbg_scratch);
+        try dbgmonit.update(access.io, &dbg_data, &dbg_write, debug_on_console);
 
         if (input.alt_projection_trigger.fired()) {
             state.alt_proj = !state.alt_proj;
@@ -464,12 +476,12 @@ fn theDeepest(access: EasyAcces) !void {
 
         if (input.persp_switch.fired()) {
             state.persp = switch (state.persp) {
-                .movable => .observer,
-                .observer => .movable,
+                .orbital => .observer,
+                .observer => .orbital,
             };
         }
 
-        var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 1024);
+        var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 1024 + 512);
         const px, const py = glass.pos;
         try dyn_text.print(txta, "\n\n", .{}); //young blit space
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
@@ -499,7 +511,6 @@ fn theDeepest(access: EasyAcces) !void {
             _ = input.sample_tirg.fired();
         }
 
-        //minimalized
         try swapchain.waitCurrentFrame();
         const storage_mapping = lazy_shady.storage.buff_arr.items[img_idx].?.mapping.?;
         const uniform_mapping = lazy_shady.uniforms.buff_arr.items[img_idx].?.mapping.?;
@@ -507,11 +518,12 @@ fn theDeepest(access: EasyAcces) !void {
         const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
 
         const virt_ray: t.Ray = switch (state.persp) {
-            .movable => t.Ray{ .at = orbital.pos(), .to = m.zero3() },
+            .orbital => t.Ray{ .at = orbital.pos(), .to = m.zero3() },
             .observer => a.testTracer(tracker_phi),
         };
 
         {
+            errdefer std.debug.print("!?! problem in this scope \n", .{});
             try refils.unifomRefil(
                 uniforms,
                 timeline1.total_s,
@@ -534,9 +546,14 @@ fn theDeepest(access: EasyAcces) !void {
                 ok_phi,
             );
 
+            // text content selection
+            const dyna_dyna_text = switch (dbgmonit.enabled) {
+                true => dbg_write.buffered(),
+                false => dyn_text.items,
+            };
             try fonts.TextBlitter //
                 .init(&abc, &state, text_sz_base)
-                .contentBlit(instances, win_f2, dyn_text.items);
+                .contentBlit(instances, win_f2, dyna_dyna_text);
         }
 
         try frame.recordFrame(
@@ -569,7 +586,7 @@ fn theDeepest(access: EasyAcces) !void {
                 swapchain,
             );
 
-            // TODO: do need to record all?
+            // with new resolution for all
             for (recorders) |*recorder| {
                 try frame.recordFrame(
                     recorder,
@@ -591,7 +608,7 @@ fn theDeepest(access: EasyAcces) !void {
             },
         };
     }
-
+    std.debug.print("Exitting\n", .{});
     try swapchain.waitForAllFences();
     try gc.dev.deviceWaitIdle();
 }

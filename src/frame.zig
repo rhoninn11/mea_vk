@@ -16,7 +16,7 @@ pub const InstGroup = struct {
 
 pub const PerspE = enum(u8) {
     observer = 0,
-    movable,
+    orbital,
 };
 
 pub const FrameState = struct {

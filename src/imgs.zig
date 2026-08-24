@@ -290,19 +290,18 @@ pub fn texPrep(
     mode: VkImage.ESamplerMode,
 ) !void {
     const buff_size = test_img.dvk_size;
-    const src_buff = try gm.createBuffer( //TODO: maybe one omnipresent buffor for img data copying?
+    const img_tranfer_buffer = try gm.createBuffer( //TODO: maybe one omnipresent buffor for img data copying?
         pic.gc,
         gm.baked.memory_cpu,
         gm.baked.usage_src,
         buff_size,
     );
-    defer src_buff.deinit(pic.gc);
-    const mapping: [*]u8 = @ptrCast(@alignCast(src_buff.mapping));
-    @memcpy(mapping, pixdata);
+    defer img_tranfer_buffer.deinit(pic.gc);
 
     const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
     const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
 
+    // prepare to recive transfer
     try imgLTrans(pic, .{
         .old_layout = .undefined,
         .new_layout = dst_layout,
@@ -310,8 +309,11 @@ pub fn texPrep(
         .flags = gm.baked.undefined_to_transfered,
     });
 
+    // tr
+    const mapping: [*]u8 = @ptrCast(@alignCast(img_tranfer_buffer.mapping));
+    @memcpy(mapping, pixdata);
     try bfr2ImgCopy(pic, .{
-        .buffer = src_buff.dvk_bfr,
+        .buffer = img_tranfer_buffer.dvk_bfr,
         .image = test_img.dvk_img,
         .layout = dst_layout,
         .g = g64,
@@ -374,13 +376,14 @@ pub fn bfr2ImgCopy(cmd_ctx: *const gm.PoolInCtx, cfg: BfrToImgCpyCfg) !void {
             .buffer_offset = 0,
             .buffer_row_length = 0,
             .buffer_image_height = 0,
+
+            .image_subresource = gm.baked.color_bfr2img_sublyr,
+            .image_offset = .{ .x = 0, .y = 0, .z = 0 },
             .image_extent = .{
                 .width = cfg.g.w,
                 .height = cfg.g.h,
                 .depth = 1,
             },
-            .image_subresource = gm.baked.color_bfr2img_sublyr,
-            .image_offset = .{ .x = 0, .y = 0, .z = 0 },
         },
     };
 

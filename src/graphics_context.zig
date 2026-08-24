@@ -128,6 +128,11 @@ pub const BufferData = struct {
         dev.destroyBuffer(self.dvk_bfr, null);
         dev.freeMemory(self.dvk_mem, null);
     }
+
+    pub fn memMapping(self: *BufferData) [*]u8 {
+        const mapping: [*]u8 = @ptrCast(@alignCast(self.mapping));
+        return mapping;
+    }
 };
 
 pub fn createBuffer(

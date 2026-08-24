@@ -165,8 +165,8 @@ pub const font_atlas_h: u32 = 1024;
 pub const Alphabet = struct {
     const show_first_blit: bool = false;
     const ascii_chars: []const u8 = //
-        "abcdefghijklmnoprstuvwxyz" ++ //
-        "ABCDEFGHIJKLMNOPRSTUVWXYZ" ++ //
+        "abcdefghijklmnopqrstuvwxyz" ++ //
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ++ //
         " _.,;:|0123456789()<>{}[]+-?\"!";
 
     const CharLocMap = std.AutoHashMap(u8, u16);
@@ -397,10 +397,9 @@ pub const Alphabet = struct {
         text: []const u8,
         screan: m.vec2,
     ) !BlitMetrics {
-        const MAX_LETTERS = 256;
-        std.debug.assert(text.len < MAX_LETTERS);
+        const lim_num = 2048;
+        std.debug.assert(text.len < lim_num);
 
-        const lim_num = 8096;
         const stack_size = lim_num * @sizeOf(sht.PerInstance);
         var stack_mem: [stack_size]u8 = undefined;
         var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
@@ -443,7 +442,20 @@ pub const Alphabet = struct {
         var cursor_glyph: u16 = 0;
         var cursor_line: u8 = 0;
 
+        var inEscMode: bool = false;
+        defer std.debug.assert(!inEscMode);
+
         for (text) |letter| {
+            if (inEscMode) {
+                if (letter == 'm') inEscMode = false;
+                continue;
+            }
+
+            if (letter == '\x1b') {
+                inEscMode = true;
+                continue;
+            }
+
             if (letter == '\n') {
                 const line_w = cursor_glyph * text_sz.char_w;
                 if (line_w > metrics.w) {
@@ -455,7 +467,10 @@ pub const Alphabet = struct {
                 continue;
             }
 
-            const tid = self.char_map.get(letter) orelse return error.charMissing;
+            const tid = self.char_map.get(letter) orelse {
+                std.debug.print("missing {d} letter\n", .{letter});
+                return error.charMissing;
+            };
             const gly_sz = self.char_sz_arr[tid];
             if (gly_sz.empty()) { //skips " " spaces
                 cursor_glyph += 1;
@@ -551,7 +566,7 @@ pub const TextBlitter = struct {
                 .corner = .downleft,
                 .sz = self.text_sz.scaled(0.4),
             },
-            " move with: w|s|a|d\n",
+            "w|s|a|d - to move    space - to pan\n",
             screen,
         );
 

@@ -20,3 +20,11 @@ pub const instablo: std.enums.EnumArray(Group, Range) = .init(.{
     .text = .{ .beg = why_text_here, .end = sz6k - 1 },
     .layer = .{ .beg = sz6k, .end = sz6k + sz2k - 1 },
 });
+
+// TODO: texture map
+
+// 0 - 3 few, mostly test textures
+// 4 for atlas
+// 5 scan data
+// 32 default gradient
+// 33 - 159 ok slices
