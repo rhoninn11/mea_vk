@@ -2,10 +2,16 @@ const std = @import("std");
 const vk = @import("vulkan-zig");
 const gfctx = @import("graphics_context.zig");
 const gftx = @import("graphics_context.zig");
-const GraphicsContext = gftx.GraphicsContext;
+const imgs = @import("imgs.zig");
 
+const GraphicsContext = gftx.GraphicsContext;
 const Allocator = std.mem.Allocator;
 const m = @import("math.zig");
+
+pub const SwapchainContext = struct {
+    gc: *const GraphicsContext,
+    imga: *imgs.LinearImageAllocator,
+};
 
 pub const Swapchain = struct {
     pub const PresentState = enum {
@@ -13,7 +19,7 @@ pub const Swapchain = struct {
         suboptimal,
     };
 
-    gc: *const GraphicsContext,
+    sc: *const SwapchainContext,
     allocator: Allocator,
 
     surface_format: vk.SurfaceFormatKHR,
@@ -22,15 +28,16 @@ pub const Swapchain = struct {
     handle: vk.SwapchainKHR,
 
     swap_images: []SwapImage,
-    depth_image: gftx.DepthImage,
+    depth_images: []imgs.DepthImage,
     image_index: u32,
     next_image_acquired: vk.Semaphore,
 
-    pub fn init(gc: *const GraphicsContext, allocator: Allocator, extent: vk.Extent2D) !Swapchain {
-        return try initRecycle(gc, allocator, extent, .null_handle);
+    pub fn init(sc: *const SwapchainContext, allocator: Allocator, extent: vk.Extent2D) !Swapchain {
+        return try initRecycle(sc, allocator, extent, .null_handle);
     }
 
-    pub fn initRecycle(gc: *const GraphicsContext, allocator: Allocator, extent: vk.Extent2D, old_handle: vk.SwapchainKHR) !Swapchain {
+    pub fn initRecycle(sc: *const SwapchainContext, allocator: Allocator, extent: vk.Extent2D, old_handle: vk.SwapchainKHR) !Swapchain {
+        const gc = sc.gc;
         const caps = try gc.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(gc.pdev, gc.surface);
         const actual_extent = findActualExtent(caps, extent);
         if (actual_extent.width == 0 or actual_extent.height == 0) {
@@ -59,7 +66,7 @@ pub const Swapchain = struct {
             .image_color_space = surface_format.color_space,
             .image_extent = actual_extent,
             .image_array_layers = 1,
-            .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
+            .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true }, // TODO: Experiment with storege texture
             .image_sharing_mode = sharing_mode,
             .queue_family_index_count = qfi.len,
             .p_queue_family_indices = &qfi,
@@ -83,6 +90,11 @@ pub const Swapchain = struct {
             for (swap_images) |si| si.deinit(gc);
             allocator.free(swap_images);
         }
+        const depth_imgs = try initDepths(gc, allocator, sc.imga, extent, @intCast(swap_images.len));
+        errdefer {
+            for (depth_imgs) |di| di.deinit(gc, sc.imga);
+            allocator.free(depth_imgs);
+        }
 
         var next_image_acquired = try gc.dev.createSemaphore(&.{}, null);
         errdefer gc.dev.destroySemaphore(next_image_acquired, null);
@@ -96,17 +108,16 @@ pub const Swapchain = struct {
             return error.ImageAcquireFailed;
         }
 
-        const depth_img = try gftx.DepthImage.init(gc, extent);
         std.mem.swap(vk.Semaphore, &swap_images[result.image_index].image_acquired, &next_image_acquired);
         return Swapchain{
-            .gc = gc,
+            .sc = sc,
             .allocator = allocator,
             .surface_format = surface_format,
             .present_mode = present_mode,
             .extent = actual_extent,
             .handle = handle,
             .swap_images = swap_images,
-            .depth_image = depth_img,
+            .depth_images = depth_imgs,
             .image_index = result.image_index,
             .next_image_acquired = next_image_acquired,
         };
@@ -114,15 +125,17 @@ pub const Swapchain = struct {
 
     fn deinitExceptSwapchain(self: Swapchain) !void {
         std.debug.print("+++ deinit exept swapchain\n", .{});
-        for (self.swap_images) |si| try si.waitForFence(self.gc);
-        for (self.swap_images) |si| si.deinit(self.gc);
-        self.depth_image.deinit(self.gc);
+        for (self.swap_images) |si| try si.waitForFence(self.sc.gc);
+        for (self.swap_images) |si| si.deinit(self.sc.gc);
         self.allocator.free(self.swap_images);
-        self.gc.dev.destroySemaphore(self.next_image_acquired, null);
+        for (self.depth_images) |di| di.deinit(self.sc.gc, self.sc.imga);
+        self.allocator.free(self.depth_images);
+
+        self.sc.gc.dev.destroySemaphore(self.next_image_acquired, null);
     }
 
     pub fn waitForAllFences(self: Swapchain) !void {
-        for (self.swap_images) |si| si.waitForFence(self.gc) catch {};
+        for (self.swap_images) |si| si.waitForFence(self.sc.gc) catch {};
     }
 
     pub fn deinit(self: Swapchain) !void {
@@ -130,11 +143,11 @@ pub const Swapchain = struct {
         if (self.handle == .null_handle) return;
 
         try self.deinitExceptSwapchain();
-        self.gc.dev.destroySwapchainKHR(self.handle, null);
+        self.sc.gc.dev.destroySwapchainKHR(self.handle, null);
     }
 
     pub fn recreate(self: *Swapchain, new_extent: vk.Extent2D) !void {
-        const gc = self.gc;
+        const gc = self.sc.gc;
         const allocator = self.allocator;
         const old_handle = self.handle;
 
@@ -144,7 +157,7 @@ pub const Swapchain = struct {
         // set current handle to NULL_HANDLE to signal that the current swapchain does no longer need to be
         // de-initialized if we fail to recreate it.
         self.handle = .null_handle;
-        self.* = initRecycle(gc, allocator, new_extent, old_handle) catch |err| switch (err) {
+        self.* = initRecycle(self.sc, allocator, new_extent, old_handle) catch |err| switch (err) {
             error.SwapchainCreationFailed => {
                 // we failed while recreating so our current handle still exists,
                 // but we won't destroy it in the deferred deinit of this object.
@@ -164,7 +177,7 @@ pub const Swapchain = struct {
     }
 
     pub fn present(self: *Swapchain, cmdbuf: vk.CommandBuffer) !PresentState {
-        const gc = self.gc;
+        const gc = self.sc.gc;
         // Simple method:
         // 1) Acquire next image
         // 2) Wait for and reset fence of the acquired image
@@ -215,15 +228,15 @@ pub const Swapchain = struct {
         }};
 
         // Step 2: Submit the command buffer
-        try self.gc.dev.queueSubmit2KHR(
-            self.gc.graphics_queue.handle,
+        try gc.dev.queueSubmit2KHR(
+            gc.graphics_queue.handle,
             render_submits,
             current.frame_fence,
         );
         // https://claude.ai/chat/398d5ba8-7355-4093-9a37-3361c5f3c45e
 
         // Step 3: Present the current frame
-        _ = try self.gc.dev.queuePresentKHR(self.gc.present_queue.handle, &.{
+        _ = try gc.dev.queuePresentKHR(gc.present_queue.handle, &.{
             .wait_semaphore_count = 1,
             .p_wait_semaphores = @ptrCast(&current.render_finished),
             .swapchain_count = 1,
@@ -232,7 +245,7 @@ pub const Swapchain = struct {
         });
 
         // Step 4: Acquire next frame
-        const result = try self.gc.dev.acquireNextImageKHR(
+        const result = try gc.dev.acquireNextImageKHR(
             self.handle,
             std.math.maxInt(u64),
             self.next_image_acquired,
@@ -250,7 +263,7 @@ pub const Swapchain = struct {
     }
 
     pub fn waitCurrentFrame(self: *Swapchain) !void {
-        return try self.currentSwapImage().waitForFence(self.gc);
+        return try self.currentSwapImage().waitForFence(self.sc.gc);
     }
 };
 
@@ -317,6 +330,7 @@ const SwapImage = struct {
 };
 
 fn initSwapchainImages(gc: *const GraphicsContext, swapchain: vk.SwapchainKHR, format: vk.Format, allocator: Allocator) ![]SwapImage {
+    // TODO: there are some special allocator for images provided by dev?
     const images = try gc.dev.getSwapchainImagesAllocKHR(swapchain, allocator);
     defer allocator.free(images);
 
@@ -332,6 +346,27 @@ fn initSwapchainImages(gc: *const GraphicsContext, swapchain: vk.SwapchainKHR, f
     }
 
     return swap_images;
+}
+
+fn initDepths(
+    gc: *const GraphicsContext,
+    gpa: Allocator,
+    imga: *imgs.LinearImageAllocator,
+    extent: vk.Extent2D,
+    n_copies: u8,
+) ![]imgs.DepthImage {
+    const d_imgs = try gpa.alloc(imgs.DepthImage, n_copies);
+    errdefer gpa.free(d_imgs);
+
+    var i: usize = 0;
+    errdefer for (d_imgs[0..i]) |di| di.deinit(gc, imga);
+
+    for (0..n_copies) |jj| {
+        d_imgs[jj] = try imgs.DepthImage.init(gc, imga, extent);
+        i += 1;
+    }
+
+    return d_imgs;
 }
 
 fn findSurfaceFormat(gc: *const GraphicsContext, allocator: Allocator) !vk.SurfaceFormatKHR {

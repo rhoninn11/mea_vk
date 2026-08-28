@@ -5,12 +5,14 @@ const glfw = @import("third_party/glfw.zig");
 const vk = @import("vulkan-zig");
 const input = @import("input.zig");
 const sdlh = @import("sdlh.zig");
+const imgs = @import("imgs.zig");
 
 pub const EasyAcces = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
     host: DualHostWin,
     gm: *const gm.GraphicsContext,
+    imga: *imgs.LinearImageAllocator,
 };
 
 pub const OnHostErrors = error{
@@ -71,15 +73,24 @@ pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
     const sdl_ctx = sdlh.getContext();
     // sdl_ctx.should_close = true; // DEBUG SPOT
 
-    const vkctx_sdl = try gm.GraphicsContext.initUnderSdl(init.gpa, sdl_name, sdl_ctx.window.?);
-    defer vkctx_sdl.deinit();
+    const main_gc = try gm.GraphicsContext.initUnderSdl(init.gpa, sdl_name, sdl_ctx.window.?);
+    defer main_gc.deinit();
 
-    std.log.debug("Using device: {s}", .{vkctx_sdl.deviceName()});
+    var imga = try imgs.LinearImageAllocator.init(&main_gc, .{ .device_local_bit = true });
+    defer imga.deinit(&main_gc);
+
+    std.log.debug("Using device: {s}", .{main_gc.deviceName()});
     const access = EasyAcces{
         .host = .{ .sdl_h = sdl_ctx },
-        .gm = &vkctx_sdl,
+        .gm = &main_gc,
         .gpa = init.gpa,
         .io = init.io,
+        .imga = &imga,
     };
-    return passenger(access);
+
+    passenger(access) catch |err| {
+        std.debug.print("passanger error {s}\n", .{@errorName(err)});
+    };
+
+    std.debug.print("+++ leaving host\n", .{});
 }

@@ -38,8 +38,8 @@ pub const DbgMonitor = struct {
         try scratchpad.print("--- {s: <12}: \x1b[31m{d}\x1b[0m\n", .{ "phi", current.phi });
         try scratchpad.print("--- {s: <12}: \x1b[32m{d}\x1b[0m\n", .{ "inst_num", current.inst_num });
         try scratchpad.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "observer", current.observer_pos });
-        try scratchpad.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "window w", current.win_size.width });
-        try scratchpad.print("--- {s: <12}: \x1b[33m{}\x1b[0m\n", .{ "window h", current.win_size.height });
+        try scratchpad.print("--- {s: <12}: \x1b[33m{} x {}\x1b[0m\n", //
+            .{ "window", current.win_size.width, current.win_size.height });
         try scratchpad.print("---------------\n", .{});
         lines += try sdlh.pointerInfo("---", scratchpad);
         try scratchpad.print("---------------\n", .{});

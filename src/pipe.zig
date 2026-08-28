@@ -111,24 +111,28 @@ fn blending(brush: EBrush) vk.PipelineColorBlendAttachmentState {
     };
     const blend_config = switch (brush) {
         .triangle, .sprite, .dsprite => vk.PipelineColorBlendAttachmentState{
+            .color_write_mask = color_components,
             .blend_enable = .false,
+
+            .color_blend_op = .add,
             .src_color_blend_factor = .one,
             .dst_color_blend_factor = .zero,
-            .color_blend_op = .add,
+
+            .alpha_blend_op = .add,
             .src_alpha_blend_factor = .one,
             .dst_alpha_blend_factor = .zero,
-            .alpha_blend_op = .add,
-            .color_write_mask = color_components,
         },
         .fontsdf => vk.PipelineColorBlendAttachmentState{
+            .color_write_mask = color_components,
             .blend_enable = .true,
+
+            .color_blend_op = .add,
             .src_color_blend_factor = .src_alpha,
             .dst_color_blend_factor = .one_minus_src_alpha,
-            .color_blend_op = .add,
+
+            .alpha_blend_op = .add,
             .src_alpha_blend_factor = .one,
             .dst_alpha_blend_factor = .one_minus_src_alpha,
-            .alpha_blend_op = .add,
-            .color_write_mask = color_components,
         },
     };
     return blend_config;
@@ -256,6 +260,7 @@ pub fn createRenderPass(gc: *const gm.GraphicsContext, color_format: vk.Format, 
         .stencil_store_op = .dont_care,
         .initial_layout = .undefined,
         .final_layout = .present_src_khr,
+        // .final_layout = .transfer_src_optimal,
     };
     // const depth_attachment = vk.AttachmentDescription{};
     const depth_attachment = vk.AttachmentDescription{
@@ -286,7 +291,7 @@ pub fn createRenderPass(gc: *const gm.GraphicsContext, color_format: vk.Format, 
     };
 
     const subpass_dependency = vk.SubpassDependency{
-        .dst_subpass = 0,
+        // Na co czekam
         .src_subpass = vk.SUBPASS_EXTERNAL,
         .src_stage_mask = .{
             .color_attachment_output_bit = true,
@@ -295,6 +300,8 @@ pub fn createRenderPass(gc: *const gm.GraphicsContext, color_format: vk.Format, 
         .src_access_mask = .{
             .depth_stencil_attachment_write_bit = true,
         },
+        // co wstrzymuję u siebie
+        .dst_subpass = 0,
         .dst_stage_mask = .{
             .color_attachment_output_bit = true,
             .early_fragment_tests_bit = true,

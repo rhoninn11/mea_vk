@@ -15,9 +15,10 @@ const Allocator = std.mem.Allocator;
 
 const swpchn = @import("swapchain.zig");
 
-const required_layer_names = [_][*:0]const u8{"VK_LAYER_KHRONOS_validation"};
+const required_layer_names = [_][*:0]const u8{
+    "VK_LAYER_KHRONOS_validation",
+};
 
-// TODO: https://claude.ai/chat/a8727d87-0510-44f0-a8af-664e93844a26
 const required_device_extensions = [_][*:0]const u8{
     vk.extensions.khr_swapchain.name,
     vk.extensions.khr_synchronization_2.name,
@@ -65,7 +66,6 @@ pub const DrawInfo = struct {
 };
 
 const imgs = @import("imgs.zig");
-pub const DepthImage = imgs.DepthImage;
 pub const RGBImage = imgs.RGBImage;
 pub const VkImage = imgs.VkImage;
 
@@ -90,7 +90,7 @@ pub const OneShotCommanded = struct {
 
         vkdev.freeCommandBuffers(self.pic.pool, &.{self.cmds});
     }
-    pub fn init(pic: *const PoolInCtx) !OneShotCommanded {
+    pub fn init(pic: *const PoolInCtx, len: u8) !OneShotCommanded {
         const vkd = pic.gc.dev;
         var cmds: vk.CommandBuffer = undefined;
 
@@ -98,7 +98,7 @@ pub const OneShotCommanded = struct {
             .s_type = .command_buffer_allocate_info,
             .command_pool = pic.pool,
             .level = .primary,
-            .command_buffer_count = 1,
+            .command_buffer_count = len,
         };
         try vkd.allocateCommandBuffers(
             &cb_alloc_info,
@@ -188,7 +188,7 @@ pub fn uploadVertices(pic: *const PoolInCtx, buffer: vk.Buffer, vert_slice: []co
 
 fn copyBuffer(pic: *const PoolInCtx, dst: vk.Buffer, src: vk.Buffer, size: vk.DeviceSize) !void {
     const vkdev = pic.gc.dev;
-    const one_shot = try OneShotCommanded.init(pic);
+    const one_shot = try OneShotCommanded.init(pic, 1);
     const region = &.{vk.BufferCopy{
         .src_offset = 0,
         .dst_offset = 0,
@@ -228,7 +228,7 @@ pub const FrameRecorder = struct {
 };
 
 pub const GraphicsContext = struct {
-    const enable_validation = false;
+    const deeper_validation = true;
     pub const CommandBuffer = vk.CommandBufferProxy;
     const Self = @This();
 
@@ -247,50 +247,15 @@ pub const GraphicsContext = struct {
     graphics_queue: Queue,
     present_queue: Queue,
 
-    fn getExtNamesList(gpa: Allocator) !std.ArrayList([*:0]const u8) {
-        var extension_names: std.ArrayList([*:0]const u8) = .empty;
-        errdefer extension_names.deinit(gpa);
-        try extension_names.append(gpa, vk.extensions.ext_debug_utils.name);
-        // try extension_names.append(allocator, vk.extensions.khr_portability_enumeration.name); //for apple
-        try extension_names.append(gpa, vk.extensions.khr_get_physical_device_properties_2.name);
-        try extension_names.appendSlice(gpa, try sdl.vulkan.getInstanceExtensions());
-        // try extension_names.append(gpa, vk.extensions.ext_validation_features);
+    pub fn deinit(self: Self) void {
+        self.dev.destroyDevice(null);
+        self.instance.destroySurfaceKHR(self.surface, null);
+        self.instance.destroyDebugUtilsMessengerEXT(self.debug_messenger, null);
+        self.instance.destroyInstance(null);
 
-        for (extension_names.items) |name| {
-            std.debug.print("+++ we are looking for {s} exension\n", .{name});
-        }
-        return extension_names;
-    }
-
-    fn validationFeatures() vk.ValidationFeaturesEXT {
-        const v_enables: []const vk.ValidationFeatureEnableEXT = &.{
-            .gpu_assisted_ext,
-            .synchronization_validation_ext,
-            .best_practices_ext,
-        };
-
-        return vk.ValidationFeaturesEXT{
-            .enabled_validation_feature_count = m.u32cast(v_enables.len),
-            .p_enabled_validation_features = v_enables.ptr,
-        };
-    }
-
-    fn setupDebug(self: *Self) !void {
-        self.debug_messenger = try self.instance.createDebugUtilsMessengerEXT(&.{
-            .message_severity = .{
-                //.verbose_bit_ext = true,
-                //.info_bit_ext = true,
-                .warning_bit_ext = true,
-                .error_bit_ext = true,
-            },
-            .message_type = .{
-                .general_bit_ext = true,
-                .validation_bit_ext = true,
-                .performance_bit_ext = true,
-            },
-            .pfn_user_callback = &debugUtilsMessengerCallback,
-            .p_user_data = null,
-        }, null);
+        // Don't forget to free the tables to prevent a memory leak.
+        self.allocator.destroy(self.dev.wrapper);
+        self.allocator.destroy(self.instance.wrapper);
     }
 
     pub fn initUnderSdl(gpa: Allocator, app_name: [*:0]const u8, window: sdl.video.Window) !GraphicsContext {
@@ -313,7 +278,7 @@ pub const GraphicsContext = struct {
         const validation_features = validationFeatures();
 
         const instance = try self.vkb.createInstance(&.{
-            .p_next = if (Self.enable_validation) &validation_features else null,
+            .p_next = if (Self.deeper_validation) &validation_features else null,
             .p_application_info = &appInfo(app_name),
 
             .enabled_layer_count = required_layer_names.len,
@@ -355,6 +320,51 @@ pub const GraphicsContext = struct {
         try self.propsExplore();
 
         return self;
+    }
+
+    fn getExtNamesList(gpa: Allocator) !std.ArrayList([*:0]const u8) {
+        var extension_names: std.ArrayList([*:0]const u8) = .empty;
+        errdefer extension_names.deinit(gpa);
+        try extension_names.append(gpa, vk.extensions.ext_debug_utils.name);
+        // try extension_names.append(allocator, vk.extensions.khr_portability_enumeration.name); //for apple
+        try extension_names.appendSlice(gpa, try sdl.vulkan.getInstanceExtensions());
+        // try extension_names.append(gpa, vk.extensions.ext_validation_features);
+
+        for (extension_names.items) |name| {
+            std.debug.print("+++ we are looking for {s} exension\n", .{name});
+        }
+        return extension_names;
+    }
+
+    fn validationFeatures() vk.ValidationFeaturesEXT {
+        const v_enables: []const vk.ValidationFeatureEnableEXT = &.{
+            .gpu_assisted_ext,
+            .synchronization_validation_ext,
+            .best_practices_ext,
+        };
+
+        return vk.ValidationFeaturesEXT{
+            .enabled_validation_feature_count = m.u32cast(v_enables.len),
+            .p_enabled_validation_features = v_enables.ptr,
+        };
+    }
+
+    fn setupDebug(self: *Self) !void {
+        self.debug_messenger = try self.instance.createDebugUtilsMessengerEXT(&.{
+            .message_severity = .{
+                //.verbose_bit_ext = true,
+                //.info_bit_ext = true,
+                .warning_bit_ext = true,
+                .error_bit_ext = true,
+            },
+            .message_type = .{
+                .general_bit_ext = true,
+                .validation_bit_ext = true,
+                .performance_bit_ext = true,
+            },
+            .pfn_user_callback = &debugUtilsMessengerCallback,
+            .p_user_data = null,
+        }, null);
     }
 
     pub fn appInfo(app_name: [*:0]const u8) vk.ApplicationInfo {
@@ -416,17 +426,6 @@ pub const GraphicsContext = struct {
         std.debug.assert(lim.max_push_constants_size > 128);
     }
 
-    pub fn deinit(self: GraphicsContext) void {
-        self.dev.destroyDevice(null);
-        self.instance.destroySurfaceKHR(self.surface, null);
-        self.instance.destroyDebugUtilsMessengerEXT(self.debug_messenger, null);
-        self.instance.destroyInstance(null);
-
-        // Don't forget to free the tables to prevent a memory leak.
-        self.allocator.destroy(self.dev.wrapper);
-        self.allocator.destroy(self.instance.wrapper);
-    }
-
     pub fn deviceName(self: *const GraphicsContext) []const u8 {
         return std.mem.sliceTo(&self.props.device_name, 0);
     }
@@ -442,10 +441,11 @@ pub const GraphicsContext = struct {
     }
 
     pub fn allocate(self: GraphicsContext, requirements: vk.MemoryRequirements, flags: vk.MemoryPropertyFlags) !vk.DeviceMemory {
+        const mem_type_idx = try self.findMemoryTypeIndex(requirements.memory_type_bits, flags);
         return try self.dev.allocateMemory(&.{
             .s_type = .memory_allocate_info,
             .allocation_size = requirements.size,
-            .memory_type_index = try self.findMemoryTypeIndex(requirements.memory_type_bits, flags),
+            .memory_type_index = mem_type_idx,
         }, null);
     }
 };
@@ -882,36 +882,44 @@ pub const baked = struct {
     pub const undefined_to_transfered: t.TransitPrep = .{
         .accesses = .{
             .src = .{},
-            .dst = .{
-                .transfer_write_bit = true,
-            },
+            .dst = .{ .transfer_write_bit = true },
         },
         .stages = .{
-            .src = .{
-                .top_of_pipe_bit = true,
-            },
-            .dst = .{
-                .transfer_bit = true,
-            },
+            .src = .{ .top_of_pipe_bit = true },
+            .dst = .{ .transfer_bit = true },
         },
     };
 
     pub const transfered_to_fragment_readed: t.TransitPrep = .{
         .accesses = .{
-            .src = .{
-                .transfer_write_bit = true,
-            },
-            .dst = .{
-                .shader_read_bit = true,
-            },
+            .src = .{ .transfer_write_bit = true },
+            .dst = .{ .shader_read_bit = true },
         },
         .stages = .{
-            .src = .{
-                .transfer_bit = true,
-            },
-            .dst = .{
-                .fragment_shader_bit = true,
-            },
+            .src = .{ .transfer_bit = true },
+            .dst = .{ .fragment_shader_bit = true },
+        },
+    };
+
+    pub const undefined_to_transfered_2: t.SyncPrep = .{
+        .src = .{
+            .access = .{},
+            .stage = .{ .top_of_pipe_bit = true },
+        },
+        .dst = .{
+            .access = .{ .transfer_write_bit = true },
+            .stage = .{ .transfer_bit = true },
+        },
+    };
+
+    pub const transfered_to_fragment_readed_2: t.SyncPrep = .{
+        .src = .{
+            .access = .{ .transfer_write_bit = true },
+            .stage = .{ .transfer_bit = true },
+        },
+        .dst = .{
+            .access = .{ .shader_read_bit = true },
+            .stage = .{ .fragment_shader_bit = true },
         },
     };
 

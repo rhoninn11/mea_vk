@@ -435,8 +435,8 @@ pub const LookingGlass = struct {
 
         if (inst_idx > 0) {
             @memcpy(instances + group.base, scratchpad[0..inst_idx]);
-            group.num = inst_idx;
         }
+        group.num = inst_idx;
     }
 
     // TODO: making some space

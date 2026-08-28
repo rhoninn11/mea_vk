@@ -9,7 +9,7 @@ const shu = @import("shaders/utils.zig");
 const gm = @import("graphics_context.zig");
 
 const GraphicsContext = @import("graphics_context.zig").GraphicsContext;
-const Swapchain = @import("swapchain.zig").Swapchain;
+const swap = @import("swapchain.zig");
 const a = @import("addons.zig");
 const d = @import("debug.zig");
 const dset = @import("dset.zig");
@@ -124,7 +124,7 @@ fn theDeepest(access: EasyAcces) !void {
     navig.scann_aspect = navig.aspectScale();
 
     //vk related
-    var swapchain_len: u8 = undefined;
+    var inflight_num: u8 = undefined;
 
     const gpa = access.gpa;
     const gc = access.gm;
@@ -132,11 +132,16 @@ fn theDeepest(access: EasyAcces) !void {
 
     var resolution_extent = try window.winExtent();
 
-    var swapchain = try Swapchain.init(gc, gpa, resolution_extent);
+    const swap_ctx: swap.SwapchainContext = .{
+        .gc = access.gm,
+        .imga = access.imga,
+    };
+
+    var swapchain = try swap.Swapchain.init(&swap_ctx, gpa, resolution_extent);
     defer swapchain.deinit() catch std.debug.print("... well swapchaing deinit failed\n", .{});
 
-    swapchain_len = @intCast(swapchain.swap_images.len);
-    std.debug.print("+++ Serial frames {}\n", .{swapchain_len});
+    inflight_num = @intCast(swapchain.swap_images.len);
+    std.debug.print("+++ Serial frames {}\n", .{inflight_num});
 
     const general_cpool = try gpCommandQueue(gc);
     defer gc.dev.destroyCommandPool(general_cpool, null);
@@ -169,7 +174,7 @@ fn theDeepest(access: EasyAcces) !void {
     const storage_b_sz = @sizeOf(sht.SmolInst) * instpool_num;
     _ = storage_b_sz;
     const lazy_opt: dset.ShadyGroup.Options = .{
-        .swapchain_lan = swapchain_len,
+        .swapchain_lan = inflight_num,
         .atlas_size = ATLAS_MAX,
         .ubo_size = @sizeOf(sht.GroupData),
         .storag_size = @sizeOf(sht.PerInstance) * instpool_num,
@@ -181,7 +186,7 @@ fn theDeepest(access: EasyAcces) !void {
     const render_pass = try pipe.createRenderPass(
         gc,
         swapchain.surface_format.format,
-        swapchain.depth_image.vk_format,
+        swapchain.depth_images[0].vk_format,
     );
     defer gc.dev.destroyRenderPass(render_pass, null);
 
@@ -309,22 +314,22 @@ fn theDeepest(access: EasyAcces) !void {
 
     // For frame recording
     const inflight_slots = 8;
-    std.debug.assert(swapchain_len < inflight_slots);
+    std.debug.assert(inflight_num < inflight_slots);
 
     // recorders
     var slot: u8 = 0;
     var inflight_stack: [1024]u8 = undefined;
     var loc_stack: std.heap.FixedBufferAllocator = .init(inflight_stack[0..1024]);
     var loc_fba = loc_stack.allocator();
-    const cmdbufs: []vk.CommandBuffer = try loc_fba.alloc(vk.CommandBuffer, swapchain_len);
-    const pools: []vk.CommandPool = try loc_fba.alloc(vk.CommandPool, swapchain_len);
-    const recorders: []gm.FrameRecorder = try loc_fba.alloc(gm.FrameRecorder, swapchain_len);
+    const cmdbufs: []vk.CommandBuffer = try loc_fba.alloc(vk.CommandBuffer, inflight_num);
+    const pools: []vk.CommandPool = try loc_fba.alloc(vk.CommandPool, inflight_num);
+    const recorders: []gm.FrameRecorder = try loc_fba.alloc(gm.FrameRecorder, inflight_num);
     const frame_cmd_pool_cfg: vk.CommandPoolCreateInfo = .{
         .queue_family_index = gc.graphics_queue.family,
         .flags = .{ .transient_bit = true },
     };
 
-    for (0..swapchain_len) |_| {
+    for (0..inflight_num) |_| {
         pools[slot] = try gc.dev.createCommandPool(&frame_cmd_pool_cfg, null);
         recorders[slot] = gm.FrameRecorder{
             .id = @intCast(slot),
@@ -341,7 +346,7 @@ fn theDeepest(access: EasyAcces) !void {
     var timeline1 = a.Timeline.init(access.io);
     time_glob = &timeline;
     var perf_stats = a.PerfStats.init(access.io);
-    var vk_state: Swapchain.PresentState = .optimal;
+    var vk_state: swap.Swapchain.PresentState = .optimal;
 
     const s_interval = std.time.us_per_s;
     timeline1.arm(s_interval * 0.5);
@@ -523,7 +528,6 @@ fn theDeepest(access: EasyAcces) !void {
         };
 
         {
-            errdefer std.debug.print("!?! problem in this scope \n", .{});
             try refils.unifomRefil(
                 uniforms,
                 timeline1.total_s,
@@ -601,7 +605,7 @@ fn theDeepest(access: EasyAcces) !void {
 
         const cmdbuf = cmdbufs[swapchain.image_index];
         vk_state = swapchain.present(cmdbuf) catch |err| switch (err) {
-            error.OutOfDateKHR => Swapchain.PresentState.suboptimal,
+            error.OutOfDateKHR => swap.Swapchain.PresentState.suboptimal,
             else => |narrow| {
                 std.debug.print("+++ some other presentation error {s}\n", .{@errorName(narrow)});
                 return narrow;
@@ -613,7 +617,7 @@ fn theDeepest(access: EasyAcces) !void {
     try gc.dev.deviceWaitIdle();
 }
 
-fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_pass: vk.RenderPass, swapchain: Swapchain) ![]vk.Framebuffer {
+fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_pass: vk.RenderPass, swapchain: swap.Swapchain) ![]vk.Framebuffer {
     const framebuffers = try allocator.alloc(vk.Framebuffer, swapchain.swap_images.len);
     errdefer allocator.free(framebuffers);
 
@@ -623,7 +627,7 @@ fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_p
     for (framebuffers) |*fb| {
         const att_arr: []const vk.ImageView = &.{
             swapchain.swap_images[i].view,
-            swapchain.depth_image.dvk_img_view,
+            swapchain.depth_images[i].dvk_img_view,
         };
 
         fb.* = try gc.dev.createFramebuffer(&.{
