@@ -2,7 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan-zig");
 const gfctx = @import("graphics_context.zig");
 const gftx = @import("graphics_context.zig");
-const imgs = @import("imgs.zig");
+const imgs = @import("imgs/imgs.zig");
 
 const GraphicsContext = gftx.GraphicsContext;
 const Allocator = std.mem.Allocator;

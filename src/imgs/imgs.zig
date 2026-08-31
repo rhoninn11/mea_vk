@@ -1,174 +1,27 @@
 const std = @import("std");
 const vk = @import("vulkan-zig");
-const gm = @import("graphics_context.zig");
+
+const t = @import("../types.zig");
+const m = @import("../math.zig");
+const swpchn = @import("../swapchain.zig");
+const sht = @import("../shaders/types.zig");
+const shut = @import("../shaders/utils.zig");
+
+const gm = @import("../graphics_context.zig");
 const GraphicsContext = gm.GraphicsContext;
 
-const t = @import("types.zig");
-const m = @import("math.zig");
-const swpchn = @import("swapchain.zig");
-const sht = @import("shaders/types.zig");
-const shut = @import("shaders/utils.zig");
-
+const root = @import("root.zig");
+const memory = @import("memory.zig");
+pub const demo_tex_size = root.demo_tex_r;
 // Checkboard texture spawned in memory
-const pixel_size = 4;
-const field_x_side = 16;
-const field_y_side = 4;
+pub const demo_tex_rgb = root.demo_tex_rgb;
+// Just red
+pub const demo_tex_r = root.demo_tex_r;
 
-const m_img_side = 64;
-pub const demo_tex_size = (m_img_side * m_img_side) * pixel_size;
-pub const demo_tex_rgb = blk: {
-    const spot_num = m_img_side * m_img_side;
-    var lut: [spot_num * pixel_size]u8 = undefined;
-    const colors: []const [pixel_size]u8 = &.{
-        .{ 255, 255, 255, 255 },
-        .{ 128, 128, 128, 255 },
-    };
-    @setEvalBranchQuota(spot_num);
-    for (0..spot_num) |i| {
-        const at = i * pixel_size;
-        const row = i / m_img_side;
-        const a = if (@mod(row, field_x_side * 2) < field_x_side) 0 else 1;
-        const b = 1 - a;
-
-        var pixel: [pixel_size]u8 = colors[a];
-        if (@mod(i, field_y_side * 2) < field_y_side) {
-            pixel = colors[b];
-        }
-
-        @memcpy(lut[at .. at + 4], &pixel);
-    }
-    break :blk lut;
-};
-pub const demo_tex_r = blk: {
-    const spot_num = m_img_side * m_img_side;
-    var lut: [spot_num * pixel_size]u8 = undefined;
-    const uniform_color: [pixel_size]u8 = .{ 255, 0, 0, 255 };
-
-    @setEvalBranchQuota(spot_num);
-    for (0..spot_num) |i| {
-        const at = i * pixel_size;
-        @memcpy(lut[at .. at + 4], &uniform_color);
-    }
-    break :blk lut;
-};
-
+pub const LinearImageAllocator = memory.LinearImageAllocator;
 pub fn imgMemTypeInfer(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags) !u32 {
-    const img_extent: vk.Extent3D = .{ .height = 64, .width = 64, .depth = 1 };
-
-    const Pair = struct { usage: vk.ImageUsageFlags, format: vk.Format };
-    const configs: []const Pair = &.{
-        Pair{
-            .format = .d32_sfloat,
-            .usage = .{
-                .depth_stencil_attachment_bit = true,
-                .transfer_src_bit = true,
-            },
-        },
-        Pair{
-            .format = .a8b8g8r8_srgb_pack32,
-            .usage = .{
-                .color_attachment_bit = true,
-                .transfer_src_bit = true,
-            },
-        },
-    };
-
-    var reqs: [configs.len]vk.MemoryRequirements = undefined;
-
-    var base: vk.ImageCreateInfo = .{
-        .image_type = .@"2d",
-        .format = undefined,
-        .extent = img_extent,
-        .tiling = .optimal,
-        .mip_levels = 1,
-        .array_layers = 1,
-        .samples = .{ .@"1_bit" = true },
-        .usage = undefined,
-        .sharing_mode = .exclusive,
-        .initial_layout = .undefined,
-    };
-
-    for (0.., configs) |i, config| {
-        base.usage = config.usage;
-        base.format = config.format;
-
-        const img = try gc.dev.createImage(&base, null);
-        defer gc.dev.destroyImage(img, null);
-
-        reqs[i] = gc.dev.getImageMemoryRequirements(img);
-    }
-
-    const basic_type_idx = try gc.findMemoryTypeIndex(reqs[0].memory_type_bits, flags);
-
-    for (reqs) |req| {
-        const type_idx = try gc.findMemoryTypeIndex(req.memory_type_bits, flags);
-        if (basic_type_idx != type_idx) {
-            return error.different_images_uses_different_memory_type;
-        }
-    }
-    return basic_type_idx;
+    return memory.imgMemTypeInfer(gc, flags);
 }
-
-pub const LinearImageAllocator = struct {
-    dev_mem: vk.DeviceMemory,
-    mem_idx: u32,
-
-    // book keeping
-    img_count: u32 = 0,
-    beg: u64 = 0,
-    end: u64 = 0,
-    total: u64,
-
-    pub fn deinit(self: *const LinearImageAllocator, gc: *const GraphicsContext) void {
-        gc.dev.freeMemory(self.dev_mem, null);
-    }
-
-    pub fn init(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags) !LinearImageAllocator {
-        const mem_idx = try imgMemTypeInfer(gc, flags);
-        const total_size = 256 * 1024 * 1024; //256 MB
-        const mem = try gc.dev.allocateMemory(&.{
-            .s_type = .memory_allocate_info,
-
-            .allocation_size = total_size,
-            .memory_type_index = mem_idx,
-        }, null);
-
-        return LinearImageAllocator{
-            .dev_mem = mem,
-            .mem_idx = mem_idx,
-            .total = total_size,
-        };
-    }
-
-    pub fn imgAlloc(self: *LinearImageAllocator, gc: *const GraphicsContext, img: vk.Image) !void {
-        const new_img_reqs = gc.dev.getImageMemoryRequirements(img);
-
-        const missed_by: u64 = @mod(self.end, new_img_reqs.alignment);
-
-        if (missed_by != 0) {
-            self.end += (new_img_reqs.alignment - missed_by);
-        }
-
-        const beg_of_alloc = self.end;
-        const end_of_alloc = beg_of_alloc + new_img_reqs.size;
-        if (end_of_alloc > self.total) {
-            return error.OutOfMemory;
-        }
-
-        std.debug.print("new img alloc at 0x{x} of bytes {d}\n", .{ beg_of_alloc, new_img_reqs.size });
-
-        try gc.dev.bindImageMemory(img, self.dev_mem, beg_of_alloc);
-        self.img_count += 1;
-        self.end = end_of_alloc;
-    }
-
-    pub fn imgFree(self: *LinearImageAllocator, img: vk.Image) void {
-        _ = self;
-        _ = img;
-
-        std.debug.print("yes yes we dealocating xD\n", .{});
-    }
-};
 
 pub const DepthImage = struct {
     const Self = @This();
@@ -192,8 +45,6 @@ pub const DepthImage = struct {
         const devk = gc.dev;
         const depth_format = try Self.getDepthFormat(gc);
         _ = hasSetncilComponent(depth_format);
-
-        std.debug.print("8888888 depth format is {s}\n", .{@tagName(depth_format)});
 
         const d_img_create_info: vk.ImageCreateInfo = .{
             .image_type = .@"2d",

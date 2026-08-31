@@ -65,7 +65,7 @@ pub const DrawInfo = struct {
     }
 };
 
-const imgs = @import("imgs.zig");
+const imgs = @import("imgs/imgs.zig");
 pub const RGBImage = imgs.RGBImage;
 pub const VkImage = imgs.VkImage;
 
@@ -228,7 +228,7 @@ pub const FrameRecorder = struct {
 };
 
 pub const GraphicsContext = struct {
-    const deeper_validation = true;
+    const deeper_validation = false;
     pub const CommandBuffer = vk.CommandBufferProxy;
     const Self = @This();
 

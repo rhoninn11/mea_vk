@@ -22,7 +22,7 @@ const u = @import("utils.zig");
 
 const map = @import("map.zig");
 const phys = @import("phys.zig");
-const imgs = @import("imgs.zig");
+const imgs = @import("imgs/imgs.zig");
 const refils = @import("refills.zig");
 const oklab = @import("oklab.zig");
 

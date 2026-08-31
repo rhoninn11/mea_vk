@@ -5,7 +5,7 @@ const glfw = @import("third_party/glfw.zig");
 const vk = @import("vulkan-zig");
 const input = @import("input.zig");
 const sdlh = @import("sdlh.zig");
-const imgs = @import("imgs.zig");
+const imgs = @import("imgs/imgs.zig");
 
 pub const EasyAcces = struct {
     io: std.Io,
