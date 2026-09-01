@@ -8,11 +8,13 @@ pub const Group = enum(u16) {
 };
 
 const sz2k = 2048;
-const sz4k = 4096;
+pub const sz4k = 4096;
 const sz6k = sz2k + sz4k;
+const sz8k = 8192;
 const szblk = 128;
 const why_text_here = sz4k + 512;
 
+pub const total = sz8k;
 pub const Range = struct { beg: u16, end: u16 };
 pub const instablo: std.enums.EnumArray(Group, Range) = .init(.{
     .cubes = .{ .beg = 0, .end = sz4k - 1 },

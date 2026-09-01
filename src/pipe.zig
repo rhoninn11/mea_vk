@@ -138,6 +138,7 @@ fn blending(brush: EBrush) vk.PipelineColorBlendAttachmentState {
     return blend_config;
 }
 
+// vulkan monstrocities
 fn restOfPipeline(
     pssci: []const vk.PipelineShaderStageCreateInfo,
     gc: *const gm.GraphicsContext,

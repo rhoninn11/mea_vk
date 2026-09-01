@@ -74,6 +74,7 @@ var state: frame.FrameState = .{
     .ok_group = .{ .base = map.instablo.get(.okg).beg, .num = OK_SWEEP },
     .char_group = .{ .base = map.instablo.get(.text).beg, .num = 0 },
     .layer_group = .{ .base = map.instablo.get(.layer).beg, .num = 0 },
+    .grig_group = .{ .base = map.instablo.get(.cubes).beg, .num = 0 },
     .nav = &navig,
 };
 
@@ -229,9 +230,9 @@ fn theDeepest(access: EasyAcces) !void {
     var repo = try vertex.repoSpawn(gpa, &pic);
     defer repo.deinit(gc);
     std.debug.print("+++ total verts {d}\n", .{repo.total});
+    state.grig_group.num = grid.total;
 
     const draw_instanced_attempt: gm.DrawInfo = .{
-        .instance_count = grid.total, // TODO: something like "InstanceMapping"...
         .pipeline = pipelines,
         .pipeline_layout = pipeline_layout,
         .uniform_dsets = lazy_shady.uniforms.d_set_arr,

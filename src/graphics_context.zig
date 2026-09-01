@@ -47,7 +47,6 @@ const Instance = vk.InstanceProxy;
 const Device = vk.DeviceProxy;
 
 pub const DrawInfo = struct {
-    instance_count: u32,
     pipeline: [4]vk.Pipeline,
     pipeline_layout: vk.PipelineLayout,
     models: *const v.VertRepo,
@@ -453,7 +452,7 @@ pub const GraphicsContext = struct {
 // up to 128 bytes of cheep control data
 pub const PushConstant = struct {
     pub const PCBlob = struct {
-        model: m.mat4,
+        model: m.mat4 = m.matIden().mat,
         inst_base: u32 = 0,
         tex_base: u32 = 0,
         mode: u32 = 0,

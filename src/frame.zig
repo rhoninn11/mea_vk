@@ -28,6 +28,7 @@ pub const FrameState = struct {
     ok_group: InstGroup,
     char_group: InstGroup,
     layer_group: InstGroup,
+    grig_group: InstGroup,
     nav: *const a.Navig,
 };
 
@@ -165,14 +166,12 @@ pub fn recordFrame(
             hl_cmds.dynUboDsets(all_sets, ubo_slot);
             hl_cmds.use(.triangle);
             {
-                const geopush = gm.PushConstant.PCBlob{
-                    .model = m.matTrans(.{ 0, 0, 0 }).mat,
-                    // triangle mode ???
-                };
-
-                hl_cmds.push(&geopush);
                 const selectable: v.EMesh = std.enums.fromInt(v.EMesh, state.model_idx) orelse v.EMesh.cube;
-                hl_cmds.drawInsances(selectable, draw.instance_count); // grid
+                const gridpush = gm.PushConstant.PCBlob{
+                    .inst_base = state.grig_group.base,
+                };
+                hl_cmds.push(&gridpush);
+                hl_cmds.drawInsances(selectable, state.grig_group.num); // grid
 
                 if (state.layer_group.num > 0) {
                     const layerpush = gm.PushConstant.PCBlob{

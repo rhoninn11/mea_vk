@@ -73,16 +73,25 @@ pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
     const sdl_ctx = sdlh.getContext();
     // sdl_ctx.should_close = true; // DEBUG SPOT
 
-    const main_gc = try gm.GraphicsContext.initUnderSdl(init.gpa, sdl_name, sdl_ctx.window.?);
-    defer main_gc.deinit();
+    const g_context = try gm.GraphicsContext.initUnderSdl(
+        init.gpa,
+        sdl_name,
+        sdl_ctx.window.?,
+    );
+    defer g_context.deinit();
 
-    var imga = try imgs.LinearImageAllocator.init(&main_gc, .{ .device_local_bit = true });
-    defer imga.deinit(&main_gc);
+    var imga = try imgs.LinearImageAllocator.init(
+        init.gpa,
+        &g_context,
+        .{ .device_local_bit = true },
+    );
+    defer imga.deinit(&g_context);
+    // imga.verbose = true;
 
-    std.log.debug("Using device: {s}", .{main_gc.deviceName()});
+    std.log.debug("Using device: {s}", .{g_context.deviceName()});
     const access = EasyAcces{
         .host = .{ .sdl_h = sdl_ctx },
-        .gm = &main_gc,
+        .gm = &g_context,
         .gpa = init.gpa,
         .io = init.io,
         .imga = &imga,

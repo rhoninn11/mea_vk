@@ -55,27 +55,40 @@ pub fn imgMemTypeInfer(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags
 }
 
 const std = @import("std");
+const Shelf = std.AutoHashMap(vk.Image, SpotInfo);
 
-const ImgShelf = struct {
-    img: vk.Image,
+const SpotInfo = struct {
     block_size: u16,
 };
 
 pub const LinearImageAllocator = struct {
+    const max_elements: comptime_int = 256;
+    const Self = @This();
+
+    dev_mem_idx: u32,
     dev_mem: vk.DeviceMemory,
-    mem_idx: u32,
+
+    alloc: std.mem.Allocator,
+    store: Shelf,
+    stored_elements: u8 = 0,
 
     // book keeping
-    img_count: u32 = 0,
     beg: u64 = 0,
     end: u64 = 0,
     total: u64,
 
-    pub fn deinit(self: *const LinearImageAllocator, gc: *const GraphicsContext) void {
+    verbose: bool = false,
+
+    pub fn deinit(self: *LinearImageAllocator, gc: *const GraphicsContext) void {
         gc.dev.freeMemory(self.dev_mem, null);
+        self.store.deinit();
     }
 
-    pub fn init(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags) !LinearImageAllocator {
+    pub fn init(
+        gpa: std.mem.Allocator,
+        gc: *const GraphicsContext,
+        flags: vk.MemoryPropertyFlags,
+    ) !LinearImageAllocator {
         const mem_idx = try imgMemTypeInfer(gc, flags);
         const total_size = 256 * 1024 * 1024; //256 MB
         const mem = try gc.dev.allocateMemory(&.{
@@ -85,9 +98,16 @@ pub const LinearImageAllocator = struct {
             .memory_type_index = mem_idx,
         }, null);
 
+        var map = Shelf.init(gpa);
+        try map.ensureTotalCapacity(Self.max_elements);
+
         return LinearImageAllocator{
+            .dev_mem_idx = mem_idx,
             .dev_mem = mem,
-            .mem_idx = mem_idx,
+
+            .alloc = gpa,
+            .store = map,
+
             .total = total_size,
         };
     }
@@ -114,19 +134,25 @@ pub const LinearImageAllocator = struct {
         const kb = new_img_reqs.size / 1024;
         const real_kb = blocks * block_size / 1024;
 
-        std.debug.print("new img alloc: {d} kB | {d} kB | {d} blocks | {d}B alignment \n", .{ //
-            kb, real_kb, blocks, new_img_reqs.alignment,
-        });
-
         try gc.dev.bindImageMemory(img, self.dev_mem, beg_of_alloc);
-        self.img_count += 1;
+        if (self.stored_elements == Self.max_elements - 1) return error.no_more_slots;
+
+        try self.store.put(img, .{ .block_size = @intCast(blocks) });
+
+        self.stored_elements += 1;
         self.end = end_of_alloc;
+        if (self.verbose) {
+            std.debug.print("new img alloc: {d} kB | {d} kB | {d} blocks | {d}B alignment | {d} alloc num \n", .{ //
+                kb, real_kb, blocks, new_img_reqs.alignment, self.stored_elements,
+            });
+        }
     }
 
     pub fn imgFree(self: *LinearImageAllocator, img: vk.Image) void {
-        _ = self;
-        _ = img;
-
-        std.debug.print("yes yes we dealocating xD\n", .{});
+        if (self.verbose) {
+            if (self.store.get(img)) |hmm| {
+                std.debug.print("freeining image that holds {d} 64k memory blocks\n", .{hmm.block_size});
+            }
+        }
     }
 };
