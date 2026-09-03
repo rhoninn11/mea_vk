@@ -566,7 +566,7 @@ pub const TextBlitter = struct {
                 .corner = .downleft,
                 .sz = self.text_sz.scaled(0.4),
             },
-            "w|s|a|d - to move    space - to pan\n",
+            "+ w|s|a|d - to move\n+ space - to pan\n",
             screen,
         );
 

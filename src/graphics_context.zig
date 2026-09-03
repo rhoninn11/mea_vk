@@ -878,48 +878,28 @@ pub const baked = struct {
         .layer_count = 1,
     };
 
-    pub const undefined_to_transfered: t.TransitPrep = .{
-        .accesses = .{
-            .src = .{},
-            .dst = .{ .transfer_write_bit = true },
-        },
-        .stages = .{
-            .src = .{ .top_of_pipe_bit = true },
-            .dst = .{ .transfer_bit = true },
-        },
-    };
+    pub const syncAt = struct {
+        pub const before_dst: t.SyncPrep = .{
+            .src = .{
+                .access = .{},
+                .stage = .{ .top_of_pipe_bit = true },
+            },
+            .dst = .{
+                .access = .{ .transfer_write_bit = true },
+                .stage = .{ .transfer_bit = true },
+            },
+        };
 
-    pub const transfered_to_fragment_readed: t.TransitPrep = .{
-        .accesses = .{
-            .src = .{ .transfer_write_bit = true },
-            .dst = .{ .shader_read_bit = true },
-        },
-        .stages = .{
-            .src = .{ .transfer_bit = true },
-            .dst = .{ .fragment_shader_bit = true },
-        },
-    };
-
-    pub const undefined_to_transfered_2: t.SyncPrep = .{
-        .src = .{
-            .access = .{},
-            .stage = .{ .top_of_pipe_bit = true },
-        },
-        .dst = .{
-            .access = .{ .transfer_write_bit = true },
-            .stage = .{ .transfer_bit = true },
-        },
-    };
-
-    pub const transfered_to_fragment_readed_2: t.SyncPrep = .{
-        .src = .{
-            .access = .{ .transfer_write_bit = true },
-            .stage = .{ .transfer_bit = true },
-        },
-        .dst = .{
-            .access = .{ .shader_read_bit = true },
-            .stage = .{ .fragment_shader_bit = true },
-        },
+        pub const tex_ready: t.SyncPrep = .{
+            .src = .{
+                .access = .{ .transfer_write_bit = true },
+                .stage = .{ .transfer_bit = true },
+            },
+            .dst = .{
+                .access = .{ .shader_read_bit = true },
+                .stage = .{ .fragment_shader_bit = true },
+            },
+        };
     };
 
     pub const identity_mapping: vk.ComponentMapping = .{

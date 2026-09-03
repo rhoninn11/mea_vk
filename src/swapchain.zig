@@ -29,6 +29,7 @@ pub const Swapchain = struct {
 
     swap_images: []SwapImage,
     depth_images: []imgs.DepthImage,
+    intermediate_image: []imgs.VkImage,
     image_index: u32,
     next_image_acquired: vk.Semaphore,
 
@@ -95,6 +96,11 @@ pub const Swapchain = struct {
             for (depth_imgs) |di| di.deinit(gc, sc.imga);
             allocator.free(depth_imgs);
         }
+        const preswaps_imgs = try initPreSwaps(gc, allocator, sc.imga, extent, @intCast(swap_images.len));
+        errdefer {
+            // for (depth_imgs) |di| di.deinit(gc, sc.imga);
+            allocator.free(depth_imgs);
+        }
 
         var next_image_acquired = try gc.dev.createSemaphore(&.{}, null);
         errdefer gc.dev.destroySemaphore(next_image_acquired, null);
@@ -118,6 +124,7 @@ pub const Swapchain = struct {
             .handle = handle,
             .swap_images = swap_images,
             .depth_images = depth_imgs,
+            .intermediate_image = preswaps_imgs,
             .image_index = result.image_index,
             .next_image_acquired = next_image_acquired,
         };
@@ -126,10 +133,16 @@ pub const Swapchain = struct {
     fn deinitExceptSwapchain(self: Swapchain) !void {
         std.debug.print("+++ deinit exept swapchain\n", .{});
         for (self.swap_images) |si| try si.waitForFence(self.sc.gc);
+
         for (self.swap_images) |si| si.deinit(self.sc.gc);
         self.allocator.free(self.swap_images);
+
         for (self.depth_images) |di| di.deinit(self.sc.gc, self.sc.imga);
         self.allocator.free(self.depth_images);
+
+        // for (self.depth_images) |di| iimg.deinit(self.sc.gc, self.sc.imga);
+        // for (self.intermediate_image) |*iimg| iimg.deinit();
+        self.allocator.free(self.intermediate_image);
 
         self.sc.gc.dev.destroySemaphore(self.next_image_acquired, null);
     }
@@ -367,6 +380,38 @@ fn initDepths(
     }
 
     return d_imgs;
+}
+
+fn initPreSwaps(
+    gc: *const GraphicsContext,
+    gpa: Allocator,
+    imga: *imgs.LinearImageAllocator,
+    extent: vk.Extent2D,
+    n_copies: u8,
+) ![]imgs.VkImage {
+    const swap_targets = try gpa.alloc(imgs.VkImage, n_copies);
+    errdefer gpa.free(swap_targets);
+
+    _ = gc;
+    _ = imga;
+    _ = extent;
+    // var n: u8 = 0;
+    // errdefer for (swap_targets[0..n]) |*x| x.deinit();
+
+    // const imga_silent = imga;
+    // _ = imga_silent;
+
+    // const total = extent.width * extent.height;
+    // for (0..3) |i| {
+    //     swap_targets[i] = try imgs.PreSwapImage.init(gc, .{
+    //         .h = @truncate(extent.width),
+    //         .w = @truncate(extent.width),
+    //         .total = total,
+    //     });
+    //     n += 1;
+    // }
+
+    return swap_targets;
 }
 
 fn findSurfaceFormat(gc: *const GraphicsContext, allocator: Allocator) !vk.SurfaceFormatKHR {

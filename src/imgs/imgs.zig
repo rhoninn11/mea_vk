@@ -101,6 +101,12 @@ pub const RGBImage = struct {
         return VkImage.init(gc, g, format);
     }
 };
+pub const PreSwapImage = struct {
+    pub fn init(gc: *const GraphicsContext, g: sht.GridSize) !VkImage {
+        const format: vk.Format = .a8b8g8r8_srgb_pack32;
+        return VkImage.init(gc, g, format);
+    }
+};
 
 pub const U16Image = struct {
     pub fn init(gc: *const GraphicsContext, g: sht.GridSize) !VkImage {
@@ -271,7 +277,7 @@ pub fn texPrep(
         .old_layout = .undefined,
         .new_layout = dst_layout,
         .image = test_img.dvk_img,
-        .sync_point = gm.baked.undefined_to_transfered_2,
+        .sync_point = gm.baked.syncAt.before_dst,
     });
 
     // transport image through a buffer
@@ -288,7 +294,7 @@ pub fn texPrep(
         .old_layout = dst_layout,
         .new_layout = shader_read_layout,
         .image = test_img.dvk_img,
-        .sync_point = gm.baked.transfered_to_fragment_readed_2,
+        .sync_point = gm.baked.syncAt.tex_ready,
     });
 
     try one_shot.resolve();
