@@ -15,13 +15,12 @@ pub const InstGroup = struct {
 };
 
 pub const PerspE = enum(u8) {
-    observer = 0,
+    graphView = 0,
     orbital,
 };
 
 pub const FrameState = struct {
     persp: PerspE,
-    alt_proj: bool,
     alt_shader: bool,
     model_idx: u8,
     ok_tex_base: u16,
@@ -162,7 +161,10 @@ pub fn recordFrame(
                 &.{0},
             );
 
-            const ubo_slot: u8 = if (state.alt_proj) 1 else 0;
+            const ubo_slot: u8 = switch (state.persp) {
+                .graphView => 1,
+                .orbital => 0,
+            };
             hl_cmds.dynUboDsets(all_sets, ubo_slot);
             hl_cmds.use(.triangle);
             {
@@ -184,9 +186,8 @@ pub fn recordFrame(
                 }
             }
 
-            if (state.alt_proj) {
+            {
                 hl_cmds.use(.dsprite);
-
                 const okpush = gm.PushConstant.PCBlob{
                     .model = m.matTrans(.{ 0, -6, 0 }).mat,
                     .inst_base = state.ok_group.base,
@@ -214,7 +215,7 @@ pub fn recordFrame(
                 hl_cmds.drawInsances(.hexy, 1); // cursor
             }
 
-            {
+            if (state.persp == .graphView) {
                 hl_cmds.use(.sprite);
                 const scann_mat = state.nav.scanPlacement();
                 var scan_push = gm.PushConstant.PCBlob{
@@ -234,18 +235,18 @@ pub fn recordFrame(
                 hl_cmds.push(&scan_push);
                 hl_cmds.drawInsances(.quad, 1); // scann layers
 
-                // closer = m.matTrans(.{ 0, 0, -0.05 });
-                // const delta_store = m.matXmat(closer.mat, scann_mat).mat;
-                // // delta_store[0][3] = 0.5;
-                // var scan_push_sdf = gm.PushConstant.PCBlob{
-                //     .model = delta_store,
-                //     .tex_base = 5,
-                //     .mode = 4, // sprite mode
-                //     .scale2D = state.nav.uv_map.mult,
-                //     .point2D = state.nav.uv_map.offset,
-                // };
-                // hl_cmds.push(&scan_push_sdf);
-                // hl_cmds.drawInsances(.quad, 1); // scann shaded
+                closer = m.matTrans(.{ 0, 0, -0.05 });
+                const delta_store = m.matXmat(closer.mat, scann_mat).mat;
+                // delta_store[0][3] = 0.5;
+                var scan_push_sdf = gm.PushConstant.PCBlob{
+                    .model = delta_store,
+                    .tex_base = 5,
+                    .mode = 4, // sprite mode
+                    .scale2D = state.nav.uv_map.mult,
+                    .point2D = state.nav.uv_map.offset,
+                };
+                hl_cmds.push(&scan_push_sdf);
+                hl_cmds.drawInsances(.quad, 1); // scann shaded
             }
 
             {

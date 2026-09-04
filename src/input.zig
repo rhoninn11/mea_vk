@@ -27,22 +27,26 @@ pub fn initS() !void {
             sdl.keycode.Keycode.a, sdl.keycode.Keycode.d, //
             sdl.keycode.Keycode.w, sdl.keycode.Keycode.s,
         },
-    });
-    plr_input = try IHoldAx.init(&.{
         &.{
             sdl.keycode.Keycode.h, sdl.keycode.Keycode.l, //
             sdl.keycode.Keycode.k, sdl.keycode.Keycode.j,
-            sdl.keycode.Keycode.f, sdl.keycode.Keycode.r,
         },
         &.{
             sdl.keycode.Keycode.left, sdl.keycode.Keycode.right, //
             sdl.keycode.Keycode.down, sdl.keycode.Keycode.up,
-            sdl.keycode.Keycode.f,    sdl.keycode.Keycode.r,
+        },
+    });
+    const todo_key = sdl.keycode.Keycode.p;
+    plr_input = try IHoldAx.init(&.{
+        &.{
+            todo_key, todo_key, //
+            todo_key, todo_key,
+            todo_key, todo_key,
         },
     });
     pan_input = try IHoldAx.init(&.{
         // TODO: mouse hold for dragging
-        &.{ sdl.keycode.Keycode.space, sdl.keycode.Keycode.tab },
+        &.{ sdl.keycode.Keycode.space, todo_key },
     });
 }
 
@@ -65,7 +69,7 @@ const sdl_inputs: []const Tied = &.{
     .{ .key = sdl.keycode.Keycode.two, .trig = &dbg_trig },
     .{ .key = sdl.keycode.Keycode.three, .trig = &time_stop_trig },
     .{ .key = sdl.keycode.Keycode.four, .trig = &inverse_tirg },
-    .{ .key = sdl.keycode.Keycode.five, .trig = &persp_switch },
+    .{ .key = sdl.keycode.Keycode.tab, .trig = &persp_switch },
 };
 
 const axesCheck = [_]*IHoldAx{

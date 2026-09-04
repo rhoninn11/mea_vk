@@ -67,8 +67,7 @@ var navig = a.Navig.default;
 
 var state: frame.FrameState = .{
     .model_idx = 0,
-    .persp = .observer,
-    .alt_proj = true,
+    .persp = .graphView,
     .alt_shader = false,
     .ok_tex_base = OK_TEX_BASE,
     .ok_group = .{ .base = map.instablo.get(.okg).beg, .num = OK_SWEEP },
@@ -420,13 +419,19 @@ fn theDeepest(access: EasyAcces) !void {
         if (input.time_stop_trig.fired()) timeline1.passageToggle();
 
         if (input.shader_reset_trigger.fired()) state.alt_shader = true;
-
-        const refresh_cond = glass.update(&input.glass_input, td);
-        if (refresh_cond) state.alt_shader = false;
+        switch (state.persp) {
+            .graphView => {
+                const refresh_cond = glass.update(&input.glass_input, td);
+                if (refresh_cond) state.alt_shader = false;
+                panner.update(&input.pan_input, last_mouse_pos);
+            },
+            .orbital => {
+                // TODO:
+                orbital.update(td, &input.plr_input);
+            },
+        }
 
         // orbit control
-        panner.update(&input.pan_input, last_mouse_pos);
-        orbital.update(td, &input.plr_input);
 
         smooth_scale.update(td, ok_slider.frac());
 
@@ -460,10 +465,6 @@ fn theDeepest(access: EasyAcces) !void {
         var dbg_write = std.Io.Writer.fixed(&dbg_scratch);
         try dbgmonit.update(access.io, &dbg_data, &dbg_write, debug_on_console);
 
-        if (input.alt_projection_trigger.fired()) {
-            state.alt_proj = !state.alt_proj;
-        }
-
         if (input.slide_r_trig.fired()) {
             state.model_idx = a.wrapUp(state.model_idx, repo.head);
         }
@@ -482,8 +483,8 @@ fn theDeepest(access: EasyAcces) !void {
 
         if (input.persp_switch.fired()) {
             state.persp = switch (state.persp) {
-                .orbital => .observer,
-                .observer => .orbital,
+                .orbital => .graphView,
+                .graphView => .orbital,
             };
         }
 
@@ -525,7 +526,7 @@ fn theDeepest(access: EasyAcces) !void {
 
         const virt_ray: t.Ray = switch (state.persp) {
             .orbital => t.Ray{ .at = orbital.pos(), .to = m.zero3() },
-            .observer => a.testTracer(tracker_phi),
+            .graphView => a.testTracer(tracker_phi),
         };
 
         {

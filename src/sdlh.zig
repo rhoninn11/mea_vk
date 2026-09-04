@@ -25,7 +25,7 @@ const EvCapture = struct {
         if (self.bins.getPtr(this_one)) |counter| counter.* += 1;
     }
 
-    pub fn key_u_action(self: *EvCapture, kb: sdl3.keycode.Keycode) void {
+    pub fn registerUp(self: *EvCapture, kb: sdl3.keycode.Keycode) void {
         var i = HistorySlots - 1;
         while (i > 0) {
             i -= 1;
@@ -35,7 +35,7 @@ const EvCapture = struct {
         self.key_u_history[0] = @tagName(kb);
     }
 
-    pub fn key_d_action(self: *EvCapture, kb: sdl3.keycode.Keycode) void {
+    pub fn registerDown(self: *EvCapture, kb: sdl3.keycode.Keycode) void {
         var i = HistorySlots - 1;
         while (i > 0) {
             i -= 1;
@@ -201,13 +201,50 @@ pub const SdlContext = struct {
         }
         sdl3.quit(system);
     }
+    const ClickDir = enum(u8) {
+        up = 0,
+        down,
+    };
+    const KbClick = struct {
+        key: sdl3.keycode.Keycode,
+        mod: sdl3.keycode.KeyModifier,
+        dir: ClickDir,
+
+        pub fn init(kb: sdl3.events.Keyboard) KbClick {
+            var x = KbClick{
+                .key = kb.key.?,
+                .mod = kb.mod,
+                .dir = .up,
+            };
+            if (kb.down) x.dir = .down;
+            return x;
+        }
+        pub fn dispatch(self: KbClick, evc: *EvCapture) void {
+            switch (self.dir) {
+                .up => {
+                    evc.registerUp(self.key);
+                    input.sdlKeyUp(self.key);
+                },
+                .down => {
+                    evc.registerDown(self.key);
+                    input.sdlKeyDown(self.key);
+                },
+            }
+        }
+    };
+
     pub fn pollEvents(self: *Self) void {
         while (sdl3.events.poll()) |ev| {
             self.ev_capture.inc(ev);
-            var key: sdl3.keycode.Keycode = undefined;
+            var key: KbClick = undefined;
+
+            // TODO: recive pad
 
             switch (ev) {
-                .key_up, .key_down => |kb| key = kb.key.?,
+                .key_up, .key_down => |kb| {
+                    key = .init(kb);
+                    key.dispatch(&self.ev_capture);
+                },
                 .mouse_button_down => |mbtn| {
                     // TODO: mouse hold for dragging
                     input.sample_tirg.activated = true;
@@ -219,19 +256,13 @@ pub const SdlContext = struct {
             }
 
             switch (ev) {
-                .key_up => {
-                    self.ev_capture.key_u_action(key);
-                    input.sdlKeyUp(key);
-                },
                 .key_down => {
-                    if (key == .escape) self.should_close = true;
-                    if (key == .one) {
+                    if (key.key == .escape) self.should_close = true;
+                    if (key.key == .one) {
                         self._gamepadProbe() catch |err| {
                             std.debug.print("!!! gamepad probe failed |> {s}\n", .{@errorName(err)});
                         };
                     }
-                    self.ev_capture.key_d_action(key);
-                    input.sdlKeyDown(key);
                 },
                 else => {},
             }
