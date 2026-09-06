@@ -84,14 +84,28 @@ pub const Caped = struct {
 };
 
 const IVec3 = phys.InertiaPack(m.vec3);
-pub const CappedPlayer = struct {
+
+pub const Freeflyer = struct {
+    const Spawn: m.vec3 = .{ 0, 2, 0 };
+
+    p: t.FreeflyPlayer = .{ .head = Spawn },
+    inertia_head: IVec3.Inertia,
+    inertia_dof: IVec3.Inertia,
+
+    pub const def: Freeflyer = .{
+        .inertia_head = .init(Spawn),
+        .inertia_dof = .init(.{ 0, 0 }),
+    };
+};
+
+pub const Orbiter = struct {
     pub const lim_r = Caped.init(1, 5);
     pub const lim_h = Caped.init(-10, 10);
 
-    p: t.Player,
+    p: t.OrbitalPlayer,
     phi_raw: f32,
     inertia: IVec3.Inertia,
-    pub const default: CappedPlayer = .{
+    pub const default: Orbiter = .{
         .phi_raw = 0,
         .p = .{
             .phi = 0,
@@ -101,8 +115,9 @@ pub const CappedPlayer = struct {
         .inertia = .init(.{ 0, 0, 0 }),
     };
 
-    pub fn pos(self: *CappedPlayer) m.vec3 {
-        return playerPos(&self.p);
+    pub fn pos(self: *Orbiter) m.vec3 {
+        const p = &self.p;
+        return m.orbit_r(p.phi, p.r) + m.vec3{ 0, p.h, 0 };
     }
 
     pub fn aroundAxis(phi_axis: motion.Axis) f32 {
@@ -114,7 +129,7 @@ pub const CappedPlayer = struct {
         return -phi_moved; //why minus
     }
 
-    pub fn update(self: *CappedPlayer, td: f32, input: *const in.IHoldAx) void {
+    pub fn update(self: *Orbiter, td: f32, input: *const in.IHoldAx) void {
         const phi_spead: f32 = 1;
         const phi_delt = aroundAxis(input.value()[0]) * td * std.math.tau * phi_spead;
         self.phi_raw += phi_delt;
@@ -127,33 +142,29 @@ pub const CappedPlayer = struct {
 
         playerApplyInput(&self.p, input, td);
     }
+
+    fn playerApplyInput(player: *t.OrbitalPlayer, input: *const in.IHoldAx, td: f32) void {
+        const plr = player;
+
+        const r_speed: f32 = 3;
+        const proximity = input.value()[1];
+        player.r = switch (proximity) {
+            motion.Axis.negative => plr.r + r_speed * td,
+            motion.Axis.positive => plr.r - r_speed * td,
+            else => plr.r,
+        };
+        plr.r = Orbiter.lim_r.cap(plr.r);
+
+        const h_speed: f32 = 3;
+        const height = input.value()[2];
+        plr.h = switch (height) {
+            motion.Axis.negative => plr.h - h_speed * td,
+            motion.Axis.positive => plr.h + h_speed * td,
+            else => plr.h,
+        };
+        plr.h = Orbiter.lim_h.cap(plr.h);
+    }
 };
-
-pub fn playerPos(p: *t.Player) m.vec3 {
-    return m.orbit_r(p.phi, p.r) + m.vec3{ 0, p.h, 0 };
-}
-
-pub fn playerApplyInput(player: *t.Player, input: *const in.IHoldAx, td: f32) void {
-    const plr = player;
-
-    const r_speed: f32 = 3;
-    const proximity = input.value()[1];
-    player.r = switch (proximity) {
-        motion.Axis.negative => plr.r + r_speed * td,
-        motion.Axis.positive => plr.r - r_speed * td,
-        else => plr.r,
-    };
-    plr.r = CappedPlayer.lim_r.cap(plr.r);
-
-    const h_speed: f32 = 3;
-    const height = input.value()[2];
-    plr.h = switch (height) {
-        motion.Axis.negative => plr.h - h_speed * td,
-        motion.Axis.positive => plr.h + h_speed * td,
-        else => plr.h,
-    };
-    plr.h = CappedPlayer.lim_h.cap(plr.h);
-}
 
 pub inline fn DefaultRng() !std.Random {
     var prng: std.Random.DefaultPrng = .init(blk: {

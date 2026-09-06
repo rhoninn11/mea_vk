@@ -35,7 +35,7 @@ pub const ImgLTranConfig = struct {
     sync_point: SyncPrep,
 };
 
-pub const Player = struct {
+pub const OrbitalPlayer = struct {
     phi: f32,
     h: f32,
     r: f32,
@@ -45,4 +45,9 @@ pub const Ray = struct {
     up: m.vec3 = .{ 0, 1, 0 },
     at: m.vec3,
     to: m.vec3,
+};
+
+pub const FreeflyPlayer = struct {
+    head: m.vec3,
+    dof: m.vec2 = .{ 0, 0 },
 };

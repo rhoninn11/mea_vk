@@ -108,16 +108,21 @@ pub const Coords = struct {
     const HitResult = struct {
         at: m.vec2,
         hit: bool,
+
+        const def = HitResult{ .at = m.zero(2), .hit = false };
     };
 
     sz_scr: m.vec2,
     sz_area: m.vec2,
     offset: m.vec2,
+    result: HitResult,
+
     pub fn init(screan: vk.Extent2D) Coords {
         var base: Self = .{
             .sz_scr = m.vkextAsV2(screan),
             .sz_area = undefined,
             .offset = undefined,
+            .result = .def,
         };
         base.calcArea(0.9);
         return base;
@@ -131,7 +136,7 @@ pub const Coords = struct {
         self.offset = .{ padding, padding };
     }
 
-    pub fn update(self: *const Self, cursor: m.vec2) HitResult {
+    pub fn update(self: *Self, cursor: m.vec2) void {
         const axnum = 2;
         const axes: [axnum]u8 = .{ m.X, m.Y };
         var in_num: u8 = 0;
@@ -146,12 +151,32 @@ pub const Coords = struct {
                 in_num += 1;
             }
         }
-        return HitResult{
+        const result: bool = in_num == axnum;
+        self.result = HitResult{
             .at = .{ r[m.X], r[m.Y] },
-            .hit = in_num == axnum,
+            .hit = result,
         };
     }
+    pub fn hit(self: *const Self) HitResult {
+        return self.result;
+    }
 };
+
+test "Hitting a cord region" {
+    var coord: Coords = .init(vk.Extent2D{
+        .height = 128,
+        .width = 128,
+    });
+
+    const pointer_in: m.vec2 = .{ 64, 64 };
+    const pointer_out: m.vec2 = .{ 64, 128 + 64 };
+
+    coord.update(pointer_in);
+    try std.testing.expect(coord.hit().hit);
+
+    coord.update(pointer_out);
+    try std.testing.expect(!coord.hit().hit);
+}
 
 const UVMap = struct {
     offset: m.vec2 = m.v2Zero(),

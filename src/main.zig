@@ -351,7 +351,7 @@ fn theDeepest(access: EasyAcces) !void {
     const s_interval = std.time.us_per_s;
     timeline1.arm(s_interval * 0.5);
 
-    var orbital: u.CappedPlayer = .default;
+    var orbital: u.Orbiter = .default;
     orbital.inertia.phx = .default;
 
     const IVec3 = phys.InertiaPack(m.vec3);
@@ -396,8 +396,9 @@ fn theDeepest(access: EasyAcces) !void {
         navig.cursor = cursor_f2;
         navig.cursor_tex = OK_TEX_BASE + ok_slider.curr;
 
-        const coords: a.Coords = .init(win_size);
-        const interact = coords.update(cursor_f2);
+        var coords: a.Coords = .init(win_size);
+        coords.update(cursor_f2);
+
         navig.screan = win_f2;
 
         const img_idx = swapchain.image_index;
@@ -493,9 +494,10 @@ fn theDeepest(access: EasyAcces) !void {
         try dyn_text.print(txta, "\n\n", .{}); //young blit space
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
         // try dyn_text.print(txta, "blit info x:{d:>6.2}|y:{d:>6.2}\n", .{ blit_x.w, blit_x.h });
-        if (interact.hit) {
+        const hit = coords.hit();
+        if (hit.hit) {
             // const x, const y = interact.at;
-            const scale_frac = navig.uv_map.mult * interact.at;
+            const scale_frac = navig.uv_map.mult * hit.at;
             const s_x, const s_y = scale_frac;
             const mlt_x, const mlt_y = scale_frac + navig.uv_map.offset;
 

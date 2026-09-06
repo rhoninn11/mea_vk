@@ -45,7 +45,7 @@ const BuildPaths = enum(u8) {
     path_vulkan,
 };
 
-pub fn testInit(b: *std.Build, o: *const Options, libs_from_c: *const LibsFromC) *std.Build.Step.Compile {
+pub fn testInit(b: *std.Build, o: *const Options, libs_from_c: *const LibsFromC, vk_module: std.Build.Module.Import) *std.Build.Step.Compile {
     return b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/test.zig"),
@@ -53,6 +53,7 @@ pub fn testInit(b: *std.Build, o: *const Options, libs_from_c: *const LibsFromC)
             .optimize = o.optimize,
             .imports = &.{
                 .{ .name = "rmath", .module = libs_from_c.raymath_module },
+                vk_module,
             },
         }),
         .use_llvm = switch (builtin.os.tag) {
@@ -145,6 +146,8 @@ pub fn build(b: *std.Build) !void {
     const vulkan_bind = b.dependency("vulkan_zig", .{ .registry = vk_registry_path }) //
         .module("vulkan-zig");
 
+    const vk_import: std.Build.Module.Import = .{ .name = "vulkan-zig", .module = vulkan_bind };
+
     const triangle_exe = b.addExecutable(.{
         .name = "main_app",
         .root_module = b.createModule(.{
@@ -156,7 +159,7 @@ pub fn build(b: *std.Build) !void {
                 .{ .name = "stbtt", .module = libs_from_c.stb_tt_module },
                 .{ .name = "rmath", .module = libs_from_c.raymath_module },
                 .{ .name = "oct", .module = libs_from_c.api_module },
-                .{ .name = "vulkan-zig", .module = vulkan_bind },
+                vk_import,
             },
         }),
         .use_llvm = switch (builtin.os.tag) {
@@ -240,7 +243,7 @@ pub fn build(b: *std.Build) !void {
     const triangle_run_step = b.step("main", "Run the triangle example");
     triangle_run_step.dependOn(&triangle_run_cmd.step);
 
-    const tests = testInit(b, &o, &libs_from_c);
+    const tests = testInit(b, &o, &libs_from_c, vk_import);
     const test_run_cmd = b.addRunArtifact(tests);
     test_run_cmd.has_side_effects = true;
     const test_step = b.step("test", "Run unit tests");
