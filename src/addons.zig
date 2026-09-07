@@ -103,6 +103,24 @@ pub fn visible(a: vk.Extent2D) bool {
     return a.width != 0 and a.height != 0;
 }
 
+test "Hitting a cord region" {
+    var coord: Coords = .init(vk.Extent2D{
+        .height = 128,
+        .width = 128,
+    });
+
+    const pointer_in: m.vec2 = .{ 64, 64 };
+    const pointer_out: m.vec2 = .{ 64, 128 + 64 };
+
+    coord.update(pointer_in);
+    const e = coord.hit().at - m.vec2{ 0.5, 0.5 };
+    try std.testing.expect(coord.hit().hit);
+    try std.testing.expect(m.dot2(e, e) < 0.001);
+
+    coord.update(pointer_out);
+    try std.testing.expect(!coord.hit().hit);
+}
+
 pub const Coords = struct {
     const Self = @This();
     const HitResult = struct {
@@ -162,23 +180,7 @@ pub const Coords = struct {
     }
 };
 
-test "Hitting a cord region" {
-    var coord: Coords = .init(vk.Extent2D{
-        .height = 128,
-        .width = 128,
-    });
-
-    const pointer_in: m.vec2 = .{ 64, 64 };
-    const pointer_out: m.vec2 = .{ 64, 128 + 64 };
-
-    coord.update(pointer_in);
-    try std.testing.expect(coord.hit().hit);
-
-    coord.update(pointer_out);
-    try std.testing.expect(!coord.hit().hit);
-}
-
-const UVMap = struct {
+pub const UVMap = struct {
     offset: m.vec2 = m.v2Zero(),
     mult: m.vec2 = m.v2Zero(),
 };

@@ -141,7 +141,11 @@ pub fn trim3d(a: vec4) vec3 {
     return .{ a[0], a[1], a[2] };
 }
 
-pub fn dot(a: vec3, b: vec3) f32 {
+pub fn dot2(a: vec2, b: vec2) f32 {
+    return @reduce(.Add, a * b);
+}
+
+pub fn dot3(a: vec3, b: vec3) f32 {
     return @reduce(.Add, a * b);
 }
 
@@ -154,7 +158,7 @@ pub fn cross(a: vec3, b: vec3) vec3 {
 }
 
 pub fn len(vec: vec3) f32 {
-    return std.math.sqrt(dot(vec, vec));
+    return std.math.sqrt(dot3(vec, vec));
 }
 
 test "len test" {
@@ -303,7 +307,7 @@ test "|point_moved" {
 pub fn lookRotation(pos: vec3, target: vec3, ref_up: vec3) mat4u {
     const delta = target - pos;
     const forward = norm(delta);
-    if (abs(dot(forward, ref_up)) > 0.95) {
+    if (abs(dot3(forward, ref_up)) > 0.95) {
         @panic("singularity");
     }
 

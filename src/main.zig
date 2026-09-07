@@ -351,6 +351,8 @@ fn theDeepest(access: EasyAcces) !void {
     const s_interval = std.time.us_per_s;
     timeline1.arm(s_interval * 0.5);
 
+    var freefly: u.Freeflyer = .def;
+    _ = &freefly;
     var orbital: u.Orbiter = .default;
     orbital.inertia.phx = .default;
 
@@ -411,6 +413,7 @@ fn theDeepest(access: EasyAcces) !void {
 
         const td = timeline.deltaS();
         const td1 = timeline1.deltaS();
+
         ok_phi += td1 * 0.1;
         glyph_phi += td1 * 0.13;
         tracker_phi += td1 * 3;
@@ -427,8 +430,7 @@ fn theDeepest(access: EasyAcces) !void {
                 panner.update(&input.pan_input, last_mouse_pos);
             },
             .orbital => {
-                // TODO:
-                orbital.update(td, &input.plr_input);
+                freefly.update(td, &input.glass_input);
             },
         }
 
@@ -439,20 +441,22 @@ fn theDeepest(access: EasyAcces) !void {
         const zoom_scale = smooth_scale.out() * 0.95 + 0.05;
         const scann_scale = m.splat2d(zoom_scale) * m.vec2{ 1, shu.gridAspect(glass.img_sz) };
 
-        const glass_frac = glass.frac();
-        const xoff, const yoff = glass_frac;
-        const scann_xoff = switch (xoff + scann_scale[0] > 1) {
-            true => 1.0 - scann_scale[0],
-            false => xoff,
-        };
-        const scann_yoff = switch (yoff + scann_scale[1] > 1) {
-            true => 1.0 - scann_scale[1],
-            false => yoff,
-        };
+        navig.uv_map = blk: {
+            const xoff, const yoff = glass.frac();
+            const scann_xoff = switch (xoff + scann_scale[0] > 1) {
+                true => 1.0 - scann_scale[0],
+                false => xoff,
+            };
+            const scann_yoff = switch (yoff + scann_scale[1] > 1) {
+                true => 1.0 - scann_scale[1],
+                false => yoff,
+            };
 
-        // navig.uv_map.mult = @splat(scan_scale);
-        navig.uv_map.mult = scann_scale;
-        navig.uv_map.offset = .{ scann_xoff, scann_yoff };
+            break :blk a.UVMap{
+                .mult = scann_scale,
+                .offset = .{ scann_xoff, scann_yoff },
+            };
+        };
 
         const dbg_data = d.DbgMonitor.DbgVals{
             .phi = orbital.p.phi,
@@ -466,27 +470,29 @@ fn theDeepest(access: EasyAcces) !void {
         var dbg_write = std.Io.Writer.fixed(&dbg_scratch);
         try dbgmonit.update(access.io, &dbg_data, &dbg_write, debug_on_console);
 
-        if (input.slide_r_trig.fired()) {
-            state.model_idx = a.wrapUp(state.model_idx, repo.head);
-        }
+        { // simple trigger actions
+            if (input.slide_r_trig.fired()) {
+                state.model_idx = a.wrapUp(state.model_idx, repo.head);
+            }
 
-        if (input.slide_l_trig.fired()) {
-            state.model_idx = a.wrapDown(state.model_idx, repo.head);
-        }
+            if (input.slide_l_trig.fired()) {
+                state.model_idx = a.wrapDown(state.model_idx, repo.head);
+            }
 
-        if (input.dbg_trig.fired()) {
-            dbgmonit.enabled = a.toggle(dbgmonit.enabled);
-        }
+            if (input.dbg_trig.fired()) {
+                dbgmonit.enabled = a.toggle(dbgmonit.enabled);
+            }
 
-        if (input.inverse_tirg.fired()) {
-            glass.inverse = a.toggle(glass.inverse);
-        }
+            if (input.inverse_tirg.fired()) {
+                glass.inverse = a.toggle(glass.inverse);
+            }
 
-        if (input.persp_switch.fired()) {
-            state.persp = switch (state.persp) {
-                .orbital => .graphView,
-                .graphView => .orbital,
-            };
+            if (input.persp_switch.fired()) {
+                state.persp = switch (state.persp) {
+                    .orbital => .graphView,
+                    .graphView => .orbital,
+                };
+            }
         }
 
         var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 1024 + 512);
@@ -527,7 +533,7 @@ fn theDeepest(access: EasyAcces) !void {
         const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
 
         const virt_ray: t.Ray = switch (state.persp) {
-            .orbital => t.Ray{ .at = orbital.pos(), .to = m.zero3() },
+            .orbital => t.Ray{ .at = freefly.p.head, .to = .{ 0, 0, -10 } },
             .graphView => a.testTracer(tracker_phi),
         };
 

@@ -94,8 +94,28 @@ pub const Freeflyer = struct {
 
     pub const def: Freeflyer = .{
         .inertia_head = .init(Spawn),
-        .inertia_dof = .init(.{ 0, 0 }),
+        .inertia_dof = .init(.{ 0, 0, 0 }),
     };
+
+    pub fn update(self: *@This(), td: f32, input: *const in.IHoldAx) void {
+        self.playerApplyInput(input, td);
+    }
+
+    fn playerApplyInput(self: *@This(), input: *const in.IHoldAx, td: f32) void {
+        const r_speed: f32 = 3;
+        const delta = m.vec3{ resolve(input.value()[0]), 0, resolve(input.value()[1]) } //
+            * @as(m.vec3, @splat(r_speed * td));
+
+        self.p.head += delta;
+    }
+
+    pub inline fn resolve(phi_axis: motion.Axis) f32 {
+        return switch (phi_axis) {
+            motion.Axis.positive => 1,
+            motion.Axis.negative => -1,
+            else => 0,
+        };
+    }
 };
 
 pub const Orbiter = struct {

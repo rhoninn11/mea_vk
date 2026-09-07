@@ -14,7 +14,7 @@ pub fn srgb_to_oklab(srgb: m.vec3) m.vec3 {
         .{ 0.0883024619, 0.2817188376, 0.6299787005 },
     };
     var lms: m.vec3 = undefined;
-    for (0..3) |i| lms[i] = m.dot(lms_conv[i], srgb);
+    for (0..3) |i| lms[i] = m.dot3(lms_conv[i], srgb);
     for (0..3) |i| lms[i] = std.math.cbrt(lms[i]);
 
     const lab_conv: [3]m.vec3 = .{
@@ -23,7 +23,7 @@ pub fn srgb_to_oklab(srgb: m.vec3) m.vec3 {
         .{ 0.0259040371, 0.7827717662, -0.8086757660 },
     };
     var lab: m.vec3 = undefined;
-    for (0..3) |i| lab[i] = m.dot(lab_conv[i], lms);
+    for (0..3) |i| lab[i] = m.dot3(lab_conv[i], lms);
 
     return lab;
 }
@@ -36,7 +36,7 @@ pub fn oklab_to_srgb(lab: m.vec3) m.vec3 {
     };
 
     var lms: m.vec3 = undefined;
-    inline for (0..3) |i| lms[i] = m.dot(lms_conv[i], lab);
+    inline for (0..3) |i| lms[i] = m.dot3(lms_conv[i], lab);
     inline for (0..3) |i| lms[i] = lms[i] * lms[i] * lms[i];
 
     const srgb_conv: [3]m.vec3 = .{
@@ -46,7 +46,7 @@ pub fn oklab_to_srgb(lab: m.vec3) m.vec3 {
     };
 
     var srgb: m.vec3 = undefined;
-    inline for (0..3) |i| srgb[i] = m.dot(srgb_conv[i], lms);
+    inline for (0..3) |i| srgb[i] = m.dot3(srgb_conv[i], lms);
     return srgb;
 }
 
