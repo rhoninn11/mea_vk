@@ -16,7 +16,7 @@ pub const InstGroup = struct {
 
 pub const PerspE = enum(u8) {
     graphView = 0,
-    orbital,
+    omni,
 };
 
 pub const FrameState = struct {
@@ -163,7 +163,7 @@ pub fn recordFrame(
 
             const ubo_slot: u8 = switch (state.persp) {
                 .graphView => 1,
-                .orbital => 0,
+                .omni => 0,
             };
             hl_cmds.dynUboDsets(all_sets, ubo_slot);
             hl_cmds.use(.triangle);

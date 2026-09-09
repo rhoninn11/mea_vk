@@ -317,10 +317,10 @@ fn theDeepest(access: EasyAcces) !void {
     std.debug.assert(inflight_num < inflight_slots);
 
     // recorders
-    var slot: u8 = 0;
     var inflight_stack: [1024]u8 = undefined;
     var loc_stack: std.heap.FixedBufferAllocator = .init(inflight_stack[0..1024]);
     var loc_fba = loc_stack.allocator();
+
     const cmdbufs: []vk.CommandBuffer = try loc_fba.alloc(vk.CommandBuffer, inflight_num);
     const pools: []vk.CommandPool = try loc_fba.alloc(vk.CommandPool, inflight_num);
     const recorders: []gm.FrameRecorder = try loc_fba.alloc(gm.FrameRecorder, inflight_num);
@@ -329,6 +329,7 @@ fn theDeepest(access: EasyAcces) !void {
         .flags = .{ .transient_bit = true },
     };
 
+    var slot: u8 = 0;
     for (0..inflight_num) |_| {
         pools[slot] = try gc.dev.createCommandPool(&frame_cmd_pool_cfg, null);
         recorders[slot] = gm.FrameRecorder{
@@ -429,7 +430,7 @@ fn theDeepest(access: EasyAcces) !void {
                 if (refresh_cond) state.alt_shader = false;
                 panner.update(&input.pan_input, last_mouse_pos);
             },
-            .orbital => {
+            .omni => {
                 freefly.update(td, &input.glass_input);
             },
         }
@@ -489,8 +490,8 @@ fn theDeepest(access: EasyAcces) !void {
 
             if (input.persp_switch.fired()) {
                 state.persp = switch (state.persp) {
-                    .orbital => .graphView,
-                    .graphView => .orbital,
+                    .omni => .graphView,
+                    .graphView => .omni,
                 };
             }
         }
@@ -533,7 +534,7 @@ fn theDeepest(access: EasyAcces) !void {
         const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
 
         const virt_ray: t.Ray = switch (state.persp) {
-            .orbital => t.Ray{ .at = freefly.p.head, .to = .{ 0, 0, -10 } },
+            .omni => t.Ray{ .at = freefly.p.head, .to = .{ 0, 0, 10 } },
             .graphView => a.testTracer(tracker_phi),
         };
 

@@ -259,7 +259,8 @@ pub fn texPrep(
     mode: VkImage.ESamplerMode,
 ) !void {
     const buff_size = test_img.dvk_size;
-    var transport_bfr = try gm.createBuffer( //TODO: maybe one omnipresent buffor for img data copying?
+    //TODO: maybe one omnipresent buffor for img data copying? On front of new imga indeed
+    var transport_bfr = try gm.BufferData.init(
         pic.gc,
         gm.baked.memory_cpu,
         gm.baked.usage_src,

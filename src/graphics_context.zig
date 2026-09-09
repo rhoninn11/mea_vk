@@ -128,53 +128,72 @@ pub const BufferData = struct {
         dev.freeMemory(self.dvk_mem, null);
     }
 
+    const MemProx = struct {
+        mem: vk.DeviceMemory,
+        size: u64,
+    };
+
+    fn getMemory(
+        gc: *const GraphicsContext,
+        bfr: vk.Buffer,
+        mem_flags: vk.MemoryPropertyFlags,
+    ) !MemProx {
+        const r = gc.dev.getBufferMemoryRequirements(bfr);
+        // INFO: requirements propably will be bigger then original size
+
+        const memory = try gc.allocate(r, mem_flags);
+        errdefer gc.dev.freeMemory(memory, null);
+
+        try gc.dev.bindBufferMemory(bfr, memory, 0);
+
+        return MemProx{
+            .mem = memory,
+            .size = r.size,
+        };
+    }
+
+    pub fn init(
+        gc: *const GraphicsContext,
+        mem_flags: vk.MemoryPropertyFlags,
+        usage: vk.BufferUsageFlags,
+        bsize: u64,
+    ) !BufferData {
+        const devk = gc.dev;
+        const default_size = bsize;
+
+        const bfr = try devk.createBuffer(&vk.BufferCreateInfo{
+            .size = default_size,
+            .usage = usage,
+            .sharing_mode = .exclusive,
+        }, null);
+
+        // TODO: propably few memory pools based on "imag" image
+        const prox = try getMemory(gc, bfr, mem_flags);
+        errdefer unreachable;
+
+        var mapping: ?*anyopaque = null;
+        if (mem_flags.host_visible_bit) {
+            mapping = try devk.mapMemory(prox.mem, 0, prox.size, .{});
+        }
+        return BufferData{
+            .dvk_bfr = bfr,
+            .dvk_mem = prox.mem,
+            .mapping = mapping,
+        };
+    }
+
     pub fn memMapping(self: *BufferData) [*]u8 {
         const mapping: [*]u8 = @ptrCast(@alignCast(self.mapping));
         return mapping;
     }
 };
 
-pub fn createBuffer(
-    gc: *const GraphicsContext,
-    mem_flags: vk.MemoryPropertyFlags,
-    usage: vk.BufferUsageFlags,
-    bsize: u64,
-) !BufferData {
-    const devk = gc.dev;
-    const default_size = bsize;
-
-    const bfr = try devk.createBuffer(&vk.BufferCreateInfo{
-        .size = default_size,
-        .usage = usage,
-        .sharing_mode = .exclusive,
-    }, null);
-
-    const r = devk.getBufferMemoryRequirements(bfr);
-    if (r.size != default_size) {
-        std.debug.print("??? requested low amount of memory: requested - {d}, resulted - {d}\n", .{ default_size, r.size });
-    }
-
-    const memory = try gc.allocate(r, mem_flags);
-
-    try gc.dev.bindBufferMemory(bfr, memory, 0);
-
-    var mapping: ?*anyopaque = null;
-    if (mem_flags.host_visible_bit) {
-        mapping = try devk.mapMemory(memory, 0, r.size, .{});
-    }
-    return BufferData{
-        .dvk_bfr = bfr,
-        .dvk_mem = memory,
-        .mapping = mapping,
-    };
-}
-
 const BufforingVert = u.MemCalc(v.Vertex);
 // przykład przesyłania danych na gpu, też jest potrze kolejka dla tej operacji
 pub fn uploadVertices(pic: *const PoolInCtx, buffer: vk.Buffer, vert_slice: []const v.Vertex) !void {
     const buff_size = BufforingVert.memSize(vert_slice);
 
-    var buffer_ = try createBuffer(pic.gc, //
+    var buffer_ = try BufferData.init(pic.gc, //
         baked.memory_cpu, baked.usage_src, buff_size);
     defer buffer_.deinit(pic.gc);
 
@@ -392,7 +411,7 @@ pub const GraphicsContext = struct {
         const my_first_usage = vk.BufferUsageFlags{
             .transfer_src_bit = true,
         };
-        const test_buffer = try createBuffer(self, my_first_memory_flags, my_first_usage, 4);
+        const test_buffer = try BufferData.init(self, my_first_memory_flags, my_first_usage, 4);
         std.debug.print("+++ test buffor created\n", .{});
         test_buffer.deinit(self);
     }

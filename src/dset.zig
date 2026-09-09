@@ -74,9 +74,21 @@ pub const HLDSetPrep = struct {
     gc: *const gm.GraphicsContext,
     gpa: std.mem.Allocator,
 
-    pub fn init(self: *const HLDSetPrep, frame_copies_num: usize, using: gm.baked.DSetInit, data_info: []const gm.baked.DSetDataInfo, bindless_size: ?u32) !DescriptorPrep {
-        return DescriptorPrep.init(self.gpa, self.gc, //
-            frame_copies_num, using, data_info, bindless_size);
+    pub fn init(
+        self: *const HLDSetPrep,
+        frame_copies_num: usize,
+        using: gm.baked.DSetInit,
+        data_info: []const gm.baked.DSetDataInfo,
+        bindless_size: ?u32,
+    ) !DescriptorPrep {
+        return DescriptorPrep.init(
+            self.gpa,
+            self.gc,
+            frame_copies_num,
+            using,
+            data_info,
+            bindless_size,
+        );
     }
 
     pub fn deinit(self: *const HLDSetPrep, dsetPrep: *DescriptorPrep) void {
@@ -196,7 +208,8 @@ pub const DescriptorPrep = struct {
 
             var total_buffer_sz: u32 = 0;
             for (data_info) |di| total_buffer_sz += di.element_size * di.num;
-            self.buff_arr.items[i] = try gm.createBuffer(
+
+            self.buff_arr.items[i] = try gm.BufferData.init(
                 self.gc,
                 using.memory_property,
                 using.usage.usage_flag,
@@ -218,13 +231,15 @@ pub const DescriptorPrep = struct {
             .update_after_bind_bit = true,
         };
 
-        self._d_pool = try self.gc.dev.createDescriptorPool(&vk.DescriptorPoolCreateInfo{
+        const could_be_more_global = try self.gc.dev.createDescriptorPool(&vk.DescriptorPoolCreateInfo{
             .s_type = .descriptor_pool_create_info,
             .flags = pool_flags,
             .p_pool_sizes = p_size.ptr,
             .pool_size_count = @intCast(p_size.len),
             .max_sets = len_u32,
         }, null);
+        errdefer self.gc.dev.destroyDescriptorPool(could_be_more_global, null);
+        self._d_pool = could_be_more_global;
 
         // eg. "arr_size" bindles textures
         const variable_count: vk.DescriptorSetVariableDescriptorCountAllocateInfo = .{

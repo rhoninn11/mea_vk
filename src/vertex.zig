@@ -416,7 +416,7 @@ pub fn repoSpawn(alloc: std.mem.Allocator, pic: *const gm.PoolInCtx) !VertRepo {
     var repo: VertRepo = .{};
     try repo.populate(arean.allocator(), &verts);
 
-    const vert_buffer = try gm.createBuffer(
+    const vert_buffer = try gm.BufferData.init(
         pic.gc,
         gm.baked.memory_gpu,
         gm.baked.usage_vert_dst,
