@@ -160,11 +160,6 @@ fn theDeepest(access: EasyAcces) !void {
     defer desets_arena.deinit();
     const aa = desets_arena.allocator();
 
-    const hl_dset = dset.HLDSetPrep{
-        .gc = gc,
-        .gpa = aa,
-    };
-
     const _8k = 1 << 13;
     std.debug.assert(grid.total * 2 == _8k);
 
@@ -179,8 +174,12 @@ fn theDeepest(access: EasyAcces) !void {
         .ubo_size = @sizeOf(sht.GroupData),
         .storag_size = @sizeOf(sht.PerInstance) * instpool_num,
     };
-    var lazy_shady: dset.ShadyGroup = try .init(&hl_dset, lazy_opt);
-    defer lazy_shady.drop(&hl_dset);
+    const ctx = dset.DsetCtx{
+        .gc = gc,
+        .gpa = aa,
+    };
+    var lazy_shady: dset.ShadyGroup = try .init(ctx, lazy_opt);
+    defer lazy_shady.drop(ctx);
 
     // rendering & pipelines
     const render_pass = try pipe.createRenderPass(

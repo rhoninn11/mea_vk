@@ -19,18 +19,22 @@ pub const ShadyGroup = struct {
         storag_size: u32,
     };
 
-    pub fn init(hl_dset: *const HLDSetPrep, opt: Options) !Self {
+    pub fn init(ctx: DsetCtx, opt: Options) !Self {
         var self: Self = undefined;
 
-        var dset_uniform = try hl_dset.init(
+        // TODO: alloc buffers before Dset Prep
+        var dset_uniform: DescriptorPrep = try .init(
+            ctx,
             opt.swapchain_lan,
             gm.baked.uniform_frag_vert_dyn,
             &.{.{ .binding = 0, .element_size = opt.ubo_size, .num = 16 }},
             null,
         );
-        errdefer hl_dset.deinit(&dset_uniform);
+        errdefer dset_uniform.deinit(ctx);
 
-        var storage = try hl_dset.init(
+        // TODO: alloc buffers before Dset Prep
+        var storage: DescriptorPrep = try .init(
+            ctx,
             opt.swapchain_lan,
             gm.baked.storage_frag_vert,
             &.{
@@ -39,15 +43,15 @@ pub const ShadyGroup = struct {
             },
             null,
         );
-        errdefer hl_dset.deinit(&storage);
+        errdefer storage.deinit(ctx);
 
-        var dset_atlas = try hl_dset.init(
+        const dset_atlas: DescriptorPrep = try .init(
+            ctx,
             1,
             gm.baked.texture_frag,
             &.{.{ .binding = 0 }},
             opt.atlas_size,
         );
-        errdefer hl_dset.deinit(&dset_atlas);
 
         self.uniforms = dset_uniform;
         self.storage = storage;
@@ -55,10 +59,10 @@ pub const ShadyGroup = struct {
         return self;
     }
 
-    pub fn drop(self: *ShadyGroup, hld: *const HLDSetPrep) void {
-        defer hld.deinit(&self.uniforms);
-        defer hld.deinit(&self.storage);
-        defer hld.deinit(&self.omnitex);
+    pub fn drop(self: *ShadyGroup, ctx: DsetCtx) void {
+        self.uniforms.deinit(ctx);
+        self.storage.deinit(ctx);
+        self.omnitex.deinit(ctx);
     }
 
     pub fn layout(self: *const Self) [sets]vk.DescriptorSetLayout {
@@ -70,31 +74,11 @@ pub const ShadyGroup = struct {
     }
 };
 
-pub const HLDSetPrep = struct {
+pub const DsetCtx = struct {
     gc: *const gm.GraphicsContext,
     gpa: std.mem.Allocator,
-
-    pub fn init(
-        self: *const HLDSetPrep,
-        frame_copies_num: usize,
-        using: gm.baked.DSetInit,
-        data_info: []const gm.baked.DSetDataInfo,
-        bindless_size: ?u32,
-    ) !DescriptorPrep {
-        return DescriptorPrep.init(
-            self.gpa,
-            self.gc,
-            frame_copies_num,
-            using,
-            data_info,
-            bindless_size,
-        );
-    }
-
-    pub fn deinit(self: *const HLDSetPrep, dsetPrep: *DescriptorPrep) void {
-        dsetPrep.deinit(self.gpa);
-    }
 };
+
 pub const DescriptorPrep = struct {
     const Self = @This();
     d_set_layout_arr: std.ArrayList(vk.DescriptorSetLayout) = .empty,
@@ -168,8 +152,7 @@ pub const DescriptorPrep = struct {
         }
     };
     pub fn init(
-        gpa: std.mem.Allocator,
-        gc: *const gm.GraphicsContext,
+        ctx: DsetCtx,
         frame_copies_num: usize,
         using: gm.baked.DSetInit,
         data_info: []const gm.baked.DSetDataInfo,
@@ -178,17 +161,21 @@ pub const DescriptorPrep = struct {
         std.debug.assert(data_info.len > 0);
         const len_u32: u32 = @intCast(frame_copies_num);
 
+        const gc = ctx.gc;
+        const gpa = ctx.gpa;
+
         var self: Self = .{
             .gc = gc,
             .set_binding = data_info[0].binding, // for writing bindless textures
             .set_type = using.usage.descriptor_type,
         };
+        errdefer self.deinit(ctx);
+
         const laytr = LayoutHl{
             .gc = gc,
             .dsctype = using.usage.descriptor_type,
             .stageflags = using.shader_stage,
         };
-        errdefer self.deinit(gpa);
 
         const arr_size: u32 = bindless_size orelse 1;
         const bindless: bool = bindless_size != null;
@@ -230,14 +217,14 @@ pub const DescriptorPrep = struct {
         const pool_flags: vk.DescriptorPoolCreateFlags = .{
             .update_after_bind_bit = true,
         };
-
-        const could_be_more_global = try self.gc.dev.createDescriptorPool(&vk.DescriptorPoolCreateInfo{
-            .s_type = .descriptor_pool_create_info,
+        const dset_pool_opt = vk.DescriptorPoolCreateInfo{
             .flags = pool_flags,
             .p_pool_sizes = p_size.ptr,
             .pool_size_count = @intCast(p_size.len),
             .max_sets = len_u32,
-        }, null);
+        };
+
+        const could_be_more_global = try self.gc.dev.createDescriptorPool(&dset_pool_opt, null);
         errdefer self.gc.dev.destroyDescriptorPool(could_be_more_global, null);
         self._d_pool = could_be_more_global;
 
@@ -273,7 +260,7 @@ pub const DescriptorPrep = struct {
                     .dst_set = self.d_set_arr.items[i],
                     .dst_binding = data_info[0].binding,
                     .dst_array_element = 0,
-                    .descriptor_type = using.usage.descriptor_type,
+                    .descriptor_type = self.set_type,
                     .descriptor_count = 1,
                     .p_buffer_info = @ptrCast(&buf_info),
                     .p_image_info = &.{},
@@ -305,9 +292,11 @@ pub const DescriptorPrep = struct {
         self.gc.dev.updateDescriptorSets(write_image_dsc_set, &.{});
     }
 
-    pub fn deinit(self: *Self, alloc: std.mem.Allocator) void {
+    pub fn deinit(self: *Self, ctx: DsetCtx) void {
+        const alloc = ctx.gpa;
+        const gc = ctx.gc;
         if (self._d_pool) |d_pool| {
-            self.gc.dev.destroyDescriptorPool(d_pool, null);
+            gc.dev.destroyDescriptorPool(d_pool, null);
         }
 
         for (self.buff_arr.items) |possible_buff| {
@@ -317,7 +306,7 @@ pub const DescriptorPrep = struct {
         }
 
         if (self._d_set_layout) |layout| {
-            self.gc.dev.destroyDescriptorSetLayout(layout, null);
+            gc.dev.destroyDescriptorSetLayout(layout, null);
         }
 
         self.d_set_arr.deinit(alloc);
