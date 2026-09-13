@@ -6,7 +6,6 @@ const sdl = @import("sdl3");
 const motion = @import("motion.zig");
 const Trigger = motion.Trigger;
 
-pub var exit_trig: Trigger = .{};
 pub var time_stop_trig: Trigger = .{};
 
 pub const HoldAxis = motion.msdl.HoldAxis;
@@ -52,7 +51,6 @@ pub fn initS() !void {
 
 pub var ok_vis_trigger: Trigger = .{};
 pub var shader_reset_trigger: Trigger = .{};
-pub var alt_projection_trigger: Trigger = .{};
 pub var slide_l_trig: Trigger = .{};
 pub var slide_r_trig: Trigger = .{};
 pub var dbg_trig: Trigger = .{};
@@ -60,16 +58,22 @@ pub var sample_tirg: Trigger = .{};
 pub var inverse_tirg: Trigger = .{};
 pub var persp_switch: Trigger = .{};
 
+pub var exit_trig: Trigger = .{};
+pub var gamepad_trig: Trigger = .{};
+
 const sdl_inputs: []const Tied = &.{
     .{ .key = sdl.keycode.Keycode.y, .trig = &ok_vis_trigger },
     .{ .key = sdl.keycode.Keycode.q, .trig = &shader_reset_trigger },
-    .{ .key = sdl.keycode.Keycode.left_alt, .trig = &alt_projection_trigger },
     .{ .key = sdl.keycode.Keycode.v, .trig = &slide_l_trig },
     .{ .key = sdl.keycode.Keycode.b, .trig = &slide_r_trig },
+
+    .{ .key = sdl.keycode.Keycode.one, .trig = &gamepad_trig },
     .{ .key = sdl.keycode.Keycode.two, .trig = &dbg_trig },
     .{ .key = sdl.keycode.Keycode.three, .trig = &time_stop_trig },
     .{ .key = sdl.keycode.Keycode.four, .trig = &inverse_tirg },
+
     .{ .key = sdl.keycode.Keycode.tab, .trig = &persp_switch },
+    .{ .key = sdl.keycode.Keycode.escape, .trig = &exit_trig },
 };
 
 const module_axes = [_]*HoldAxis{

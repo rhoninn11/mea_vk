@@ -28,7 +28,7 @@ pub const DepthImage = struct {
     dvk_img: vk.Image,
     dvk_img_view: vk.ImageView,
     vk_format: vk.Format,
-    mem_spot: u16 = 0,
+    memspot: memory.LocDesc,
 
     fn getDepthFormat(gc: *const GraphicsContext) !vk.Format {
         return swpchn.findSupportedFormat(
@@ -69,6 +69,9 @@ pub const DepthImage = struct {
         const d_img = try devk.createImage(&d_img_create_info, null);
         errdefer devk.destroyImage(d_img, null);
 
+        // TODO:
+        // const loc = try imga.imgAlloc2(gc, d_img);
+        // errdefer imga.imgFree2(loc);
         try imga.imgAlloc(gc, d_img);
         errdefer imga.imgFree(d_img);
 
@@ -86,12 +89,14 @@ pub const DepthImage = struct {
             .dvk_img_view = img_viu,
             .dvk_img = d_img,
             .vk_format = depth_format,
+            .memspot = undefined, // TODO: = loc,
         };
     }
     pub fn deinit(self: Self, gc: *const GraphicsContext, imga: *LinearImageAllocator) void {
         const devk = gc.dev;
         devk.destroyImageView(self.dvk_img_view, null);
         devk.destroyImage(self.dvk_img, null);
+        //TODO: imga.imgFree2(self.memspot);
         imga.imgFree(self.dvk_img);
     }
 };

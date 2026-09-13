@@ -103,7 +103,7 @@ pub const Freeflyer = struct {
 
     fn playerApplyInput(self: *@This(), input: *const in.HoldAxis, td: f32) void {
         const r_speed: f32 = 3;
-        const delta = m.vec3{ resolve(input.value()[0]), 0, resolve(input.value()[1]) } //
+        const delta = m.vec3{ resolve(input.value()[0]), 0, -resolve(input.value()[1]) } //
             * @as(m.vec3, @splat(r_speed * td));
 
         self.p.head += delta;

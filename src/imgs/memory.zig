@@ -55,11 +55,11 @@ pub fn imgMemTypeInfer(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags
 }
 
 const std = @import("std");
-const Shelf = std.AutoHashMap(vk.Image, SpotDesc);
+const Shelf = std.AutoHashMap(vk.Image, LocDesc);
 
-const SpotDesc = struct {
-    block_idx: u16,
-    block_num: u16,
+pub const LocDesc = struct {
+    blk_idx: u16,
+    num: u16,
 };
 
 pub const LinearImageAllocator = struct {
@@ -110,7 +110,7 @@ pub const LinearImageAllocator = struct {
         };
     }
 
-    fn findSpot(self: *LinearImageAllocator, req: vk.MemoryRequirements) !SpotDesc {
+    fn findSpot(self: *LinearImageAllocator, req: vk.MemoryRequirements) !LocDesc {
         const blocks = requiredBlocks(req.size);
         var block_idx: u16 = 0;
         var blocks_free: u16 = 0;
@@ -118,9 +118,9 @@ pub const LinearImageAllocator = struct {
         for (self.bitmap, 0..) |mask, i| {
             for (0..8) |jj| {
                 const index = i * 8 + jj;
-                if (((mask << jj) & 128) == 128) {
+                if (((mask << @truncate(jj)) & 128) == 128) {
                     block_needed = blocks;
-                    block_idx = index + 1;
+                    block_idx = @truncate(index + 1);
                     blocks_free = 0;
                 } else {
                     blocks_free += 1;
@@ -130,9 +130,9 @@ pub const LinearImageAllocator = struct {
                     const delta = alignDelta(block_idx, req.alignment);
                     const block_needed_real = requiredBlocks(req.size + delta);
                     if (block_needed_real == block_needed) {
-                        return SpotDesc{
-                            .block_idx = block_idx,
-                            .block_num = block_needed_real,
+                        return LocDesc{
+                            .blk_idx = block_idx,
+                            .num = block_needed_real,
                         };
                     }
                     block_needed = block_needed_real;
@@ -142,10 +142,10 @@ pub const LinearImageAllocator = struct {
         return error.outofmem;
     }
 
-    fn requiredBlocks(size: u64) u64 {
+    fn requiredBlocks(size: u64) u16 {
         var blocks = size / block_size;
         if (@mod(size, block_size) != 0) blocks += 1;
-        return blocks;
+        return @truncate(blocks);
     }
 
     fn alignDelta(block: u64, alignment: u64) u64 {
@@ -157,35 +157,36 @@ pub const LinearImageAllocator = struct {
         return 0;
     }
 
-    pub fn imgAlloc2(self: *LinearImageAllocator, gc: *const GraphicsContext, img: vk.Image) !SpotDesc {
+    pub fn imgAlloc2(self: *LinearImageAllocator, gc: *const GraphicsContext, img: vk.Image) !LocDesc {
         const require = gc.dev.getImageMemoryRequirements(img);
 
         const memory_spot = try self.findSpot(require);
 
-        const offset_align = alignDelta(memory_spot.block_idx, require.alignment);
-        const offset_mem = memory_spot.block_idx * block_size + offset_align;
+        const offset_align = alignDelta(memory_spot.blk_idx, require.alignment);
+        const offset_mem = @as(u64, memory_spot.blk_idx) * block_size + offset_align;
 
         try gc.dev.bindImageMemory(img, self.dev_mem, offset_mem);
         self.markSpot(memory_spot, .set);
         return memory_spot;
     }
 
-    pub fn imgFree2(self: *LinearImageAllocator, spot: SpotDesc) void {
-        _ = &self;
+    pub fn imgFree2(self: *LinearImageAllocator, spot: LocDesc) void {
         self.markSpot(spot, .unset);
     }
 
     const MarkOp = enum(u8) { unset = 0, set };
 
-    pub fn markSpot(self: *LinearImageAllocator, spot: SpotDesc, mark: MarkOp) void {
-        for (0..spot.block_num) |i| {
-            const block_idx = spot.block_idx + i;
+    pub fn markSpot(self: *LinearImageAllocator, spot: LocDesc, mark: MarkOp) void {
+        for (0..spot.num) |i| {
+            const block_idx = spot.blk_idx + i;
             const byte_idx = block_idx / 8;
             const shift = @mod(block_idx, 8);
 
+            const l_bit: u8 = 128;
+
             switch (mark) {
-                .set => self.bitmap[byte_idx] |= @as(u8, 128 >> shift),
-                .unset => self.bitmap[byte_idx] &= ~@as(u8, 128 >> shift),
+                .set => self.bitmap[byte_idx] |= @as(u8, l_bit >> @truncate(shift)),
+                .unset => self.bitmap[byte_idx] &= ~@as(u8, l_bit >> @truncate(shift)),
             }
         }
     }

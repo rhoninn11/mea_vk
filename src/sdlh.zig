@@ -237,14 +237,11 @@ pub const SdlContext = struct {
     pub fn pollEvents(self: *Self) void {
         while (sdl3.events.poll()) |ev| {
             self.ev_capture.inc(ev);
-            var key: KbClick = undefined;
-
             // TODO: recive pad
 
             switch (ev) {
                 .key_up, .key_down => |kb| {
-                    key = .init(kb);
-                    key.dispatch(&self.ev_capture);
+                    KbClick.init(kb).dispatch(&self.ev_capture);
                 },
                 .mouse_button_down => |mbtn| {
                     // TODO: mouse hold for dragging
@@ -261,24 +258,25 @@ pub const SdlContext = struct {
             }
 
             switch (ev) {
-                .key_down => {
-                    if (key.key == .escape) self.should_close = true;
-                    if (key.key == .one) {
-                        self._gamepadProbe() catch |err| {
-                            std.debug.print("!!! gamepad probe failed |> {s}\n", .{@errorName(err)});
-                        };
-                    }
-                },
-                else => {},
-            }
-
-            switch (ev) {
                 .quit => self.should_close = true,
                 else => {},
             }
         }
+
+        self.inputTriggers();
     }
-    fn _gamepadProbe(self: *Self) !void {
+
+    fn inputTriggers(self: *Self) void {
+        if (input.exit_trig.fired()) {
+            self.should_close = true;
+        }
+        if (input.gamepad_trig.fired()) {
+            self.gamepadProbe() catch |err| {
+                std.debug.print("!!! gamepad probe failed |> {s}\n", .{@errorName(err)});
+            };
+        }
+    }
+    fn gamepadProbe(self: *Self) !void {
         const gamepads: []sdl3.joystick.Id = try sdl3.gamepad.getGamepads();
         defer sdl3.free(gamepads);
 
