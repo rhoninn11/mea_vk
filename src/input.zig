@@ -9,11 +9,11 @@ const Trigger = motion.Trigger;
 pub var exit_trig: Trigger = .{};
 pub var time_stop_trig: Trigger = .{};
 
-pub const IHoldAx = motion.msdl.HoldAx;
+pub const HoldAxis = motion.msdl.HoldAxis;
 
-pub var glass_input: IHoldAx = undefined;
-pub var plr_input: IHoldAx = undefined;
-pub var pan_input: IHoldAx = undefined;
+pub var glass_input: HoldAxis = undefined;
+pub var plr_input: HoldAxis = undefined;
+pub var pan_input: HoldAxis = undefined;
 
 const KeyActionSdl = motion.msdl.KeyAction;
 const Tied = struct {
@@ -22,7 +22,7 @@ const Tied = struct {
 };
 
 pub fn initS() !void {
-    glass_input = try IHoldAx.init(&.{
+    glass_input = try HoldAxis.init(&.{
         &.{
             sdl.keycode.Keycode.a, sdl.keycode.Keycode.d, //
             sdl.keycode.Keycode.w, sdl.keycode.Keycode.s,
@@ -37,14 +37,14 @@ pub fn initS() !void {
         },
     });
     const todo_key = sdl.keycode.Keycode.p;
-    plr_input = try IHoldAx.init(&.{
+    plr_input = try HoldAxis.init(&.{
         &.{
             todo_key, todo_key, //
             todo_key, todo_key,
             todo_key, todo_key,
         },
     });
-    pan_input = try IHoldAx.init(&.{
+    pan_input = try HoldAxis.init(&.{
         // TODO: mouse hold for dragging
         &.{ sdl.keycode.Keycode.space, todo_key },
     });
@@ -72,13 +72,13 @@ const sdl_inputs: []const Tied = &.{
     .{ .key = sdl.keycode.Keycode.tab, .trig = &persp_switch },
 };
 
-const axesCheck = [_]*IHoldAx{
+const module_axes = [_]*HoldAxis{
     &glass_input,
     &plr_input,
     &pan_input,
 };
 pub fn updateAxes() void {
-    for (axesCheck) |ax| ax.update();
+    for (module_axes) |ax| ax.update();
 }
 
 pub fn sdlKeyDown(key: sdl.keycode.Keycode) void {
@@ -87,10 +87,10 @@ pub fn sdlKeyDown(key: sdl.keycode.Keycode) void {
         if (x.down(bind.key)) bind.trig.activated = true;
     }
 
-    for (axesCheck) |hld_ax| hld_ax.reciveInput(&x);
+    for (module_axes) |hld_ax| hld_ax.reciveInput(&x);
 }
 
 pub fn sdlKeyUp(key: sdl.keycode.Keycode) void {
     const x: KeyActionSdl = .{ .key = key, .action = glfw.Release };
-    for (axesCheck) |hld_ax| hld_ax.reciveInput(&x);
+    for (module_axes) |hld_ax| hld_ax.reciveInput(&x);
 }

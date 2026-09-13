@@ -166,6 +166,7 @@ pub const SdlContext = struct {
     gamepad: ?sdl3.gamepad.Gamepad = null,
     ev_capture: EvCapture = .init(),
     should_close: bool = false,
+    counter: u32 = 0,
 
     pub fn getWindow(self: *const Self) sdl3.video.Window {
         return self.window.?;
@@ -219,14 +220,14 @@ pub const SdlContext = struct {
             if (kb.down) x.dir = .down;
             return x;
         }
-        pub fn dispatch(self: KbClick, evc: *EvCapture) void {
+        pub fn dispatch(self: KbClick, dbg: *EvCapture) void {
             switch (self.dir) {
                 .up => {
-                    evc.registerUp(self.key);
+                    dbg.registerUp(self.key);
                     input.sdlKeyUp(self.key);
                 },
                 .down => {
-                    evc.registerDown(self.key);
+                    dbg.registerDown(self.key);
                     input.sdlKeyDown(self.key);
                 },
             }
@@ -252,6 +253,10 @@ pub const SdlContext = struct {
                 },
                 .mouse_motion => |*mm| pointer.update(mm),
                 .mouse_wheel => |*mw| wheel.update(mw),
+                .gamepad_axis_motion => |*gam| {
+                    self.counter += 1;
+                    _ = gam;
+                },
                 else => {},
             }
 

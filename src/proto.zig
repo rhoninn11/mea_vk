@@ -215,7 +215,7 @@ pub const Panner = struct {
         }
     }
 
-    pub fn update(self: *Self, axes: *const input.IHoldAx, scann_pos: m.ivec2) void {
+    pub fn update(self: *Self, axes: *const input.HoldAxis, scann_pos: m.ivec2) void {
         const activation = axes.value();
         const input_active = activation[0].active();
         {
@@ -283,7 +283,7 @@ pub const LookingGlass = struct {
         return @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.win_sz.h)) - 1;
     }
 
-    pub fn update(self: *LookingGlass, axes: *const input.IHoldAx, td: f32) bool {
+    pub fn update(self: *LookingGlass, axes: *const input.HoldAxis, td: f32) bool {
         const ax: [2]u8 = .{ m.X, m.Y };
         const ax_val = axes.value();
 

@@ -97,11 +97,11 @@ pub const Freeflyer = struct {
         .inertia_dof = .init(.{ 0, 0, 0 }),
     };
 
-    pub fn update(self: *@This(), td: f32, input: *const in.IHoldAx) void {
+    pub fn update(self: *@This(), td: f32, input: *const in.HoldAxis) void {
         self.playerApplyInput(input, td);
     }
 
-    fn playerApplyInput(self: *@This(), input: *const in.IHoldAx, td: f32) void {
+    fn playerApplyInput(self: *@This(), input: *const in.HoldAxis, td: f32) void {
         const r_speed: f32 = 3;
         const delta = m.vec3{ resolve(input.value()[0]), 0, resolve(input.value()[1]) } //
             * @as(m.vec3, @splat(r_speed * td));
@@ -149,7 +149,7 @@ pub const Orbiter = struct {
         return -phi_moved; //why minus
     }
 
-    pub fn update(self: *Orbiter, td: f32, input: *const in.IHoldAx) void {
+    pub fn update(self: *Orbiter, td: f32, input: *const in.HoldAxis) void {
         const phi_spead: f32 = 1;
         const phi_delt = aroundAxis(input.value()[0]) * td * std.math.tau * phi_spead;
         self.phi_raw += phi_delt;
@@ -163,7 +163,7 @@ pub const Orbiter = struct {
         playerApplyInput(&self.p, input, td);
     }
 
-    fn playerApplyInput(player: *t.OrbitalPlayer, input: *const in.IHoldAx, td: f32) void {
+    fn playerApplyInput(player: *t.OrbitalPlayer, input: *const in.HoldAxis, td: f32) void {
         const plr = player;
 
         const r_speed: f32 = 3;

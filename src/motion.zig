@@ -4,9 +4,6 @@ const sdl = @import("sdl3");
 
 const Allocator = std.mem.Allocator;
 
-pub const mglfw: type = HostMotion(c_int);
-pub const msdl: type = HostMotion(sdl.keycode.Keycode);
-
 pub const Axis = enum(i8) {
     none = 0,
     positive = 1,
@@ -31,6 +28,8 @@ pub const Trigger = struct {
 };
 
 const max_holds: comptime_int = 16;
+
+pub const msdl: type = HostMotion(sdl.keycode.Keycode);
 pub fn HostMotion(keytype: type) type {
     return struct {
         pub const KeyAction = struct {
@@ -57,7 +56,7 @@ pub fn HostMotion(keytype: type) type {
             }
         };
 
-        pub const HoldAx = struct {
+        pub const HoldAxis = struct {
             pub const BasedOn = keytype;
             holds: [max_holds]Hold = undefined,
             keys: [max_holds]keytype = undefined,
@@ -65,7 +64,7 @@ pub fn HostMotion(keytype: type) type {
             keyn: u8,
             setn: u8,
 
-            pub fn init(sets: []const []const keytype) !HoldAx {
+            pub fn init(sets: []const []const keytype) !HoldAxis {
                 const set_num = sets.len;
                 std.debug.assert(set_num > 0);
 
@@ -77,7 +76,7 @@ pub fn HostMotion(keytype: type) type {
                     return MoveErrs.HoldSizeExceded;
                 }
 
-                var self = HoldAx{
+                var self = HoldAxis{
                     .keyn = @intCast(key_num),
                     .setn = @intCast(set_num),
                 };
@@ -96,7 +95,7 @@ pub fn HostMotion(keytype: type) type {
                 return self;
             }
 
-            pub fn reciveInput(self: *HoldAx, ka: *const KeyAction) void {
+            pub fn reciveInput(self: *HoldAxis, ka: *const KeyAction) void {
                 axis: for (0..self.keyn) |ii| {
                     for (0..self.setn) |s| {
                         const j = s * self.keyn + ii;
@@ -108,7 +107,7 @@ pub fn HostMotion(keytype: type) type {
                 }
             }
 
-            pub fn update(self: *HoldAx) void {
+            pub fn update(self: *HoldAxis) void {
                 for (0..(self.keyn / 2)) |i| {
                     const neq = self.holds[i * 2].active;
                     const pos = self.holds[i * 2 + 1].active;
@@ -118,7 +117,7 @@ pub fn HostMotion(keytype: type) type {
                 }
             }
 
-            pub fn value(self: *const HoldAx) []const Axis {
+            pub fn value(self: *const HoldAxis) []const Axis {
                 return &self.axes;
             }
         };

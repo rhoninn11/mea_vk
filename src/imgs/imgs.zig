@@ -25,9 +25,10 @@ pub fn imgMemTypeInfer(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags
 
 pub const DepthImage = struct {
     const Self = @This();
-    vk_format: vk.Format,
     dvk_img: vk.Image,
     dvk_img_view: vk.ImageView,
+    vk_format: vk.Format,
+    mem_spot: u16 = 0,
 
     fn getDepthFormat(gc: *const GraphicsContext) !vk.Format {
         return swpchn.findSupportedFormat(
