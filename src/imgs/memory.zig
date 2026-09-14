@@ -62,6 +62,114 @@ pub const LocDesc = struct {
     num: u16,
 };
 
+pub fn MemBitmap(block_num: u16, block_size: u64) type {
+    const mask_size = 8;
+    std.debug.assert(@rem(block_num, mask_size) == 0);
+
+    return struct {
+        const Self = @This();
+        const elements = block_num / mask_size;
+
+        bitmap: [elements]u8,
+        pub fn init() Self {
+            var me: Self = undefined;
+            @memset(me.bitmap[0..], 0);
+            return me;
+        }
+
+        pub const MarkOp = enum(u8) { unset = 0, set };
+
+        pub fn markSpot(self: *Self, spot: LocDesc, mark: MarkOp) void {
+            for (0..spot.num) |i| {
+                const block_idx = spot.blk_idx + i;
+                const byte_idx = block_idx / mask_size;
+                const shift = @mod(block_idx, mask_size);
+
+                const l_bit: u8 = 128;
+
+                switch (mark) {
+                    .set => self.bitmap[byte_idx] |= @as(u8, l_bit >> @truncate(shift)),
+                    .unset => self.bitmap[byte_idx] &= ~@as(u8, l_bit >> @truncate(shift)),
+                }
+            }
+        }
+
+        fn requiredBlocks(size: u64) u16 {
+            var blocks = size / block_size;
+            if (@mod(size, block_size) != 0) blocks += 1;
+            return @truncate(blocks);
+        }
+
+        fn alignDelta(block: u64, alignment: u64) u64 {
+            const addr = @as(u64, block) * block_size;
+            const missed_by = @mod(addr, alignment);
+            if (missed_by != 0) {
+                return alignment - missed_by;
+            }
+            return 0;
+        }
+
+        fn findSpot(self: *Self, req: vk.MemoryRequirements) !LocDesc {
+            const blocks = requiredBlocks(req.size);
+            var block_idx: u16 = 0;
+            var blocks_free: u16 = 0;
+            var block_needed: u16 = blocks;
+            for (self.bitmap, 0..) |mask, i| {
+                for (0..8) |jj| {
+                    const index = i * 8 + jj;
+                    if (((mask << @truncate(jj)) & 128) == 128) {
+                        block_needed = blocks;
+                        block_idx = @truncate(index + 1);
+                        blocks_free = 0;
+                    } else {
+                        blocks_free += 1;
+                    }
+
+                    if (blocks_free >= block_needed) {
+                        const delta = alignDelta(block_idx, req.alignment);
+                        const block_needed_real = requiredBlocks(req.size + delta);
+                        if (block_needed_real == block_needed) {
+                            return LocDesc{
+                                .blk_idx = block_idx,
+                                .num = block_needed_real,
+                            };
+                        }
+                        block_needed = block_needed_real;
+                    }
+                }
+            }
+            return error.OutOfBlocks;
+        }
+
+        fn count(self: *Self) u16 {
+            var full_num: u16 = 0;
+            for (self.bitmap) |mask| {
+                for (0..8) |shift| {
+                    if (((mask << @truncate(shift)) & 128) == 128) {
+                        full_num += 1;
+                    }
+                }
+            }
+            return full_num;
+        }
+    };
+}
+
+test "setin and restin" {
+    var storage = MemBitmap(32, 16).init();
+
+    const first_half = LocDesc{
+        .blk_idx = 0,
+        .num = 16,
+    };
+
+    try std.testing.expect(storage.count() == 0);
+    storage.markSpot(first_half, .set);
+    try std.testing.expect(storage.count() == first_half.num);
+    storage.markSpot(first_half, .unset);
+    try std.testing.expect(storage.count() == 0);
+}
+
 pub const LinearImageAllocator = struct {
     const total_size = 256 * 1024 * 1024; //256 MB
     const block_size = 64 * 1024;
@@ -69,6 +177,7 @@ pub const LinearImageAllocator = struct {
     const mask_bytes = block_num / 8;
 
     const Self = @This();
+    const Bitmap = MemBitmap(block_num, block_size);
 
     dev_mem_idx: u32,
     dev_mem: vk.DeviceMemory,
@@ -82,7 +191,7 @@ pub const LinearImageAllocator = struct {
     total: u64,
 
     verbose: bool = false,
-    bitmap: [mask_bytes]u8,
+    bitmap: Bitmap = .init(),
 
     pub fn deinit(self: *LinearImageAllocator, gc: *const GraphicsContext) void {
         gc.dev.freeMemory(self.dev_mem, null);
@@ -110,38 +219,6 @@ pub const LinearImageAllocator = struct {
         };
     }
 
-    fn findSpot(self: *LinearImageAllocator, req: vk.MemoryRequirements) !LocDesc {
-        const blocks = requiredBlocks(req.size);
-        var block_idx: u16 = 0;
-        var blocks_free: u16 = 0;
-        var block_needed: u16 = blocks;
-        for (self.bitmap, 0..) |mask, i| {
-            for (0..8) |jj| {
-                const index = i * 8 + jj;
-                if (((mask << @truncate(jj)) & 128) == 128) {
-                    block_needed = blocks;
-                    block_idx = @truncate(index + 1);
-                    blocks_free = 0;
-                } else {
-                    blocks_free += 1;
-                }
-
-                if (blocks_free >= block_needed) {
-                    const delta = alignDelta(block_idx, req.alignment);
-                    const block_needed_real = requiredBlocks(req.size + delta);
-                    if (block_needed_real == block_needed) {
-                        return LocDesc{
-                            .blk_idx = block_idx,
-                            .num = block_needed_real,
-                        };
-                    }
-                    block_needed = block_needed_real;
-                }
-            }
-        }
-        return error.outofmem;
-    }
-
     fn requiredBlocks(size: u64) u16 {
         var blocks = size / block_size;
         if (@mod(size, block_size) != 0) blocks += 1;
@@ -161,12 +238,13 @@ pub const LinearImageAllocator = struct {
         const require = gc.dev.getImageMemoryRequirements(img);
 
         const memory_spot = try self.findSpot(require);
+        self.markSpot(memory_spot, .set);
+        errdefer self.markSpot(memory_spot, .unset);
 
         const offset_align = alignDelta(memory_spot.blk_idx, require.alignment);
         const offset_mem = @as(u64, memory_spot.blk_idx) * block_size + offset_align;
 
         try gc.dev.bindImageMemory(img, self.dev_mem, offset_mem);
-        self.markSpot(memory_spot, .set);
         return memory_spot;
     }
 

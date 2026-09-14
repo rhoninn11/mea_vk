@@ -67,6 +67,8 @@ pub const G = 1;
 pub const B = 2;
 pub const A = 3;
 
+pub const UP = vec3{ 0, 1, 0 };
+
 pub fn sum(a: [2]f32) f32 {
     return a[0] + a[1];
 }
@@ -181,12 +183,12 @@ pub const vec3u = extern union {
     arr: [3]f32,
 };
 
-const mat4u = extern union {
+pub const mat4u = extern union {
     mat: mat4,
     arr: [16]f32,
     rmat: rmath.struct_Matrix,
 };
-const mat3u = extern union {
+pub const mat3u = extern union {
     mat: mat3,
     arr: [12]f32,
 };
@@ -456,10 +458,12 @@ pub fn matLookAt(pos: vec3, target: vec3, ref_up: vec3) !mat4u {
     }
 }
 
-const UP = vec3{ 0, 1, 0 };
-
-fn rvec3(v3: vec3) rmath.struct_Vector3 {
+pub fn rvec3(v3: vec3) rmath.struct_Vector3 {
     return rmath.struct_Vector3{ .x = v3[0], .y = v3[1], .z = v3[2] };
+}
+
+pub fn fromRMat4(m4: rmath.struct_Matrix) mat4u {
+    return .{ .rmat = m4 };
 }
 
 test "is_matrix_looking" {
