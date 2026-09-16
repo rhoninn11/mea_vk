@@ -447,8 +447,7 @@ pub fn matLookAt(pos: vec3, target: vec3, ref_up: vec3) !mat4u {
                 rvec3(ref_up),
             );
 
-            const alt_result: mat4u = .{ .rmat = from_rl };
-            return alt_result;
+            return fromRMat4(from_rl);
         },
         false => {
             const trans = matTrans(-pos);
@@ -463,42 +462,46 @@ pub fn rvec3(v3: vec3) rmath.struct_Vector3 {
 }
 
 pub fn fromRMat4(m4: rmath.struct_Matrix) mat4u {
-    return .{ .rmat = m4 };
+    return .{ .arr = rmath.MatrixToFloat(m4) };
 }
+const mdbg = @import("math_debug.zig");
 
 test "is_matrix_looking" {
-    const observ = vec3{ -1, 1, -1 };
+    var somespace: [512]u8 = undefined;
+    var stderr = std.debug.lockStderr(somespace[0..]).file_writer;
+    defer std.debug.unlockStderr();
 
-    const M = 0;
-    const Ri = 1;
-    const _U = 2;
-    const target = vec3{ 1, 0, 1 };
-    const target_right = vec3{ 1.1, 0, 1 };
-    const target_upper = vec3{ 1, 0.1, 1 };
+    const w = &stderr.interface;
+
+    const observ = vec3{ 0, 2, -3 };
+
+    const target = vec3{ 1, 2, 1 };
+    const target_upper = vec3{ 1, 15, 1 };
 
     const transform = try matLookAt(observ, target, UP);
-    const r_ref_transform = rmath.MatrixLookAt(
-        rvec3(observ),
-        rvec3(target),
-        rvec3(UP),
-    );
-    std.debug.print("custom look_at {any}\n", .{transform.arr});
-    std.debug.print("raylib look_at {any}\n", .{r_ref_transform});
-    var outs: [3]vec4 = undefined;
-    const to_transform: [3]vec3 = .{ target, target_right, target_upper };
+
+    var outs: [2]vec4 = undefined;
+    const to_transform: [2]vec3 = .{
+        target,
+        target_upper,
+    };
     for (to_transform, 0..) |x, i| {
         outs[i] = matXvec(transform.mat, stack4(x, 1));
     }
 
     std.debug.print("---\n", .{});
-    std.debug.print("middle one {}\n", .{outs[M]});
-    std.debug.print("right one  {}\n", .{outs[Ri]});
-    std.debug.print("left one   {}\n", .{outs[_U]});
-    try std.testing.expect(abs(outs[M][X]) < 0.001);
-    try std.testing.expect(abs(outs[M][Y]) < 0.001);
+    try w.print("middle one ", .{});
+    try mdbg.prettyV4(outs[0], w);
+    try w.print("\nupper one  ", .{});
+    try mdbg.prettyV4(outs[1], w);
+    try w.print("\n---\n", .{});
+    try w.flush();
 
-    try std.testing.expect(outs[M][X] < outs[Ri][X]); //should be on right
-    try std.testing.expect(outs[M][Y] < outs[U][Y]); //should be higher
+    try std.testing.expect(abs(outs[0][X]) < 0.001);
+    try std.testing.expect(abs(outs[0][Y]) < 0.001);
+    try std.testing.expect(outs[0][Z] < -1);
+
+    try std.testing.expect(outs[0][Y] < outs[1][Y]); //should be higher
 }
 
 pub inline fn orbit(phi: f32) vec3 {
