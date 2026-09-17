@@ -70,10 +70,8 @@ pub const DepthImage = struct {
         errdefer devk.destroyImage(d_img, null);
 
         // TODO:
-        // const loc = try imga.imgAlloc2(gc, d_img);
-        // errdefer imga.imgFree2(loc);
-        try imga.imgAlloc(gc, d_img);
-        errdefer imga.imgFree(d_img);
+        const loc = try imga.imgAlloc(gc, d_img);
+        errdefer imga.imgFree(loc);
 
         const img_viu_info: vk.ImageViewCreateInfo = .{
             .view_type = .@"2d",
@@ -89,7 +87,7 @@ pub const DepthImage = struct {
             .dvk_img_view = img_viu,
             .dvk_img = d_img,
             .vk_format = depth_format,
-            .memspot = undefined, // TODO: = loc,
+            .memspot = loc, // TODO: = loc,
         };
     }
     pub fn deinit(self: Self, gc: *const GraphicsContext, imga: *LinearImageAllocator) void {
@@ -97,7 +95,7 @@ pub const DepthImage = struct {
         devk.destroyImageView(self.dvk_img_view, null);
         devk.destroyImage(self.dvk_img, null);
         //TODO: imga.imgFree2(self.memspot);
-        imga.imgFree(self.dvk_img);
+        imga.imgFree(self.memspot);
     }
 };
 

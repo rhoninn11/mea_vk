@@ -206,10 +206,18 @@ pub const Panner = struct {
         };
     }
 
-    fn grab(self: *Self, hold_active: bool, img_pos: m.ivec2) void {
-        if (!self.active and hold_active) {
+    fn grab(self: *Self, input_active: bool, scann_pos: m.ivec2) void {
+        if (!self.active and input_active) {
             self.active = true;
-            self.start_at = img_pos;
+            self.start_at = scann_pos;
+            self.pan_delta_total_prev = .{ 0, 0 };
+            self.pan_delta_total = .{ 0, 0 };
+        }
+    }
+    fn grab2(self: *Self, input_active: bool, scann_pos: m.ivec2) void {
+        if (!self.active and input_active) {
+            self.active = true;
+            self.start_at = scann_pos;
             self.pan_delta_total_prev = .{ 0, 0 };
             self.pan_delta_total = .{ 0, 0 };
         }
@@ -221,28 +229,34 @@ pub const Panner = struct {
         for (0..axes.axn()) |i| {
             input_active |= activation[i].active();
         }
-        {
-            self.grab(input_active, scann_pos);
 
-            if (self.active) {
-                self.pan_delta_total = scann_pos - self.start_at;
-                defer self.pan_delta_total_prev = self.pan_delta_total;
-                const move_delta = self.pan_delta_total - self.pan_delta_total_prev;
+        if (!input_active) {
+            return;
+        }
 
-                inline for (0..2) |i| {
-                    var movemnt: motion.Axis = .none;
-                    const val = move_delta[i];
-                    // inverse for panning motion
-                    if (val > 0) movemnt = .negative;
-                    if (val < 0) movemnt = .positive;
-                    for (0..@abs(val)) |_| _ = self.glass.sliders[i].drive(movemnt);
-                }
+        self.grab(input_active, scann_pos);
+
+        const xy = 2;
+        if (self.active) {
+            self.pan_delta_total = scann_pos - self.start_at;
+            defer self.pan_delta_total_prev = self.pan_delta_total;
+
+            const move_delta: [xy]f32 = self.pan_delta_total - self.pan_delta_total_prev;
+            for (0..xy) |ax| {
+                const val = move_delta[ax];
+                var movemnt: motion.Axis = .none;
+                if (val > 0) movemnt = .positive;
+                if (val < 0) movemnt = .negative;
+
+                movemnt = movemnt.invese(); //for panning
+                for (0..@abs(xy)) |_|
+                    _ = self.glass.sliders[ax].drive(movemnt);
             }
+        }
 
-            // release
-            if (!input_active and self.active) {
-                self.active = false;
-            }
+        // release
+        if (!input_active and self.active) {
+            self.active = false;
         }
     }
 };

@@ -81,7 +81,6 @@ pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
     defer g_context.deinit();
 
     var imga = try imgs.LinearImageAllocator.init(
-        init.gpa,
         &g_context,
         .{ .device_local_bit = true },
     );

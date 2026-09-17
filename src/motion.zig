@@ -12,6 +12,14 @@ pub const Axis = enum(i8) {
     pub fn active(a: Axis) bool {
         return a == .positive or a == .negative;
     }
+
+    pub fn invese(a: Axis) Axis {
+        return switch (a) {
+            .negative => .positive,
+            .positive => .negative,
+            else => .none,
+        };
+    }
 };
 
 const MoveErrs = error{
