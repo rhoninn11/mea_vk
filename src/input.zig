@@ -45,7 +45,10 @@ pub fn initS() !void {
     });
     pan_input = try HoldAxis.init(&.{
         // TODO: mouse hold for dragging
-        &.{ sdl.keycode.Keycode.space, todo_key },
+        &.{
+            sdl.keycode.Keycode.space, todo_key,
+            sdl.keycode.Keycode.y,     todo_key,
+        },
     });
 }
 

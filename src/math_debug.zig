@@ -32,17 +32,26 @@ const ax_colors = EscapeColor.initDefault(
     },
 );
 
-inline fn colored(f: f32, here: *std.Io.Writer, brush: AxId) !void {
-    const color = ax_colors.get(brush);
-    try here.writeAll(color);
+inline fn floatMono(f: f32, here: *std.Io.Writer) !void {
     try here.print("| {d:>6.03} |", .{f});
-    try here.writeAll(white);
+}
+
+inline fn floatColor(f: f32, paper: *std.Io.Writer, brush: AxId) !void {
+    const color = ax_colors.get(brush);
+    try paper.writeAll(color);
+    try floatMono(f, paper);
+    try paper.writeAll(white);
 }
 
 pub fn prettyV4(v4: [4]f32, paper: *std.Io.Writer) !void {
     const seq: [4]AxId = .{ .x, .y, .z, .w };
     inline for (0..4) |i| {
-        try colored(v4[i], paper, seq[i]);
+        try floatColor(v4[i], paper, seq[i]);
+    }
+}
+pub fn basicV3(v3: [3]f32, paper: *std.Io.Writer) !void {
+    inline for (0..3) |i| {
+        try floatMono(v3[i], paper);
     }
 }
 

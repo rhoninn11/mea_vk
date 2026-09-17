@@ -217,7 +217,10 @@ pub const Panner = struct {
 
     pub fn update(self: *Self, axes: *const input.HoldAxis, scann_pos: m.ivec2) void {
         const activation = axes.value();
-        const input_active = activation[0].active();
+        var input_active = false;
+        for (0..axes.axn()) |i| {
+            input_active |= activation[i].active();
+        }
         {
             self.grab(input_active, scann_pos);
 

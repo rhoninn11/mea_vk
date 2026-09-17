@@ -500,6 +500,17 @@ fn theDeepest(access: EasyAcces) !void {
         try dyn_text.print(txta, "\n\n", .{}); //young blit space
         try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
         // try dyn_text.print(txta, "blit info x:{d:>6.2}|y:{d:>6.2}\n", .{ blit_x.w, blit_x.h });
+
+        {
+            const ppos = freefly.p.head;
+            const mdbg = @import("math_debug.zig");
+            var line: [128]u8 = undefined;
+            var writer = std.Io.Writer.fixed(&line);
+            try mdbg.basicV3(ppos, &writer);
+            try writer.flush();
+            try dyn_text.print(txta, "{s}", .{writer.buffered()});
+        }
+
         const hit = coords.hit();
         if (hit.hit) {
             // const x, const y = interact.at;
@@ -533,8 +544,8 @@ fn theDeepest(access: EasyAcces) !void {
         const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
 
         const virt_ray: t.Ray = switch (state.persp) {
-            .omni => t.Ray{ .at = freefly.p.head, .to = .{ 0, 0, 10 } },
-            .graphView => a.testTracer(tracker_phi),
+            .omni => freefly.viewRay(),
+            .graphView => a.graphView(tracker_phi),
         };
 
         {

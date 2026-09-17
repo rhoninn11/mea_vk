@@ -230,7 +230,7 @@ pub const Navig = struct {
     };
 };
 
-pub fn testTracer(fast_phi: f32) t.Ray {
+pub fn graphView(fast_phi: f32) t.Ray {
     const phi = fast_phi * 0.1;
 
     const lower = m.vec3{ 0, -3, 0 };

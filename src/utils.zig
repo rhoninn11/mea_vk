@@ -103,10 +103,22 @@ pub const Freeflyer = struct {
 
     fn playerApplyInput(self: *@This(), input: *const in.HoldAxis, td: f32) void {
         const r_speed: f32 = 3;
-        const delta = m.vec3{ resolve(input.value()[0]), 0, -resolve(input.value()[1]) } //
-            * @as(m.vec3, @splat(r_speed * td));
+        const delta = @as(m.vec3, @splat(r_speed * td));
+        const dir = m.vec3{
+            resolve(input.value()[0]),
+            0,
+            -resolve(input.value()[1]),
+        };
 
-        self.p.head += delta;
+        self.p.head += dir * delta;
+    }
+
+    pub inline fn viewRay(self: *const Freeflyer) t.Ray {
+        const target = self.p.head + m.vec3{ 0, 0, 1 };
+        return t.Ray{
+            .at = self.p.head,
+            .to = target,
+        };
     }
 
     pub inline fn resolve(phi_axis: motion.Axis) f32 {

@@ -64,6 +64,10 @@ pub fn HostMotion(keytype: type) type {
             keyn: u8,
             setn: u8,
 
+            pub inline fn axn(self: *const HoldAxis) u8 {
+                return self.keyn / 2;
+            }
+
             pub fn init(sets: []const []const keytype) !HoldAxis {
                 const set_num = sets.len;
                 std.debug.assert(set_num > 0);
