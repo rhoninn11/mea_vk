@@ -191,71 +191,88 @@ pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator) !DualImageData {
     return try DualImageData.initProto(io, gpa, zip.file_sets[0]);
 }
 
-pub const Panner = struct {
-    const Self = @This();
+const xy = 2;
+pub const GlassPan = struct {
     glass: *LookingGlass,
-    start_at: m.ivec2,
-    pan_delta_total_prev: m.ivec2 = .{ 0, 0 },
-    pan_delta_total: m.ivec2 = .{ 0, 0 },
-    active: bool = false,
+    panner: Panning,
+    delta: m.ivec2 = .{ 0, 0 },
 
-    pub fn init(glass: *LookingGlass) Self {
-        return Panner{
+    pub fn init(glass: *LookingGlass) GlassPan {
+        return .{
             .glass = glass,
-            .start_at = .{ 0, 0 },
+            .panner = .{},
         };
     }
 
-    fn grab(self: *Self, input_active: bool, scann_pos: m.ivec2) void {
-        if (!self.active and input_active) {
-            self.active = true;
-            self.start_at = scann_pos;
-            self.pan_delta_total_prev = .{ 0, 0 };
-            self.pan_delta_total = .{ 0, 0 };
-        }
-    }
-    fn grab2(self: *Self, input_active: bool, scann_pos: m.ivec2) void {
-        if (!self.active and input_active) {
-            self.active = true;
-            self.start_at = scann_pos;
-            self.pan_delta_total_prev = .{ 0, 0 };
-            self.pan_delta_total = .{ 0, 0 };
+    fn applyDeltaToGlass(self: *GlassPan, delta: m.ivec2) void {
+        const move_delta: [xy]i16 = delta - self.delta;
+        defer self.delta = delta;
+
+        for (0..xy) |ax| {
+            const ax_delta = move_delta[ax];
+            var movemnt: motion.Axis = .none;
+            if (ax_delta > 0) movemnt = .positive;
+            if (ax_delta < 0) movemnt = .negative;
+
+            movemnt = movemnt.invese(); //for panning
+            for (0..@abs(ax_delta)) |_|
+                _ = self.glass.sliders[ax].drive(movemnt);
         }
     }
 
-    pub fn update(self: *Self, axes: *const input.HoldAxis, scann_pos: m.ivec2) void {
+    pub fn update(self: *GlassPan, axes: *const input.HoldAxis, scann_pos: m.ivec2) void {
         const activation = axes.value();
         var input_active = false;
         for (0..axes.axn()) |i| {
             input_active |= activation[i].active();
         }
 
-        if (!input_active) {
+        self.panner.update(input_active, scann_pos);
+        const pan = self.panner.getDelta();
+
+        if (!pan.active) {
+            self.delta = .{ 0, 0 };
             return;
         }
 
-        self.grab(input_active, scann_pos);
+        self.applyDeltaToGlass(pan.delta);
+    }
+};
 
-        const xy = 2;
+pub const Panning = struct {
+    const Self = @This();
+    start_at: m.ivec2 = .{ 0, 0 },
+    pan_delta: m.ivec2 = .{ 0, 0 },
+    active: bool = false,
+
+    const Delta = struct {
+        active: bool,
+        delta: [xy]i16,
+    };
+
+    pub fn getDelta(self: *Self) Delta {
+        return .{
+            .active = self.active,
+            .delta = self.pan_delta,
+        };
+    }
+
+    pub fn update(self: *Self, input_active: bool, scann_pos: m.ivec2) void {
+        // grap
+        if (!self.active and input_active) {
+            self.active = true;
+            self.start_at = scann_pos;
+            self.pan_delta = .{ 0, 0 };
+        }
+
+        // messure
         if (self.active) {
-            self.pan_delta_total = scann_pos - self.start_at;
-            defer self.pan_delta_total_prev = self.pan_delta_total;
-
-            const move_delta: [xy]f32 = self.pan_delta_total - self.pan_delta_total_prev;
-            for (0..xy) |ax| {
-                const val = move_delta[ax];
-                var movemnt: motion.Axis = .none;
-                if (val > 0) movemnt = .positive;
-                if (val < 0) movemnt = .negative;
-
-                movemnt = movemnt.invese(); //for panning
-                for (0..@abs(xy)) |_|
-                    _ = self.glass.sliders[ax].drive(movemnt);
-            }
+            self.pan_delta = scann_pos - self.start_at;
         }
 
         // release
         if (!input_active and self.active) {
+            self.pan_delta = .{ 0, 0 };
             self.active = false;
         }
     }

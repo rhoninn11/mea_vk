@@ -374,7 +374,7 @@ fn theDeepest(access: EasyAcces) !void {
     var smooth_scale: u.Smooth = .{};
 
     var last_mouse_pos: m.ivec2 = .{ 0, 0 };
-    var panner = proto.Panner.init(&glass);
+    var panner = proto.GlassPan.init(&glass);
 
     // main loop
     const text_sz_base: fonts.TextSz = .{};
@@ -528,7 +528,7 @@ fn theDeepest(access: EasyAcces) !void {
                 @intCast(m.uinty(p_y_s)),
             };
 
-            const pd = panner.pan_delta_total_prev;
+            const pd = panner.delta;
 
             try dyn_text.print(txta, "{s:<16} | x:{d:>6} y:{d:>6}\n", .{ "pixel pos", m.uinty(p_x), m.uinty(p_y) });
             try dyn_text.print(txta, "{s:<16} | x:{d:>6} y:{d:>6}\n", .{ "pan delta", pd[0], pd[1] });
