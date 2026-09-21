@@ -194,7 +194,7 @@ pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator) !DualImageData {
 const xy = 2;
 pub const GlassPan = struct {
     glass: *LookingGlass,
-    panner: Panning,
+    panner: addon.Panning_(m.ivec2),
     delta: m.ivec2 = .{ 0, 0 },
 
     pub fn init(glass: *LookingGlass) GlassPan {
@@ -236,45 +236,6 @@ pub const GlassPan = struct {
         }
 
         self.applyDeltaToGlass(pan.delta);
-    }
-};
-
-pub const Panning = struct {
-    const Self = @This();
-    start_at: m.ivec2 = .{ 0, 0 },
-    pan_delta: m.ivec2 = .{ 0, 0 },
-    active: bool = false,
-
-    const Delta = struct {
-        active: bool,
-        delta: [xy]i16,
-    };
-
-    pub fn getDelta(self: *Self) Delta {
-        return .{
-            .active = self.active,
-            .delta = self.pan_delta,
-        };
-    }
-
-    pub fn update(self: *Self, input_active: bool, scann_pos: m.ivec2) void {
-        // grap
-        if (!self.active and input_active) {
-            self.active = true;
-            self.start_at = scann_pos;
-            self.pan_delta = .{ 0, 0 };
-        }
-
-        // messure
-        if (self.active) {
-            self.pan_delta = scann_pos - self.start_at;
-        }
-
-        // release
-        if (!input_active and self.active) {
-            self.pan_delta = .{ 0, 0 };
-            self.active = false;
-        }
     }
 };
 

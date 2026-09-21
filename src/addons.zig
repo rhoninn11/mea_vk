@@ -260,3 +260,76 @@ pub fn wrapDown(val: u8, total: u8) u8 {
     const first = val == 0;
     return if (first) total - 1 else val - 1;
 }
+
+const xy = 2;
+pub fn Panning_(vtpy: type) type {
+    const Panning = struct {
+        const Self = @This();
+        start_at: vtpy = .{ 0, 0 },
+        pan_delta: vtpy = .{ 0, 0 },
+        active: bool = false,
+
+        const Delta = struct {
+            active: bool,
+            delta: vtpy,
+        };
+
+        pub fn getDelta(self: *Self) Delta {
+            return .{
+                .active = self.active,
+                .delta = self.pan_delta,
+            };
+        }
+
+        pub fn update(self: *Self, input_active: bool, scann_pos: vtpy) void {
+            // grap
+            if (!self.active and input_active) {
+                self.active = true;
+                self.start_at = scann_pos;
+                self.pan_delta = .{ 0, 0 };
+            }
+
+            // messure
+            if (self.active) {
+                self.pan_delta = scann_pos - self.start_at;
+            }
+
+            // release
+            if (!input_active and self.active) {
+                self.pan_delta = .{ 0, 0 };
+                self.active = false;
+            }
+        }
+    };
+    return Panning;
+}
+
+test "panning motion" {
+    var pan: Panning_(m.vec2) = .{};
+
+    const steps: []const m.vec2 = &.{
+        .{ 0, 1 },
+        .{ 1, 1 },
+        .{ 0, 1 },
+        .{ -1, 1 },
+    };
+
+    var len: f32 = 0;
+    var sum: m.vec2 = .{ 0, 0 };
+    pan.update(true, sum);
+    for (steps) |delta| {
+        sum += delta;
+        pan.update(true, sum);
+
+        const dist = m.len(m.stack(pan.getDelta().delta, 0));
+        std.debug.print("dist is: {d}\n", .{dist});
+        try std.testing.expect(dist > len);
+        len = dist;
+    }
+
+    pan.update(false, .{ 128, 199 });
+
+    const dist = m.len(m.stack(pan.getDelta().delta, 0));
+    std.debug.print("dist is: {d}\n", .{dist});
+    try std.testing.expect(dist < 0.001);
+}

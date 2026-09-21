@@ -244,11 +244,11 @@ pub const LinearImageAllocator = struct {
     pub fn imgAlloc(self: *LinearImageAllocator, gc: *const GraphicsContext, img: vk.Image) !LocDesc {
         const req = gc.dev.getImageMemoryRequirements(img);
         const spot = try self.bitmap.allocateSpot(req);
-        try gc.dev.bindImageMemory(
-            img,
-            self.dev_mem,
-            Bitmap.alignDelta(spot.blk_idx, req.alignment),
-        );
+        const alignment_delta = Bitmap.alignDelta(spot.blk_idx, req.alignment);
+        const offset = @as(u64, block_size) * spot.blk_idx + alignment_delta;
+
+        std.debug.print("+++ offset is {d} alignment is {d}\n", .{ offset, req.alignment });
+        try gc.dev.bindImageMemory(img, self.dev_mem, offset);
 
         return spot;
     }
