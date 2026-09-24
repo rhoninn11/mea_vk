@@ -210,7 +210,7 @@ test "setin and restin" {
 
 pub const LinearImageAllocator = struct {
     const total_size = 256 * 1024 * 1024; //256 MB
-    const block_size = 64 * 1024; //64 KB
+    pub const block_size = 64 * 1024; //64 KB
     const block_num = total_size / block_size;
 
     const Self = @This();
@@ -247,7 +247,7 @@ pub const LinearImageAllocator = struct {
         const alignment_delta = Bitmap.alignDelta(spot.blk_idx, req.alignment);
         const offset = @as(u64, block_size) * spot.blk_idx + alignment_delta;
 
-        std.debug.print("+++ offset is {d} alignment is {d}\n", .{ offset, req.alignment });
+        // std.debug.print("+++ offset is {d} alignment is {d}\n", .{ offset, req.alignment });
         try gc.dev.bindImageMemory(img, self.dev_mem, offset);
 
         return spot;

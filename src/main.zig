@@ -247,16 +247,20 @@ fn theDeepest(access: EasyAcces) !void {
     // textures
     const g64 = sht.GridSize.g64;
 
-    var all_imgs: imgs.ManyImages = try .init(access.gpa);
+    var all_imgs: imgs.ManyImages = try .init(access.gpa, access.imga);
     defer all_imgs.deinit();
 
+    const tctx = imgs.TexCtx{
+        .pic = &pic,
+        .imga = access.imga,
+    };
     {
         // 0 - 3 few, mostly test textures
         const basic_tex_set: [4]anyerror!imgs.VkImage = .{
-            imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_rgb, .default),
-            imgs.vulkanTexture(&pic, g64, &imgs.demo_tex_r, .default),
-            imgs.vulkanTexture(&pic, looking_vol.grid, looking_vol.pix, .nearest),
-            imgs.vulkanTexture(&pic, looking_lyr.grid, looking_lyr.pix, .nearest),
+            imgs.vulkanTexture(&tctx, g64, &imgs.demo_tex_rgb, .default),
+            imgs.vulkanTexture(&tctx, g64, &imgs.demo_tex_r, .default),
+            imgs.vulkanTexture(&tctx, looking_vol.grid, looking_vol.pix, .nearest),
+            imgs.vulkanTexture(&tctx, looking_lyr.grid, looking_lyr.pix, .nearest),
         };
         const basic_idx = 0;
         inline for (0.., basic_tex_set) |i, risky_rgba| {
@@ -268,7 +272,7 @@ fn theDeepest(access: EasyAcces) !void {
     {
         // 4 for atlas
         const gridsz_abc = fonts.font_g;
-        var vki_glyph_atlas = try imgs.U8Image.init(access.gm, gridsz_abc);
+        var vki_glyph_atlas = try imgs.U8Image.init(access.gm, access.imga, gridsz_abc);
         try imgs.texPrep(&pic, gridsz_abc, abc.char_atlas, &vki_glyph_atlas, .font);
         try all_imgs.append(&vki_glyph_atlas);
 
@@ -278,8 +282,8 @@ fn theDeepest(access: EasyAcces) !void {
 
     {
         // 5 scan data
-        var mono = try imgs.U16Image.init(pic.gc, glass.img_sz);
-        errdefer mono.deinit();
+        var mono = try imgs.U16Image.init(pic.gc, access.imga, glass.img_sz);
+        errdefer mono.deinit(access.imga);
         try imgs.texPrep(&pic, glass.img_sz, glass.scan_raw.pixels, &mono, .nearest);
         try all_imgs.append(&mono);
 
@@ -302,7 +306,7 @@ fn theDeepest(access: EasyAcces) !void {
             };
             defer gpa.free(pixels);
 
-            const rgba = try imgs.vulkanTexture(&pic, tex_grid_ok, pixels, .nearest);
+            const rgba = try imgs.vulkanTexture(&tctx, tex_grid_ok, pixels, .nearest);
             lazy_shady.omnitex.updateTexture(0, &rgba, ok_atlas_idx);
             try all_imgs.append(&rgba);
 
