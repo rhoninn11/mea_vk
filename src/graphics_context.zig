@@ -65,8 +65,6 @@ pub const DrawInfo = struct {
 };
 
 const imgs = @import("imgs/imgs.zig");
-pub const RGBImage = imgs.RGBImage;
-pub const VkImage = imgs.VkImage;
 
 pub const OneShotCommanded = struct {
     pic: *const PoolInCtx,

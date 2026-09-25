@@ -164,8 +164,8 @@ pub const DualImageData = struct {
     }
 };
 
-pub fn serdesLoadBackup(io: std.Io, gpa: std.mem.Allocator) !DualImageData {
-    const raw_img = serdesLoad(io, gpa) catch |err| {
+pub fn serdesLoadWithFallback(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !DualImageData {
+    const raw_img = serdesLoad(io, gpa, prefix) catch |err| {
         std.debug.print("+++ dummy synthesis | {s}\n", .{@errorName(err)});
         return DualImageData.initDummy(gpa);
     };
@@ -183,9 +183,7 @@ pub fn protoImgRead(io: std.Io, gpa: std.mem.Allocator, filepath: []const u8) !m
     return meagen.Image.decode(&rader.interface, gpa);
 }
 
-pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator) !DualImageData {
-    const prefix = "./fs/serdes";
-
+pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !DualImageData {
     var zip = try files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" });
     defer zip.deinit(gpa);
     return try DualImageData.initProto(io, gpa, zip.file_sets[0]);

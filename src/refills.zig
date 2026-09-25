@@ -39,6 +39,19 @@ pub fn unifomRefil(
 }
 
 pub fn gridPrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spacing: f32) !void {
+    const stump = storage_dset.instances(0);
+    try gridPrefilInner(stump, grid, spacing);
+
+    for (1..storage_dset.d_set_arr.items.len) |i| {
+        const inst_in_memory = storage_dset.instances(@truncate(i));
+        @memcpy(
+            inst_in_memory[0..grid.total],
+            stump[0..grid.total],
+        );
+    }
+}
+
+pub fn gridPrefilInner(inst_in_memory: [*]sht.PerInstance, grid: sht.GridSize, spacing: f32) !void {
     const instance_num = grid.total;
     const lim_num = 8096;
     std.debug.assert(instance_num <= lim_num);
@@ -102,10 +115,5 @@ pub fn gridPrefil(storage_dset: dset.DescriptorPrep, grid: sht.GridSize, spacing
             std.debug.print("+++ storage refil i({d}) stores position v({})\n", .{ i, pos_1 });
         }
     }
-
-    for (storage_dset.buff_arr.items) |possible_buffer| {
-        const storage = possible_buffer.?;
-        const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
-        defer @memcpy(mapping, scratchpad);
-    }
+    @memcpy(inst_in_memory, scratchpad);
 }

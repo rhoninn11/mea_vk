@@ -109,7 +109,9 @@ fn theDeepest(access: EasyAcces) !void {
     defer abc.deinit(access.gpa);
 
     // vol data
-    var dual_img = try proto.serdesLoadBackup(access.io, pages);
+
+    const prefix = "./fs/serdes";
+    var dual_img = try proto.serdesLoadWithFallback(access.io, pages, prefix);
     defer dual_img.deinit(pages);
 
     const grid = sht.GridSize.g64;
@@ -179,7 +181,7 @@ fn theDeepest(access: EasyAcces) !void {
         .gpa = aa,
     };
     var lazy_shady: dset.ShadyGroup = try .init(ctx, lazy_opt);
-    defer lazy_shady.drop(ctx);
+    defer lazy_shady.deinit(ctx);
 
     // rendering & pipelines
     const render_pass = try pipe.createRenderPass(
@@ -277,12 +279,12 @@ fn theDeepest(access: EasyAcces) !void {
         try all_imgs.append(&vki_glyph_atlas);
 
         lazy_shady.omnitex.updateTexture(0, &vki_glyph_atlas, 4);
-        try d.ppmU8Debug(access.io, abc.char_atlas, gridsz_abc);
+        // try d.ppmU8Debug(access.io, abc.char_atlas, gridsz_abc);
     }
 
     {
         // 5 scan data
-        var mono = try imgs.U16Image.init(pic.gc, access.imga, glass.img_sz);
+        var mono = try imgs.U16Image.init(access.gm, access.imga, glass.img_sz);
         errdefer mono.deinit(access.imga);
         try imgs.texPrep(&pic, glass.img_sz, glass.scan_raw.pixels, &mono, .nearest);
         try all_imgs.append(&mono);

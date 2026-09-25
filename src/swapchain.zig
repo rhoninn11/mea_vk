@@ -246,7 +246,6 @@ pub const Swapchain = struct {
             render_submits,
             current.frame_fence,
         );
-        // https://claude.ai/chat/398d5ba8-7355-4093-9a37-3361c5f3c45e
 
         // Step 3: Present the current frame
         _ = try gc.dev.queuePresentKHR(gc.present_queue.handle, &.{
@@ -265,8 +264,8 @@ pub const Swapchain = struct {
             .null_handle,
         );
 
-        std.mem.swap(vk.Semaphore, &self.swap_images[result.image_index].image_acquired, &self.next_image_acquired);
         self.image_index = result.image_index;
+        std.mem.swap(vk.Semaphore, &self.swap_images[self.image_index].image_acquired, &self.next_image_acquired);
 
         return switch (result.result) {
             .success => .optimal,

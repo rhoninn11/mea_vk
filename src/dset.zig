@@ -2,6 +2,8 @@ const std = @import("std");
 const vk = @import("vulkan-zig");
 const gm = @import("graphics_context.zig");
 const m = @import("math.zig");
+const imgs = @import("imgs/imgs.zig");
+const sht = @import("shaders/types.zig");
 
 pub const ShadyGroup = struct {
     const Self = @This();
@@ -19,6 +21,12 @@ pub const ShadyGroup = struct {
         storag_size: u32,
     };
 
+    pub fn deinit(self: *ShadyGroup, ctx: DsetCtx) void {
+        self.uniforms.deinit(ctx);
+        self.storage.deinit(ctx);
+        self.omnitex.deinit(ctx);
+    }
+
     pub fn init(ctx: DsetCtx, opt: Options) !Self {
         var self: Self = undefined;
 
@@ -27,7 +35,7 @@ pub const ShadyGroup = struct {
             ctx,
             opt.swapchain_lan,
             gm.baked.uniform_frag_vert_dyn,
-            &.{.{ .binding = 0, .element_size = opt.ubo_size, .num = 16 }},
+            &.{.{ .binding = 0, .element_size = opt.ubo_size, .num = 16 }}, //shader.types.zig.GroupData
             null,
         );
         errdefer dset_uniform.deinit(ctx);
@@ -38,7 +46,7 @@ pub const ShadyGroup = struct {
             opt.swapchain_lan,
             gm.baked.storage_frag_vert,
             &.{
-                .{ .binding = 0, .element_size = opt.storag_size, .num = 1 },
+                .{ .binding = 0, .element_size = opt.storag_size, .num = 1 }, //shader.types.zig.PerInstance
                 // .{ .binding = 1, .element_size = storage_b_sz, .num = 1 },
             },
             null,
@@ -57,12 +65,6 @@ pub const ShadyGroup = struct {
         self.storage = storage;
         self.omnitex = dset_atlas;
         return self;
-    }
-
-    pub fn drop(self: *ShadyGroup, ctx: DsetCtx) void {
-        self.uniforms.deinit(ctx);
-        self.storage.deinit(ctx);
-        self.omnitex.deinit(ctx);
     }
 
     pub fn layout(self: *const Self) [sets]vk.DescriptorSetLayout {
@@ -151,11 +153,35 @@ pub const DescriptorPrep = struct {
             return self.gc.dev.createDescriptorSetLayout(&dslci, null);
         }
     };
+    const DSetInfo = gm.baked.DSetDataInfo;
+
+    pub fn deinit(self: *Self, ctx: DsetCtx) void {
+        const alloc = ctx.gpa;
+        const gc = ctx.gc;
+        if (self._d_pool) |d_pool| {
+            gc.dev.destroyDescriptorPool(d_pool, null);
+        }
+
+        for (self.buff_arr.items) |possible_buff| {
+            if (possible_buff) |buff| {
+                buff.deinit(self.gc);
+            }
+        }
+
+        if (self._d_set_layout) |layout| {
+            gc.dev.destroyDescriptorSetLayout(layout, null);
+        }
+
+        self.d_set_arr.deinit(alloc);
+        self.buff_arr.deinit(alloc);
+        self.d_set_layout_arr.deinit(alloc);
+    }
+
     pub fn init(
         ctx: DsetCtx,
         frame_copies_num: usize,
         using: gm.baked.DSetInit,
-        data_info: []const gm.baked.DSetDataInfo,
+        data_info: []const DSetInfo,
         bindless_size: ?u32,
     ) !Self {
         std.debug.assert(data_info.len > 0);
@@ -245,35 +271,37 @@ pub const DescriptorPrep = struct {
             self.d_set_arr.items.ptr,
         );
 
-        // specify data
-        // var hmm: std.ArrayList(vk.WriteDescriptorSet) = .empty;
-
-        if (self.set_type != .combined_image_sampler) {
-            for (0..frame_copies_num) |i| {
-                const buf_info = vk.DescriptorBufferInfo{
-                    .buffer = self.buff_arr.items[i].?.dvk_bfr,
-                    .range = data_info[0].element_size, // relevent for dynamics offset but not exactly the same as single instance data
-                    .offset = 0,
-                };
-                const write_ops: []const vk.WriteDescriptorSet = &.{vk.WriteDescriptorSet{
-                    .s_type = .write_descriptor_set,
-                    .dst_set = self.d_set_arr.items[i],
-                    .dst_binding = data_info[0].binding,
-                    .dst_array_element = 0,
-                    .descriptor_type = self.set_type,
-                    .descriptor_count = 1,
-                    .p_buffer_info = @ptrCast(&buf_info),
-                    .p_image_info = &.{},
-                    .p_texel_buffer_view = &.{},
-                }};
-                self.gc.dev.updateDescriptorSets(write_ops, &.{});
-            }
-        }
+        self.writeContent(@truncate(frame_copies_num), data_info[0]);
 
         return self;
     }
 
-    pub fn updateTexture(self: *Self, idx: usize, img: *const gm.VkImage, array_idx: ?u32) void {
+    fn writeContent(self: *Self, times_n: u8, info: DSetInfo) void {
+        if (self.set_type == .combined_image_sampler) return;
+
+        //for each chain link
+        for (0..times_n) |i| {
+            const buf_info = vk.DescriptorBufferInfo{
+                .buffer = self.buff_arr.items[i].?.dvk_bfr,
+                .range = info.element_size, // relevent for dynamics offset but not exactly the same as single instance data
+                .offset = 0,
+            };
+            const write_ops: []const vk.WriteDescriptorSet = &.{vk.WriteDescriptorSet{
+                .s_type = .write_descriptor_set,
+                .dst_set = self.d_set_arr.items[i],
+                .dst_binding = info.binding,
+                .dst_array_element = 0,
+                .descriptor_type = self.set_type,
+                .descriptor_count = 1,
+                .p_buffer_info = @ptrCast(&buf_info),
+                .p_image_info = &.{},
+                .p_texel_buffer_view = &.{},
+            }};
+            self.gc.dev.updateDescriptorSets(write_ops, &.{});
+        }
+    }
+
+    pub fn updateTexture(self: *Self, idx: usize, img: *const imgs.VkImage, array_idx: ?u32) void {
         const img_info = vk.DescriptorImageInfo{
             .image_layout = .shader_read_only_optimal,
             .image_view = img.vk_img_view.?,
@@ -292,25 +320,11 @@ pub const DescriptorPrep = struct {
         self.gc.dev.updateDescriptorSets(write_image_dsc_set, &.{});
     }
 
-    pub fn deinit(self: *Self, ctx: DsetCtx) void {
-        const alloc = ctx.gpa;
-        const gc = ctx.gc;
-        if (self._d_pool) |d_pool| {
-            gc.dev.destroyDescriptorPool(d_pool, null);
-        }
+    pub fn instances(self: *const Self, link_id: u8) [*]sht.PerInstance {
+        std.debug.assert(self.set_type == .storage_buffer);
 
-        for (self.buff_arr.items) |possible_buff| {
-            if (possible_buff) |buff| {
-                buff.deinit(self.gc);
-            }
-        }
-
-        if (self._d_set_layout) |layout| {
-            gc.dev.destroyDescriptorSetLayout(layout, null);
-        }
-
-        self.d_set_arr.deinit(alloc);
-        self.buff_arr.deinit(alloc);
-        self.d_set_layout_arr.deinit(alloc);
+        const storage = self.buff_arr.items[link_id].?;
+        const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
+        return mapping;
     }
 };
