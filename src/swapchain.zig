@@ -10,7 +10,7 @@ const m = @import("math.zig");
 
 pub const SwapchainContext = struct {
     gc: *const GraphicsContext,
-    imga: *imgs.LinearImageAllocator,
+    imga: *imgs.ImgaAllocator,
 };
 
 pub const Swapchain = struct {
@@ -363,7 +363,7 @@ fn initSwapchainImages(gc: *const GraphicsContext, swapchain: vk.SwapchainKHR, f
 fn initDepths(
     gc: *const GraphicsContext,
     gpa: Allocator,
-    imga: *imgs.LinearImageAllocator,
+    imga: *imgs.ImgaAllocator,
     extent: vk.Extent2D,
     n_copies: u8,
 ) ![]imgs.DepthImage {
@@ -384,7 +384,7 @@ fn initDepths(
 fn initPreSwaps(
     gc: *const GraphicsContext,
     gpa: Allocator,
-    imga: *imgs.LinearImageAllocator,
+    imga: *imgs.ImgaAllocator,
     extent: vk.Extent2D,
     n_copies: u8,
 ) ![]imgs.VkImage {

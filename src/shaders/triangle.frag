@@ -72,7 +72,12 @@ void main() {
     vec3 level_color = f_color.xyz;
 
     if (gate > 0.5) {
-        // vec4 inferno_alt = texture(tex_bindless[nonuniformEXT(3)], v_uv);
+
+        // gradient from tex usagezs
+        float pos = clamp(h, 0.0, 1.0);
+        vec4 inferno_alt = texture(tex_bindless[nonuniformEXT(32)], vec2(pos, 0));
+        level_color = inferno_alt.xyz * vec3(uv.x);
+        // old usage
         level_color = inferno(h) * vec3(uv.x);
     }
     if (gate > 1.5) {

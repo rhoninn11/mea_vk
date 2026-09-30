@@ -18,7 +18,7 @@ pub const demo_tex_rgb = root.demo_tex_rgb;
 // Just red
 pub const demo_tex_r = root.demo_tex_r;
 
-pub const LinearImageAllocator = memory.LinearImageAllocator;
+pub const ImgaAllocator = memory.ImgaAllocator;
 pub fn imgMemTypeInfer(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags) !u32 {
     return memory.imgMemTypeInfer(gc, flags);
 }
@@ -42,7 +42,7 @@ pub const DepthImage = struct {
         return format == .d32_sfloat_s8_uint or format == .d24_unorm_s8_uint;
     }
 
-    pub fn init(gc: *const GraphicsContext, imga: *LinearImageAllocator, extent: vk.Extent2D) !Self {
+    pub fn init(gc: *const GraphicsContext, imga: *ImgaAllocator, extent: vk.Extent2D) !Self {
         const devk = gc.dev;
         const depth_format = try Self.getDepthFormat(gc);
         _ = hasSetncilComponent(depth_format);
@@ -90,7 +90,7 @@ pub const DepthImage = struct {
             .memspot = loc, // TODO: = loc,
         };
     }
-    pub fn deinit(self: Self, gc: *const GraphicsContext, imga: *LinearImageAllocator) void {
+    pub fn deinit(self: Self, gc: *const GraphicsContext, imga: *ImgaAllocator) void {
         const devk = gc.dev;
         devk.destroyImageView(self.dvk_img_view, null);
         devk.destroyImage(self.dvk_img, null);
@@ -100,26 +100,26 @@ pub const DepthImage = struct {
 };
 
 pub const RGBImage = struct {
-    pub fn init(gc: *const GraphicsContext, imga: *memory.LinearImageAllocator, g: sht.GridSize) !VkImage {
+    pub fn init(gc: *const GraphicsContext, imga: *memory.ImgaAllocator, g: sht.GridSize) !VkImage {
         const format: vk.Format = .a8b8g8r8_srgb_pack32;
         return VkImage.init(gc, imga, g, format);
     }
 };
 pub const PreSwapImage = struct {
-    pub fn init(gc: *const GraphicsContext, imga: *memory.LinearImageAllocator, g: sht.GridSize) !VkImage {
+    pub fn init(gc: *const GraphicsContext, imga: *memory.ImgaAllocator, g: sht.GridSize) !VkImage {
         const format: vk.Format = .a8b8g8r8_srgb_pack32;
         return VkImage.init(gc, imga, g, format);
     }
 };
 
 pub const U16Image = struct {
-    pub fn init(gc: *const GraphicsContext, imga: *memory.LinearImageAllocator, g: sht.GridSize) !VkImage {
+    pub fn init(gc: *const GraphicsContext, imga: *memory.ImgaAllocator, g: sht.GridSize) !VkImage {
         return VkImage.init(gc, imga, g, .r16_unorm);
     }
 };
 
 pub const U8Image = struct {
-    pub fn init(gc: *const GraphicsContext, imga: *memory.LinearImageAllocator, g: sht.GridSize) !VkImage {
+    pub fn init(gc: *const GraphicsContext, imga: *memory.ImgaAllocator, g: sht.GridSize) !VkImage {
         return VkImage.init(gc, imga, g, .r8_unorm);
     }
 };
@@ -139,7 +139,7 @@ pub const VkImage = struct {
         return g.total * @sizeOf(u32);
     }
 
-    pub fn deinit(self: *Self, imga: *memory.LinearImageAllocator) void {
+    pub fn deinit(self: *Self, imga: *memory.ImgaAllocator) void {
         const devk = self.gc.dev;
         if (self.vk_sampler) |_sampler| {
             devk.destroySampler(_sampler, null);
@@ -152,7 +152,7 @@ pub const VkImage = struct {
         imga.imgFree(self.memloc);
     }
 
-    pub fn init(gc: *const GraphicsContext, imga: *memory.LinearImageAllocator, g: sht.GridSize, format: vk.Format) !Self {
+    pub fn init(gc: *const GraphicsContext, imga: *memory.ImgaAllocator, g: sht.GridSize, format: vk.Format) !Self {
         const devk = gc.dev;
 
         const img_create_info: vk.ImageCreateInfo = .{
@@ -237,7 +237,7 @@ pub const VkImage = struct {
 
 pub const TexCtx = struct {
     pic: *const gm.PoolInCtx,
-    imga: *memory.LinearImageAllocator,
+    imga: *memory.ImgaAllocator,
 };
 
 pub fn vulkanTexture(
@@ -261,7 +261,7 @@ pub fn texPrep(
     test_img: *VkImage,
     mode: VkImage.ESamplerMode,
 ) !void {
-    const buff_size = memory.LinearImageAllocator.block_size * @as(u64, test_img.memloc.num);
+    const buff_size = memory.ImgaAllocator.block_size * @as(u64, test_img.memloc.num);
     //TODO: maybe one omnipresent buffor for img data copying? On front of new imga indeed
     var transport_bfr = try gm.BufferData.init(
         pic.gc,
@@ -370,8 +370,8 @@ pub fn bfr2ImgCopy(gc: *const gm.GraphicsContext, cmds: vk.CommandBuffer, cfg: B
 pub const ManyImages = struct {
     array: std.ArrayList(VkImage),
     _gpa: std.mem.Allocator,
-    _imga: *memory.LinearImageAllocator,
-    pub fn init(gpa: std.mem.Allocator, imga: *memory.LinearImageAllocator) !ManyImages {
+    _imga: *memory.ImgaAllocator,
+    pub fn init(gpa: std.mem.Allocator, imga: *memory.ImgaAllocator) !ManyImages {
         return .{
             .array = try .initCapacity(gpa, 256),
             ._gpa = gpa,

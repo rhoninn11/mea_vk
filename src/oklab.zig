@@ -6,6 +6,7 @@ const dset = @import("dset.zig");
 const sht = @import("shaders/types.zig");
 const addons = @import("addons.zig");
 const frame = @import("frame.zig");
+const imgs = @import("imgs/imgs.zig");
 
 pub fn srgb_to_oklab(srgb: m.vec3) m.vec3 {
     const lms_conv: [3]m.vec3 = .{
@@ -50,6 +51,9 @@ pub fn oklab_to_srgb(lab: m.vec3) m.vec3 {
     return srgb;
 }
 
+pub const OK_SWEEP: u8 = 128;
+pub const OK_TEX_BASE: u8 = 32;
+
 const U16max: f32 = 1 << 16;
 pub const OkUnderstanding = struct {
     const chroma_base: f32 = 0.2;
@@ -78,7 +82,10 @@ pub const OkUnderstanding = struct {
         };
         return .{ p0, p1 };
     }
-
+    pub fn display(self: *const Self, instances: [*]sht.PerInstance, group: frame.InstGroup, phi: f32) !void {
+        _ = self;
+        return Self.labSpliced(instances, group, phi);
+    }
     pub fn labSpliced(instances: [*]sht.PerInstance, group: frame.InstGroup, phi: f32) !void {
         const lim_num = 8096;
         const stack_size = lim_num * @sizeOf(sht.PerInstance);
@@ -118,60 +125,6 @@ pub const OkUnderstanding = struct {
         @memcpy(instances + group.base, scratchpad);
     }
 
-    pub fn labAtInfinitum(self: *const OkUnderstanding, storage_dset: dset.DescriptorPrep) !void {
-        const total = self.grid.total;
-        const lim_num = 8096;
-        std.debug.assert(total <= lim_num);
-
-        const stack_size = lim_num * @sizeOf(sht.PerInstance);
-        var stack_mem: [stack_size]u8 = undefined;
-
-        var provider: std.heap.FixedBufferAllocator = .init(&stack_mem);
-        const local_a = provider.allocator();
-
-        var scratchpad = try local_a.alloc(sht.PerInstance, total);
-
-        for (storage_dset.buff_arr.items) |possible_buffer| {
-            const storage = possible_buffer.?;
-            const mapping: [*]sht.PerInstance = @ptrCast(@alignCast(storage.mapping.?));
-            @memcpy(scratchpad, mapping);
-            var phase: f32 = 0;
-
-            const chroma: f32 = 0.2;
-            // L 0-1 -> just progress over iteration
-            const l_delt: f32 = 1.0 / 1000.0;
-            var l: f32 = -l_delt;
-            const phase_delt: f32 = 0.01;
-            for (0..total) |i| {
-                l += l_delt;
-                const lab: m.vec3 = .{
-                    l,
-                    chroma * @cos(std.math.tau * phase),
-                    chroma * @sin(std.math.tau * phase),
-                };
-                phase += phase_delt;
-                var srgb_pos: [3]f32 = oklab_to_srgb(lab);
-                var srgb_col = srgb_pos;
-                var inst_data: sht.PerInstance = scratchpad[i];
-                const clamp_lim: f32 = 2;
-                for (0..3) |jj| {
-                    if (srgb_pos[jj] < 0) {
-                        srgb_pos[jj] = 0;
-                        srgb_col[jj] = 0;
-                    }
-                    if (srgb_col[jj] > clamp_lim) srgb_col[jj] = clamp_lim;
-                }
-
-                inst_data.offset_4d = .{ srgb_pos[0], srgb_pos[1], srgb_pos[2], 0 };
-                inst_data.depth_ctrl[0] = 2;
-                inst_data.depth_ctrl[1] = 0;
-
-                scratchpad[i] = inst_data;
-            }
-            @memcpy(mapping, scratchpad);
-        }
-    }
-
     pub fn sampleSpace(alloc: std.mem.Allocator, L: f32, g: *const sht.GridSize) ![]u8 {
         const texture_mem = try alloc.alloc(u8, g.total * @sizeOf(u32));
         const g_mid = addons.GridOps.middle(g);
@@ -203,8 +156,44 @@ pub const OkUnderstanding = struct {
 
         return texture_mem;
     }
+
+    const Self = @This();
+    pub fn init(
+        gpa: std.mem.Allocator,
+        tctx: *const imgs.TexCtx,
+        omnitex: *dset.DescriptorPrep,
+        img_store: *imgs.ManyImages,
+        tex_grid: sht.GridSize,
+    ) !Self {
+        // TEXMAP: 32 gradient
+        // TEXMAP: 33 - 159 ok slices
+        const L_delt: f32 = 1.0 / @as(f32, @floatFromInt(OK_SWEEP - 1));
+        var ok_atlas_idx: u8 = OK_TEX_BASE;
+        var Lumi: f32 = 0.0;
+
+        for (0..OK_SWEEP) |i| {
+            std.debug.assert(ok_atlas_idx < dset.ATLAS_MAX);
+            const pixels = switch (i) {
+                0 => try sampleInfernoAlt(gpa, &tex_grid),
+                else => try OkUnderstanding.sampleSpace(gpa, Lumi, &tex_grid),
+            };
+            defer gpa.free(pixels);
+
+            var rgba = try imgs.vulkanTexture(tctx, tex_grid, pixels, .nearest);
+            errdefer rgba.deinit(tctx.imga);
+
+            omnitex.updateTexture(0, &rgba, ok_atlas_idx);
+            try img_store.append(&rgba);
+
+            ok_atlas_idx += 1;
+            Lumi += L_delt;
+        }
+
+        return .{ .grid = tex_grid };
+    }
 };
 
+// gradient texture
 const LabSpot = struct { key: f32, lab: m.vec3 };
 pub fn sampleInfernoAlt(alloc: std.mem.Allocator, g: *const sht.GridSize) ![]u8 {
     const path: []const LabSpot = &.{

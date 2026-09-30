@@ -10,9 +10,9 @@ const imgs = @import("imgs/imgs.zig");
 pub const EasyAcces = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
-    host: DualHostWin,
+    host: SdlHost,
     gm: *const gm.GraphicsContext,
-    imga: *imgs.LinearImageAllocator,
+    imga: *imgs.ImgaAllocator,
 };
 
 pub const OnHostErrors = error{
@@ -22,41 +22,24 @@ pub const OnHostErrors = error{
 
 const DeeperClient = *const fn (acces: EasyAcces) OnHostErrors!void;
 
-const Hosts = enum(u8) {
-    sdl_h,
-};
-pub const DualHostWin = union(Hosts) {
-    sdl_h: *sdlh.SdlContext,
+pub const SdlHost = struct {
+    ctx: *sdlh.SdlContext,
 
-    pub fn winExtent(self: DualHostWin) !vk.Extent2D {
-        switch (self) {
-            .sdl_h => |ctx| {
-                const w, const h = try ctx.window.?.getSize();
-                return vk.Extent2D{ .width = @intCast(w), .height = @intCast(h) };
-            },
-        }
+    pub fn winExtent(self: SdlHost) !vk.Extent2D {
+        const w, const h = try self.ctx.window.?.getSize();
+        return vk.Extent2D{ .width = @intCast(w), .height = @intCast(h) };
     }
 
-    pub fn shoudClose(self: DualHostWin) bool {
-        switch (self) {
-            .sdl_h => |ctx| {
-                return ctx.should_close;
-            },
-        }
+    pub fn shoudClose(self: SdlHost) bool {
+        return self.ctx.should_close;
     }
 
-    pub fn closeWindow(self: DualHostWin) void {
-        switch (self) {
-            .sdl_h => {
-                self.sdl_h.should_close = true;
-            },
-        }
+    pub fn closeWindow(self: SdlHost) void {
+        self.ctx.should_close = true;
     }
 
-    pub fn pollEvents(self: DualHostWin) void {
-        switch (self) {
-            .sdl_h => |ctx| ctx.pollEvents(),
-        }
+    pub fn pollEvents(self: SdlHost) void {
+        self.ctx.pollEvents();
     }
 };
 
@@ -80,7 +63,7 @@ pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
     );
     defer g_context.deinit();
 
-    var imga = try imgs.LinearImageAllocator.init(
+    var imga = try imgs.ImgaAllocator.init(
         &g_context,
         .{ .device_local_bit = true },
     );
@@ -89,7 +72,7 @@ pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
 
     std.log.debug("Using device: {s}", .{g_context.deviceName()});
     const access = EasyAcces{
-        .host = .{ .sdl_h = sdl_ctx },
+        .host = .{ .ctx = sdl_ctx },
         .gm = &g_context,
         .gpa = init.gpa,
         .io = init.io,

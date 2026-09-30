@@ -5,6 +5,8 @@ const m = @import("math.zig");
 const imgs = @import("imgs/imgs.zig");
 const sht = @import("shaders/types.zig");
 
+pub const ATLAS_MAX = 256;
+
 pub const ShadyGroup = struct {
     const Self = @This();
     const sets = 3;

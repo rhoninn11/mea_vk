@@ -69,8 +69,8 @@ var state: frame.FrameState = .{
     .model_idx = 0,
     .persp = .graphView,
     .alt_shader = false,
-    .ok_tex_base = OK_TEX_BASE,
-    .ok_group = .{ .base = map.instablo.get(.okg).beg, .num = OK_SWEEP },
+    .ok_tex_base = oklab.OK_TEX_BASE,
+    .ok_group = .{ .base = map.instablo.get(.okg).beg, .num = oklab.OK_SWEEP },
     .char_group = .{ .base = map.instablo.get(.text).beg, .num = 0 },
     .layer_group = .{ .base = map.instablo.get(.layer).beg, .num = 0 },
     .grig_group = .{ .base = map.instablo.get(.cubes).beg, .num = 0 },
@@ -165,14 +165,13 @@ fn theDeepest(access: EasyAcces) !void {
     const _8k = 1 << 13;
     std.debug.assert(grid.total * 2 == _8k);
 
-    const ATLAS_MAX = 256;
     const instpool_num = grid.total * 2;
 
     const storage_b_sz = @sizeOf(sht.SmolInst) * instpool_num;
     _ = storage_b_sz;
     const lazy_opt: dset.ShadyGroup.Options = .{
         .swapchain_lan = inflight_num,
-        .atlas_size = ATLAS_MAX,
+        .atlas_size = dset.ATLAS_MAX,
         .ubo_size = @sizeOf(sht.GroupData),
         .storag_size = @sizeOf(sht.PerInstance) * instpool_num,
     };
@@ -257,7 +256,7 @@ fn theDeepest(access: EasyAcces) !void {
         .imga = access.imga,
     };
     {
-        // 0 - 3 few, mostly test textures
+        // TEXMAP: 0 - 3 few, mostly test textures
         const basic_tex_set: [4]anyerror!imgs.VkImage = .{
             imgs.vulkanTexture(&tctx, g64, &imgs.demo_tex_rgb, .default),
             imgs.vulkanTexture(&tctx, g64, &imgs.demo_tex_r, .default),
@@ -272,7 +271,7 @@ fn theDeepest(access: EasyAcces) !void {
         }
     }
     {
-        // 4 for atlas
+        // TEXMAP: 4 for atlas
         const gridsz_abc = fonts.font_g;
         var vki_glyph_atlas = try imgs.U8Image.init(access.gm, access.imga, gridsz_abc);
         try imgs.texPrep(&pic, gridsz_abc, abc.char_atlas, &vki_glyph_atlas, .font);
@@ -283,7 +282,7 @@ fn theDeepest(access: EasyAcces) !void {
     }
 
     {
-        // 5 scan data
+        // TEXMAP: 5 scan data
         var mono = try imgs.U16Image.init(access.gm, access.imga, glass.img_sz);
         errdefer mono.deinit(access.imga);
         try imgs.texPrep(&pic, glass.img_sz, glass.scan_raw.pixels, &mono, .nearest);
@@ -292,34 +291,17 @@ fn theDeepest(access: EasyAcces) !void {
         lazy_shady.omnitex.updateTexture(0, &mono, 5);
     }
 
-    {
-        // 32 gradient
-        // 33 - 159 ok slices
-        const tex_grid_ok = sht.GridSize.g128;
-        const L_delt: f32 = 1.0 / @as(f32, @floatFromInt(OK_SWEEP - 1));
-        var ok_atlas_idx: u8 = OK_TEX_BASE;
-        var L: f32 = 0.0;
-
-        for (0..OK_SWEEP) |i| {
-            std.debug.assert(ok_atlas_idx < ATLAS_MAX);
-            const pixels = switch (i) {
-                0 => try oklab.sampleInfernoAlt(gpa, &tex_grid_ok),
-                else => try oklab.OkUnderstanding.sampleSpace(gpa, L, &tex_grid_ok),
-            };
-            defer gpa.free(pixels);
-
-            const rgba = try imgs.vulkanTexture(&tctx, tex_grid_ok, pixels, .nearest);
-            lazy_shady.omnitex.updateTexture(0, &rgba, ok_atlas_idx);
-            try all_imgs.append(&rgba);
-
-            ok_atlas_idx += 1;
-            L += L_delt;
-        }
-    }
+    const ok_snake = try oklab.OkUnderstanding.init(
+        gpa,
+        &tctx,
+        &lazy_shady.omnitex,
+        &all_imgs,
+        sht.GridSize.g128,
+    );
 
     // For frame recording
-    const inflight_slots = 8;
-    std.debug.assert(inflight_num < inflight_slots);
+    const max_in_flight_slots = 4;
+    std.debug.assert(inflight_num <= max_in_flight_slots);
 
     // recorders
     var inflight_stack: [1024]u8 = undefined;
@@ -571,11 +553,7 @@ fn theDeepest(access: EasyAcces) !void {
                 try glass.bakeRidges(instances, &state.layer_group);
             }
 
-            try oklab.OkUnderstanding.labSpliced(
-                instances,
-                state.ok_group,
-                ok_phi,
-            );
+            try ok_snake.display(instances, state.ok_group, ok_phi);
 
             // text content selection
             const dyna_dyna_text = switch (dbgmonit.enabled) {

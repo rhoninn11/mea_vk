@@ -208,7 +208,7 @@ test "setin and restin" {
     try std.testing.expectEqual(0, storage.count());
 }
 
-pub const LinearImageAllocator = struct {
+pub const ImgaAllocator = struct {
     const total_size = 256 * 1024 * 1024; //256 MB
     pub const block_size = 64 * 1024; //64 KB
     const block_num = total_size / block_size;
@@ -220,28 +220,28 @@ pub const LinearImageAllocator = struct {
     dev_mem: vk.DeviceMemory,
     bitmap: Bitmap,
 
-    pub fn deinit(self: *LinearImageAllocator, gc: *const GraphicsContext) void {
+    pub fn deinit(self: *ImgaAllocator, gc: *const GraphicsContext) void {
         gc.dev.freeMemory(self.dev_mem, null);
     }
 
     pub fn init(
         gc: *const GraphicsContext,
         flags: vk.MemoryPropertyFlags,
-    ) !LinearImageAllocator {
+    ) !ImgaAllocator {
         const mem_idx = try imgMemTypeInfer(gc, flags);
         const mem = try gc.dev.allocateMemory(&.{
             .allocation_size = total_size,
             .memory_type_index = mem_idx,
         }, null);
 
-        return LinearImageAllocator{
+        return ImgaAllocator{
             .dev_mem_idx = mem_idx,
             .dev_mem = mem,
             .bitmap = .init(),
         };
     }
 
-    pub fn imgAlloc(self: *LinearImageAllocator, gc: *const GraphicsContext, img: vk.Image) !LocDesc {
+    pub fn imgAlloc(self: *ImgaAllocator, gc: *const GraphicsContext, img: vk.Image) !LocDesc {
         const req = gc.dev.getImageMemoryRequirements(img);
         const spot = try self.bitmap.allocateSpot(req);
         const alignment_delta = Bitmap.alignDelta(spot.blk_idx, req.alignment);
@@ -253,7 +253,7 @@ pub const LinearImageAllocator = struct {
         return spot;
     }
 
-    pub fn imgFree(self: *LinearImageAllocator, spot: LocDesc) void {
+    pub fn imgFree(self: *ImgaAllocator, spot: LocDesc) void {
         self.bitmap.freeSpot(spot);
     }
 };
