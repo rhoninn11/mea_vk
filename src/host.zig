@@ -1,17 +1,18 @@
 const std = @import("std");
-const gm = @import("graphics_context.zig");
+const gc = @import("graphics_context.zig");
 
 const glfw = @import("third_party/glfw.zig");
 const vk = @import("vulkan-zig");
 const input = @import("input.zig");
 const sdlh = @import("sdlh.zig");
 const imgs = @import("imgs/imgs.zig");
+const devui = @import("devui.zig");
 
 pub const EasyAcces = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
     host: SdlHost,
-    gm: *const gm.GraphicsContext,
+    gm: *const gc.GraphicsContext,
     imga: *imgs.ImgaAllocator,
 };
 
@@ -47,33 +48,44 @@ const glfw_name = "glfw app name form host function";
 const sdl_name = "sld app name form host function";
 
 pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
-    sdlh.initSDL() catch |err| {
+    var sdl_ctx = sdlh.initSDL() catch |err| {
         std.debug.print("!!! sdl init failed with |> {s}\n", .{@errorName(err)});
         return err;
     };
     defer sdlh.exitSDL();
 
-    const sdl_ctx = sdlh.getContext();
-    // sdl_ctx.should_close = true; // DEBUG SPOT
-
-    const g_context = try gm.GraphicsContext.initUnderSdl(
+    var gm = try gc.GraphicsContext.initUnderSdl(
         init.gpa,
         sdl_name,
         sdl_ctx.window.?,
     );
-    defer g_context.deinit();
+    defer gm.deinit();
+
+    // cimgui.cImGui_ImplVulkan_LoadFunctions(vk.API_VERSION_1_2, loader_func: ?*const fn ([*c]const u8, ?*anyopaque) ?*const fn () void)
+    // function loading propably here
+    try devui.prelode();
+    var loader = devui.Loader.from(&gm);
+    const ok = devui.BindToVulkan(
+        vk.API_VERSION_1_2.toU32(),
+        devui.Loader.load,
+        &loader,
+    );
+    if (!ok) return error.devuiVkBindFailed;
+    try devui.createImguiContext();
+
+    // devui.Loader
 
     var imga = try imgs.ImgaAllocator.init(
-        &g_context,
+        &gm,
         .{ .device_local_bit = true },
     );
-    defer imga.deinit(&g_context);
+    defer imga.deinit(&gm);
     // imga.verbose = true;
 
-    std.log.debug("Using device: {s}", .{g_context.deviceName()});
+    std.log.debug("Using device: {s}", .{gm.deviceName()});
     const access = EasyAcces{
-        .host = .{ .ctx = sdl_ctx },
-        .gm = &g_context,
+        .host = .{ .ctx = &sdl_ctx },
+        .gm = &gm,
         .gpa = init.gpa,
         .io = init.io,
         .imga = &imga,

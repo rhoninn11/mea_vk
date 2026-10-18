@@ -43,7 +43,7 @@ pub const DepthImage = struct {
     }
 
     pub fn init(gc: *const GraphicsContext, imga: *ImgaAllocator, extent: vk.Extent2D) !Self {
-        const devk = gc.dev;
+        const devk = gc.device_proxy;
         const depth_format = try Self.getDepthFormat(gc);
         _ = hasSetncilComponent(depth_format);
 
@@ -81,7 +81,7 @@ pub const DepthImage = struct {
             .components = gm.baked.identity_mapping,
         };
 
-        const img_viu = try gc.dev.createImageView(&img_viu_info, null);
+        const img_viu = try gc.device_proxy.createImageView(&img_viu_info, null);
 
         return Self{
             .dvk_img_view = img_viu,
@@ -91,7 +91,7 @@ pub const DepthImage = struct {
         };
     }
     pub fn deinit(self: Self, gc: *const GraphicsContext, imga: *ImgaAllocator) void {
-        const devk = gc.dev;
+        const devk = gc.device_proxy;
         devk.destroyImageView(self.dvk_img_view, null);
         devk.destroyImage(self.dvk_img, null);
         //TODO: imga.imgFree2(self.memspot);
@@ -140,7 +140,7 @@ pub const VkImage = struct {
     }
 
     pub fn deinit(self: *Self, imga: *memory.ImgaAllocator) void {
-        const devk = self.gc.dev;
+        const devk = self.gc.device_proxy;
         if (self.vk_sampler) |_sampler| {
             devk.destroySampler(_sampler, null);
         }
@@ -153,7 +153,7 @@ pub const VkImage = struct {
     }
 
     pub fn init(gc: *const GraphicsContext, imga: *memory.ImgaAllocator, g: sht.GridSize, format: vk.Format) !Self {
-        const devk = gc.dev;
+        const devk = gc.device_proxy;
 
         const img_create_info: vk.ImageCreateInfo = .{
             .image_type = .@"2d",
@@ -189,7 +189,7 @@ pub const VkImage = struct {
     }
 
     pub fn createImageView(self: *Self, gc: *const GraphicsContext) !void {
-        const devk = gc.dev;
+        const devk = gc.device_proxy;
         const image_view_create_info: vk.ImageViewCreateInfo = .{
             .image = self.dvk_img,
             .format = self.vk_format,
@@ -208,7 +208,7 @@ pub const VkImage = struct {
     };
 
     pub fn createSampler(self: *Self, gc: *const GraphicsContext, mode: ESamplerMode) !void {
-        const props = gc.instance.getPhysicalDeviceProperties(gc.pdev);
+        const props = gc.instance_prox.getPhysicalDeviceProperties(gc.pdev);
         const filter = switch (mode) {
             .nearest => vk.Filter.nearest,
             .font => vk.Filter.linear,
@@ -231,7 +231,7 @@ pub const VkImage = struct {
             .min_lod = 0.0,
             .max_lod = 0.0,
         };
-        self.vk_sampler = try gc.dev.createSampler(&sample_create_info, null);
+        self.vk_sampler = try gc.device_proxy.createSampler(&sample_create_info, null);
     }
 };
 
@@ -323,7 +323,7 @@ pub fn imgLTrans(gc: *const gm.GraphicsContext, cmds: vk.CommandBuffer, cfg: t.I
             .dst_access_mask = cfg.sync_point.dst.access,
         },
     };
-    gc.dev.cmdPipelineBarrier(
+    gc.device_proxy.cmdPipelineBarrier(
         cmds,
         cfg.sync_point.src.stage,
         cfg.sync_point.dst.stage,
@@ -358,7 +358,7 @@ pub fn bfr2ImgCopy(gc: *const gm.GraphicsContext, cmds: vk.CommandBuffer, cfg: B
         },
     };
 
-    gc.dev.cmdCopyBufferToImage(
+    gc.device_proxy.cmdCopyBufferToImage(
         cmds,
         cfg.buffer,
         cfg.image,

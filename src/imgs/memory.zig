@@ -37,10 +37,10 @@ pub fn imgMemTypeInfer(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags
         base.usage = config.usage;
         base.format = config.format;
 
-        const img = try gc.dev.createImage(&base, null);
-        defer gc.dev.destroyImage(img, null);
+        const img = try gc.device_proxy.createImage(&base, null);
+        defer gc.device_proxy.destroyImage(img, null);
 
-        reqs[i] = gc.dev.getImageMemoryRequirements(img);
+        reqs[i] = gc.device_proxy.getImageMemoryRequirements(img);
     }
 
     const basic_type_idx = try gc.findMemoryTypeIndex(reqs[0].memory_type_bits, flags);
@@ -221,7 +221,7 @@ pub const ImgaAllocator = struct {
     bitmap: Bitmap,
 
     pub fn deinit(self: *ImgaAllocator, gc: *const GraphicsContext) void {
-        gc.dev.freeMemory(self.dev_mem, null);
+        gc.device_proxy.freeMemory(self.dev_mem, null);
     }
 
     pub fn init(
@@ -229,7 +229,7 @@ pub const ImgaAllocator = struct {
         flags: vk.MemoryPropertyFlags,
     ) !ImgaAllocator {
         const mem_idx = try imgMemTypeInfer(gc, flags);
-        const mem = try gc.dev.allocateMemory(&.{
+        const mem = try gc.device_proxy.allocateMemory(&.{
             .allocation_size = total_size,
             .memory_type_index = mem_idx,
         }, null);
@@ -242,13 +242,13 @@ pub const ImgaAllocator = struct {
     }
 
     pub fn imgAlloc(self: *ImgaAllocator, gc: *const GraphicsContext, img: vk.Image) !LocDesc {
-        const req = gc.dev.getImageMemoryRequirements(img);
+        const req = gc.device_proxy.getImageMemoryRequirements(img);
         const spot = try self.bitmap.allocateSpot(req);
         const alignment_delta = Bitmap.alignDelta(spot.blk_idx, req.alignment);
         const offset = @as(u64, block_size) * spot.blk_idx + alignment_delta;
 
         // std.debug.print("+++ offset is {d} alignment is {d}\n", .{ offset, req.alignment });
-        try gc.dev.bindImageMemory(img, self.dev_mem, offset);
+        try gc.device_proxy.bindImageMemory(img, self.dev_mem, offset);
 
         return spot;
     }

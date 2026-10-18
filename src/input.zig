@@ -20,7 +20,7 @@ const Tied = struct {
     trig: *Trigger,
 };
 
-pub fn initS() !void {
+pub fn setupControls() !void {
     glass_input = try HoldAxis.init(&.{
         &.{
             sdl.keycode.Keycode.a, sdl.keycode.Keycode.d, //

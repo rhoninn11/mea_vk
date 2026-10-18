@@ -85,7 +85,7 @@ pub fn gpCommandQueue(gc: *const gm.GraphicsContext) !vk.CommandPool {
             // .transient_bit = true,
         },
     };
-    return gc.dev.createCommandPool(&pool_cinfo, null);
+    return gc.device_proxy.createCommandPool(&pool_cinfo, null);
 }
 fn deeper(access: EasyAcces) host.OnHostErrors!void {
     theDeepest(access) catch |err| {
@@ -146,7 +146,7 @@ fn theDeepest(access: EasyAcces) !void {
     std.debug.print("+++ Serial frames {}\n", .{inflight_num});
 
     const general_cpool = try gpCommandQueue(gc);
-    defer gc.dev.destroyCommandPool(general_cpool, null);
+    defer gc.device_proxy.destroyCommandPool(general_cpool, null);
     const pic = gm.PoolInCtx{ .gc = gc, .pool = general_cpool };
 
     //descriptor sets
@@ -188,18 +188,18 @@ fn theDeepest(access: EasyAcces) !void {
         swapchain.surface_format.format,
         swapchain.depth_images[0].vk_format,
     );
-    defer gc.dev.destroyRenderPass(render_pass, null);
+    defer gc.device_proxy.destroyRenderPass(render_pass, null);
 
     const desc_sets = lazy_shady.layout();
     const push_const_ranges = gm.PushConstant.Ranges();
-    const pipeline_layout = try gc.dev.createPipelineLayout(&.{
+    const pipeline_layout = try gc.device_proxy.createPipelineLayout(&.{
         .flags = .{},
         .p_set_layouts = &desc_sets,
         .set_layout_count = desc_sets.len,
         .p_push_constant_ranges = push_const_ranges.ptr,
         .push_constant_range_count = @intCast(push_const_ranges.len),
     }, null);
-    defer gc.dev.destroyPipelineLayout(pipeline_layout, null);
+    defer gc.device_proxy.destroyPipelineLayout(pipeline_layout, null);
 
     var framebuffers = try createFramebuffers(
         gc,
@@ -318,7 +318,7 @@ fn theDeepest(access: EasyAcces) !void {
 
     var slot: u8 = 0;
     for (0..inflight_num) |_| {
-        pools[slot] = try gc.dev.createCommandPool(&frame_cmd_pool_cfg, null);
+        pools[slot] = try gc.device_proxy.createCommandPool(&frame_cmd_pool_cfg, null);
         recorders[slot] = gm.FrameRecorder{
             .id = @intCast(slot),
             .gm = pic.gc,
@@ -327,7 +327,7 @@ fn theDeepest(access: EasyAcces) !void {
         };
         slot += 1;
     }
-    defer for (0..slot) |i| gc.dev.destroyCommandPool(pools[i], null);
+    defer for (0..slot) |i| gc.device_proxy.destroyCommandPool(pools[i], null);
 
     // Related to scene
     var timeline = a.Timeline.init(access.io);
@@ -575,7 +575,7 @@ fn theDeepest(access: EasyAcces) !void {
         );
         if (vk_state == .suboptimal or a.extentDiffer(resolution_extent, win_size)) {
             resolution_extent = win_size;
-            try gc.dev.deviceWaitIdle();
+            try gc.device_proxy.deviceWaitIdle();
             swapchain.recreate(resolution_extent) catch |err| {
                 std.debug.print("!!! hit error at recreate |> {s}\n", .{@errorName(err)});
                 std.debug.print("!!! prev win_size w:{d} h:{d}\n", .{ win_size.width, win_size.height });
@@ -619,7 +619,7 @@ fn theDeepest(access: EasyAcces) !void {
     }
     std.debug.print("Exitting\n", .{});
     try swapchain.waitForAllFences();
-    try gc.dev.deviceWaitIdle();
+    try gc.device_proxy.deviceWaitIdle();
 }
 
 fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_pass: vk.RenderPass, swapchain: swap.Swapchain) ![]vk.Framebuffer {
@@ -627,7 +627,7 @@ fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_p
     errdefer allocator.free(framebuffers);
 
     var i: usize = 0;
-    errdefer for (framebuffers[0..i]) |fb| gc.dev.destroyFramebuffer(fb, null);
+    errdefer for (framebuffers[0..i]) |fb| gc.device_proxy.destroyFramebuffer(fb, null);
 
     for (framebuffers) |*fb| {
         const att_arr: []const vk.ImageView = &.{
@@ -635,7 +635,7 @@ fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_p
             swapchain.depth_images[i].dvk_img_view,
         };
 
-        fb.* = try gc.dev.createFramebuffer(&.{
+        fb.* = try gc.device_proxy.createFramebuffer(&.{
             .render_pass = render_pass,
             .attachment_count = @intCast(att_arr.len),
             .p_attachments = att_arr.ptr,
@@ -650,7 +650,7 @@ fn createFramebuffers(gc: *const GraphicsContext, allocator: Allocator, render_p
 }
 
 fn destroyFramebuffers(gc: *const GraphicsContext, allocator: Allocator, framebuffers: []const vk.Framebuffer) void {
-    for (framebuffers) |fb| gc.dev.destroyFramebuffer(fb, null);
+    for (framebuffers) |fb| gc.device_proxy.destroyFramebuffer(fb, null);
     allocator.free(framebuffers);
 }
 

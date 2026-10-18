@@ -87,7 +87,7 @@ pub fn libsFromC(b: *std.Build, o: *const Options) LibsFromC {
         },
     });
 
-    const inclued = b.path("src/third_party");
+    const include = b.path("src/third_party");
 
     const tt_header = b.path("src/third_party/stb_truetype.h");
     const raymath_header = b.path("src/third_party/raymath.h");
@@ -102,7 +102,7 @@ pub fn libsFromC(b: *std.Build, o: *const Options) LibsFromC {
             "-std=c99", "-Wall", //
         },
     });
-    stb_truetype_build.root_module.addIncludePath(inclued);
+    stb_truetype_build.root_module.addIncludePath(include);
     // stb_truetype_build.root_module.link_libc
 
     const tt_translate = b.addTranslateC(.{
@@ -110,6 +110,7 @@ pub fn libsFromC(b: *std.Build, o: *const Options) LibsFromC {
         .optimize = o.optimize,
         .root_source_file = tt_header,
     });
+
     const rm_translate = b.addTranslateC(.{
         .target = o.target,
         .optimize = o.optimize,
@@ -127,6 +128,24 @@ pub fn libsFromC(b: *std.Build, o: *const Options) LibsFromC {
         .compile = stb_truetype_build,
     };
 }
+pub fn cimguiC(b: *std.Build, o: *const Options) *std.Build.Module {
+    const include = b.path("src/third_party/imgui");
+    const cimgui_header = b.path("src/third_party/imgui/module.h");
+
+    const well = b.addTranslateC(.{
+        .target = o.target,
+        .optimize = o.optimize,
+        .root_source_file = cimgui_header,
+    });
+
+    well.addIncludePath(include);
+
+    return well.createModule();
+}
+
+const cimgui = @import("cimgui_zig");
+const platforms = cimgui.Platform;
+const renderers = cimgui.Renderer;
 
 pub fn build(b: *std.Build) !void {
     const o = Options.read(b);
@@ -143,8 +162,17 @@ pub fn build(b: *std.Build) !void {
     const libs_from_c = libsFromC(b, &o);
 
     const vk_registry_path = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
-    const vulkan_bind = b.dependency("vulkan_zig", .{ .registry = vk_registry_path }) //
-        .module("vulkan-zig");
+    const vulkan_bind = b.dependency(
+        "vulkan_zig",
+        .{ .registry = vk_registry_path },
+    ).module("vulkan-zig");
+    const cimgui_dep = b.dependency("cimgui_zig", .{
+        .target = o.target,
+        .optimize = o.optimize,
+        .platforms = &[_]cimgui.Platform{.SDL3},
+        .renderers = &[_]cimgui.Renderer{.Vulkan},
+    });
+    const cimgui_lib = cimgui_dep.artifact("cimgui");
 
     const vk_import: std.Build.Module.Import = .{ .name = "vulkan-zig", .module = vulkan_bind };
 
@@ -159,6 +187,7 @@ pub fn build(b: *std.Build) !void {
                 .{ .name = "stbtt", .module = libs_from_c.stb_tt_module },
                 .{ .name = "rmath", .module = libs_from_c.raymath_module },
                 .{ .name = "oct", .module = libs_from_c.api_module },
+                .{ .name = "cimgui", .module = cimguiC(b, &o) },
                 vk_import,
             },
         }),
@@ -170,8 +199,11 @@ pub fn build(b: *std.Build) !void {
 
     triangle_exe.root_module.addIncludePath(b.path("src/third_party/"));
     triangle_exe.root_module.linkLibrary(libs_from_c.compile);
+    triangle_exe.root_module.linkLibrary(cimgui_lib);
 
+    b.installArtifact(cimgui_lib);
     b.installArtifact(triangle_exe);
+    b.installArtifact(libs_from_c.compile);
     b.installArtifact(libs_from_c.compile);
 
     const sdl3_lib = b.dependency("sdl", .{

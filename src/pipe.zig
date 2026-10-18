@@ -50,11 +50,11 @@ pub const Moduler = struct {
         var out: [slot_len]vk.ShaderModule = undefined;
 
         inline for (0..slot_len) |i| {
-            const mod = try self.gc.dev.createShaderModule(&.{
+            const mod = try self.gc.device_proxy.createShaderModule(&.{
                 .code_size = lol[i].len,
                 .p_code = @ptrCast(lol[i].ptr),
             }, null);
-            errdefer self.gc.dev.destroyShaderModule(mod, null);
+            errdefer self.gc.device_proxy.destroyShaderModule(mod, null);
             out[i] = mod;
         }
         return out;
@@ -62,7 +62,7 @@ pub const Moduler = struct {
 
     pub fn destroyModules(self: *const Moduler, mods: [slot_len]vk.ShaderModule) void {
         for (mods[0..]) |mod|
-            self.gc.dev.destroyShaderModule(mod, null);
+            self.gc.device_proxy.destroyShaderModule(mod, null);
     }
 
     pub fn createPipeline(
@@ -98,7 +98,7 @@ pub const Moduler = struct {
     }
 
     pub fn destroyPipelin(self: *const Moduler, pipe: vk.Pipeline) void {
-        self.gc.dev.destroyPipeline(pipe, null);
+        self.gc.device_proxy.destroyPipeline(pipe, null);
     }
 };
 
@@ -241,7 +241,7 @@ fn restOfPipeline(
     };
 
     var pipeline: vk.Pipeline = undefined;
-    const result = try gc.dev.createGraphicsPipelines(
+    const result = try gc.device_proxy.createGraphicsPipelines(
         .null_handle,
         gpci,
         null,
@@ -331,5 +331,5 @@ pub fn createRenderPass(gc: *const gm.GraphicsContext, color_format: vk.Format, 
         .p_next = null,
     };
 
-    return try gc.dev.createRenderPass(&render_pass_create_info, null);
+    return try gc.device_proxy.createRenderPass(&render_pass_create_info, null);
 }

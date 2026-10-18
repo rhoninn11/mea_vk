@@ -20,8 +20,12 @@
             .hash = "sdl3-0.2.0-NmT1Q0mFJwBi9kZmArzh2rfJ_mFshydV0zPGULVlpACc",
         },
         .sdl = .{ //lib compilation
-            .url = "git+https://github.com/allyourcodebase/SDL3#f382eacf4b65f83dbfde2a6d6369ad0721c67976",
-            .hash = "sdl-1.0.1+3.4.4-i4QD0TSTqQBAsHLhwY8pWrOpzif-A_4zOe6-OB4oA5KS",
+            .url = "git+https://github.com/allyourcodebase/SDL#540fe66af2ca5050fc1aabdf7a19cf462ea0312e",
+            .hash = "sdl-1.0.2+3.4.16-i4QD0fCvqQBBggvApPLDHmSCoZSBDZALnEyM9m_-CQXY",
+        },
+        .cimgui_zig = .{
+            .url = "git+https://github.com/tiawl/cimgui.zig#80a2af71acb84a9c3d0ef904e3da989c407589dd",
+            .hash = "cimgui_zig-1.0.0-2XubkkvOvwAVHKlV3TlmvxEWffNz-Xcds0NWMmC2m5UI",
         },
     },
     .paths = .{""},

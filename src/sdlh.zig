@@ -177,17 +177,19 @@ pub const SdlContext = struct {
 
         // sdl3.log.setAllPriorities(.verbose);
 
+        try input.setupControls();
         try sdl3.init(system);
         errdefer self.deinit();
 
         sdl3.vulkan.loadLibrary(null) catch return error.vkloadfailed;
 
-        self.window = try sdl3.video.Window.init(name, 1600, 900, .{
-            .vulkan = true,
-            .resizable = true,
-        });
+        self.window = try sdl3.video.Window.init(
+            name,
+            1600,
+            900,
+            .{ .vulkan = true, .resizable = true },
+        );
 
-        try input.initS();
         return self;
     }
     fn deinit(self: *Self) void {
@@ -337,8 +339,9 @@ pub fn getContext() *SdlContext {
     return &sdl_state;
 }
 
-pub fn initSDL() !void {
+pub fn initSDL() !SdlContext {
     sdl_state = try SdlContext.init("somebody once told me...");
+    return sdl_state;
 }
 pub fn exitSDL() void {
     sdl_state.deinit();

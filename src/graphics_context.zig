@@ -43,7 +43,7 @@ const BaseWrapper = vk.BaseWrapper;
 const InstanceWrapper = vk.InstanceWrapper;
 const DeviceWrapper = vk.DeviceWrapper;
 
-const Instance = vk.InstanceProxy;
+const InstanceProxy = vk.InstanceProxy;
 const Device = vk.DeviceProxy;
 
 pub const DrawInfo = struct {
@@ -71,7 +71,7 @@ pub const OneShotCommanded = struct {
     cmds: vk.CommandBuffer,
 
     pub fn resolve(self: *const OneShotCommanded) !void {
-        const vkdev = self.pic.gc.dev;
+        const vkdev = self.pic.gc.device_proxy;
         const vkq = self.pic.gc.graphics_queue.handle;
 
         try vkdev.endCommandBuffer(self.cmds);
@@ -88,7 +88,7 @@ pub const OneShotCommanded = struct {
         vkdev.freeCommandBuffers(self.pic.pool, &.{self.cmds});
     }
     pub fn init(pic: *const PoolInCtx, len: u8) !OneShotCommanded {
-        const vkd = pic.gc.dev;
+        const vkd = pic.gc.device_proxy;
         var cmds: vk.CommandBuffer = undefined;
 
         const cb_alloc_info: vk.CommandBufferAllocateInfo = .{
@@ -120,10 +120,10 @@ pub const BufferData = struct {
     mapping: ?*anyopaque,
 
     pub fn deinit(self: *const BufferData, gc: *const GraphicsContext) void {
-        const dev = gc.dev;
-        if (self.mapping) |_| dev.unmapMemory(self.dvk_mem);
-        dev.destroyBuffer(self.dvk_bfr, null);
-        dev.freeMemory(self.dvk_mem, null);
+        const dev_prox = gc.device_proxy;
+        if (self.mapping) |_| dev_prox.unmapMemory(self.dvk_mem);
+        dev_prox.destroyBuffer(self.dvk_bfr, null);
+        dev_prox.freeMemory(self.dvk_mem, null);
     }
 
     const MemProx = struct {
@@ -136,13 +136,13 @@ pub const BufferData = struct {
         bfr: vk.Buffer,
         mem_flags: vk.MemoryPropertyFlags,
     ) !MemProx {
-        const r = gc.dev.getBufferMemoryRequirements(bfr);
+        const r = gc.device_proxy.getBufferMemoryRequirements(bfr);
         // INFO: requirements propably will be bigger then original size
 
         const memory = try gc.allocate(r, mem_flags);
-        errdefer gc.dev.freeMemory(memory, null);
+        errdefer gc.device_proxy.freeMemory(memory, null);
 
-        try gc.dev.bindBufferMemory(bfr, memory, 0);
+        try gc.device_proxy.bindBufferMemory(bfr, memory, 0);
 
         return MemProx{
             .mem = memory,
@@ -156,7 +156,7 @@ pub const BufferData = struct {
         usage: vk.BufferUsageFlags,
         bsize: u64,
     ) !BufferData {
-        const devk = gc.dev;
+        const devk = gc.device_proxy;
         const default_size = bsize;
 
         const bfr = try devk.createBuffer(&vk.BufferCreateInfo{
@@ -203,7 +203,7 @@ pub fn uploadVertices(pic: *const PoolInCtx, buffer: vk.Buffer, vert_slice: []co
 }
 
 fn copyBuffer(pic: *const PoolInCtx, dst: vk.Buffer, src: vk.Buffer, size: vk.DeviceSize) !void {
-    const vkdev = pic.gc.dev;
+    const vkdev = pic.gc.device_proxy;
     const one_shot = try OneShotCommanded.init(pic, 1);
     const region = &.{vk.BufferCopy{
         .src_offset = 0,
@@ -228,7 +228,7 @@ pub const FrameRecorder = struct {
 
     pub fn clear(self: *FrameRecorder, gm: *const GraphicsContext) !void {
         if (!self.flag) return;
-        try gm.dev.resetCommandPool(self.pool, .{});
+        try gm.device_proxy.resetCommandPool(self.pool, .{});
     }
 
     pub fn begin(self: *FrameRecorder, gm: *const GraphicsContext) !void {
@@ -238,7 +238,7 @@ pub const FrameRecorder = struct {
             .command_buffer_count = 1,
         };
 
-        try gm.dev.allocateCommandBuffers(&cbai, @ptrCast(self.cmds));
+        try gm.device_proxy.allocateCommandBuffers(&cbai, @ptrCast(self.cmds));
         self.flag = true;
     }
 };
@@ -250,28 +250,30 @@ pub const GraphicsContext = struct {
 
     allocator: Allocator,
 
-    vkb: BaseWrapper,
-
-    instance: Instance,
     debug_messenger: vk.DebugUtilsMessengerEXT,
     surface: vk.SurfaceKHR,
     pdev: vk.PhysicalDevice,
     props: vk.PhysicalDeviceProperties,
     mem_props: vk.PhysicalDeviceMemoryProperties,
 
-    dev: Device,
+    instance_prox: vk.InstanceProxy,
+    device_proxy: vk.DeviceProxy,
+
+    inst: vk.Instance,
+    dev: vk.Device,
+
     graphics_queue: Queue,
     present_queue: Queue,
 
     pub fn deinit(self: Self) void {
-        self.dev.destroyDevice(null);
-        self.instance.destroySurfaceKHR(self.surface, null);
-        self.instance.destroyDebugUtilsMessengerEXT(self.debug_messenger, null);
-        self.instance.destroyInstance(null);
+        self.device_proxy.destroyDevice(null);
+        self.instance_prox.destroySurfaceKHR(self.surface, null);
+        self.instance_prox.destroyDebugUtilsMessengerEXT(self.debug_messenger, null);
+        self.instance_prox.destroyInstance(null);
 
         // Don't forget to free the tables to prevent a memory leak.
-        self.allocator.destroy(self.dev.wrapper);
-        self.allocator.destroy(self.instance.wrapper);
+        self.allocator.destroy(self.device_proxy.wrapper);
+        self.allocator.destroy(self.instance_prox.wrapper);
     }
 
     pub fn initUnderSdl(gpa: Allocator, app_name: [*:0]const u8, window: sdl.video.Window) !GraphicsContext {
@@ -279,12 +281,11 @@ pub const GraphicsContext = struct {
         self.allocator = gpa;
 
         // ofc signature is for extern function, but signature should reflect that as callconv(.c)
-        const Signature = *const fn (instance: vk.Instance, procname: [*:0]const u8) callconv(.c) vk.PfnVoidFunction;
-        const raw = try sdl.vulkan.getVkGetInstanceProcAddr();
-        const callback: Signature = @ptrCast(raw);
-        self.vkb = BaseWrapper.load(callback);
+        // const Pfn = *const fn (instance: vk.Instance, procname: [*:0]const u8) callconv(.c) vk.PfnVoidFunction;
+        const callback: vk.PfnGetInstanceProcAddr = @ptrCast(try sdl.vulkan.getVkGetInstanceProcAddr());
+        const vk_lib_base = BaseWrapper.load(callback);
 
-        if (try checkLayerSupport(&self.vkb, self.allocator, required_layer_names[0..]) == false) {
+        if (try checkLayerSupport(&vk_lib_base, self.allocator, required_layer_names[0..]) == false) {
             return error.MissingLayer;
         }
 
@@ -293,7 +294,7 @@ pub const GraphicsContext = struct {
 
         const validation_features = validationFeatures();
 
-        const instance = try self.vkb.createInstance(&.{
+        const inst = try vk_lib_base.createInstance(&.{
             .p_next = if (Self.deeper_validation) &validation_features else null,
             .p_application_info = &appInfo(app_name),
 
@@ -306,34 +307,38 @@ pub const GraphicsContext = struct {
             .flags = .{ .enumerate_portability_bit_khr = false }, //true for apple
         }, null);
 
+        // dispatch wrappers
         const vki = try gpa.create(InstanceWrapper);
         errdefer gpa.destroy(vki);
-        vki.* = InstanceWrapper.load(instance, self.vkb.dispatch.vkGetInstanceProcAddr.?);
-        self.instance = Instance.init(instance, vki);
-        errdefer self.instance.destroyInstance(null);
+        const vkd = try gpa.create(DeviceWrapper);
+        errdefer gpa.destroy(vkd);
 
-        try self.setupDebug();
+        vki.* = InstanceWrapper.load(inst, vk_lib_base.dispatch.vkGetInstanceProcAddr.?);
+        self.instance_prox = InstanceProxy.init(inst, vki);
+        errdefer self.instance_prox.destroyInstance(null);
 
-        self.surface = try createSurfaceSdl(self.instance.handle, window);
-        errdefer self.instance.destroySurfaceKHR(self.surface, null);
+        self.surface = try createSurfaceSdl(self.instance_prox.handle, window);
+        errdefer self.instance_prox.destroySurfaceKHR(self.surface, null);
 
-        const candidate = try pickPhysicalDevice(self.instance, gpa, self.surface);
+        const candidate = try pickPhysicalDevice(self.instance_prox, gpa, self.surface);
         self.pdev = candidate.pdev;
         self.props = candidate.props;
 
-        const dev = try initializeCandidate(self.instance, candidate);
+        const dev = try initializeCandidate(self.instance_prox, candidate);
 
-        const vkd = try gpa.create(DeviceWrapper);
-        errdefer gpa.destroy(vkd);
-        vkd.* = DeviceWrapper.load(dev, self.instance.wrapper.dispatch.vkGetDeviceProcAddr.?);
-        self.dev = Device.init(dev, vkd);
-        errdefer self.dev.destroyDevice(null);
+        vkd.* = DeviceWrapper.load(dev, self.instance_prox.wrapper.dispatch.vkGetDeviceProcAddr.?);
+        self.device_proxy = Device.init(dev, vkd);
+        errdefer self.device_proxy.destroyDevice(null);
 
-        self.graphics_queue = Queue.init(self.dev, candidate.queues.graphics_family);
-        self.present_queue = Queue.init(self.dev, candidate.queues.present_family);
+        self.inst = inst;
+        self.dev = dev;
+
+        self.graphics_queue = Queue.init(self.device_proxy, candidate.queues.graphics_family);
+        self.present_queue = Queue.init(self.device_proxy, candidate.queues.present_family);
 
         try self.memoryPropsWithExp();
         try self.propsExplore();
+        try self.setupDebug();
 
         return self;
     }
@@ -366,7 +371,7 @@ pub const GraphicsContext = struct {
     }
 
     fn setupDebug(self: *Self) !void {
-        self.debug_messenger = try self.instance.createDebugUtilsMessengerEXT(&.{
+        self.debug_messenger = try self.instance_prox.createDebugUtilsMessengerEXT(&.{
             .message_severity = .{
                 //.verbose_bit_ext = true,
                 //.info_bit_ext = true,
@@ -394,7 +399,7 @@ pub const GraphicsContext = struct {
     }
 
     fn memoryPropsWithExp(self: *Self) !void {
-        const props = self.instance.getPhysicalDeviceMemoryProperties(self.pdev);
+        const props = self.instance_prox.getPhysicalDeviceMemoryProperties(self.pdev);
         self.mem_props = props;
         // ---- explore area -----
         const mem_t_count = props.memory_type_count;
@@ -425,7 +430,7 @@ pub const GraphicsContext = struct {
             .p_next = &mv_props,
         };
 
-        self.instance.getPhysicalDeviceProperties2(self.pdev, &phys_pros);
+        self.instance_prox.getPhysicalDeviceProperties2(self.pdev, &phys_pros);
         const lim = phys_pros.properties.limits;
         std.debug.print("------------------------ \n", .{});
         defer std.debug.print("------------------------ \n", .{});
@@ -458,7 +463,7 @@ pub const GraphicsContext = struct {
 
     pub fn allocate(self: GraphicsContext, requirements: vk.MemoryRequirements, flags: vk.MemoryPropertyFlags) !vk.DeviceMemory {
         const mem_type_idx = try self.findMemoryTypeIndex(requirements.memory_type_bits, flags);
-        return try self.dev.allocateMemory(&.{
+        return try self.device_proxy.allocateMemory(&.{
             .s_type = .memory_allocate_info,
             .allocation_size = requirements.size,
             .memory_type_index = mem_type_idx,
@@ -495,8 +500,8 @@ pub const PushConstant = struct {
     pub fn PushConstantCmd() void {}
 };
 
-fn checkLayerSupport(vkb: *const BaseWrapper, alloc: Allocator, layers_2_check: []const [*:0]const u8) !bool {
-    const available_layers = try vkb.enumerateInstanceLayerPropertiesAlloc(alloc);
+fn checkLayerSupport(vk_lib_wrap: *const BaseWrapper, alloc: Allocator, layers_2_check: []const [*:0]const u8) !bool {
+    const available_layers = try vk_lib_wrap.enumerateInstanceLayerPropertiesAlloc(alloc);
     defer alloc.free(available_layers);
     std.debug.print(
         "our instance has {d} layers\n we require {d} layers\n",
@@ -530,7 +535,7 @@ pub const Queue = struct {
     }
 };
 
-fn createSurface(instance: Instance, window: *glfw.Window) !vk.SurfaceKHR {
+fn createSurface(instance: InstanceProxy, window: *glfw.Window) !vk.SurfaceKHR {
     var surface: u64 = undefined;
 
     if (glfw.createWindowSurface(@intFromEnum(instance.handle), window, null, &surface) != .success) {
@@ -547,7 +552,7 @@ fn createSurfaceSdl(instance: vk.Instance, window: sdl.video.Window) !vk.Surface
     return @enumFromInt(surface_int);
 }
 
-fn initializeCandidate(instance: Instance, candidate: DeviceCandidate) !vk.Device {
+fn initializeCandidate(instance: InstanceProxy, candidate: DeviceCandidate) !vk.Device {
     const priority = [_]f32{1};
     const qci = [_]vk.DeviceQueueCreateInfo{
         .{
@@ -638,7 +643,7 @@ fn debugUtilsMessengerCallback(severity: vk.DebugUtilsMessageSeverityFlagsEXT, m
 }
 
 fn pickPhysicalDevice(
-    instance: Instance,
+    instance: InstanceProxy,
     allocator: Allocator,
     surface: vk.SurfaceKHR,
 ) !DeviceCandidate {
@@ -656,7 +661,7 @@ fn pickPhysicalDevice(
 }
 
 fn checkSuitable(
-    instance: Instance,
+    instance: InstanceProxy,
     pdev: vk.PhysicalDevice,
     allocator: Allocator,
     surface: vk.SurfaceKHR,
@@ -720,7 +725,7 @@ fn checkSuitable(
     return null;
 }
 
-fn allocateQueues(instance: Instance, pdev: vk.PhysicalDevice, allocator: Allocator, surface: vk.SurfaceKHR) !?QueueAllocation {
+fn allocateQueues(instance: InstanceProxy, pdev: vk.PhysicalDevice, allocator: Allocator, surface: vk.SurfaceKHR) !?QueueAllocation {
     const families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(pdev, allocator);
     defer allocator.free(families);
     std.debug.print("+++ device queue count {d}\n", .{families.len});
@@ -750,7 +755,7 @@ fn allocateQueues(instance: Instance, pdev: vk.PhysicalDevice, allocator: Alloca
     return null;
 }
 
-fn checkSurfaceSupport(instance: Instance, pdev: vk.PhysicalDevice, surface: vk.SurfaceKHR) !bool {
+fn checkSurfaceSupport(instance: InstanceProxy, pdev: vk.PhysicalDevice, surface: vk.SurfaceKHR) !bool {
     var format_count: u32 = undefined;
     _ = try instance.getPhysicalDeviceSurfaceFormatsKHR(pdev, surface, &format_count, null);
 
@@ -761,7 +766,7 @@ fn checkSurfaceSupport(instance: Instance, pdev: vk.PhysicalDevice, surface: vk.
 }
 
 fn checkExtensionSupport(
-    instance: Instance,
+    instance: InstanceProxy,
     pdev: vk.PhysicalDevice,
     allocator: Allocator,
 ) !bool {
