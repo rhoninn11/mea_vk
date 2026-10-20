@@ -8,6 +8,7 @@ const v = @import("vertex.zig");
 const addons = @import("addons.zig");
 const pipe = @import("pipe.zig");
 const a = @import("addons.zig");
+const devui = @import("devui.zig");
 
 pub const InstGroup = struct {
     base: u16,
@@ -29,6 +30,7 @@ pub const FrameState = struct {
     layer_group: InstGroup,
     grig_group: InstGroup,
     nav: *const a.Navig,
+    img_draw_data: ?devui.DevuiDrawData,
 };
 
 fn Dynamic(t: type) type {
@@ -261,7 +263,11 @@ pub fn recordFrame(
                 hl_cmds.push(&letter_push);
                 hl_cmds.drawInsances(.quad, state.char_group.num); // text
             }
+            if (state.img_draw_data) |devui_draw_data| {
+                devui.recordCommands(devui_draw_data, hl_cmds.command);
+            }
         }
+
         try gc.device_proxy.endCommandBuffer(cbufr);
     }
 }

@@ -71,8 +71,6 @@ pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
         &loader,
     );
     if (!ok) return error.devuiVkBindFailed;
-    try devui.createImguiContext();
-
     // devui.Loader
 
     var imga = try imgs.ImgaAllocator.init(

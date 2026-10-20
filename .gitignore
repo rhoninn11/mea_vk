@@ -6,3 +6,4 @@ zig-pkg
 .zig-cache
 src/gen
 .vscode
+imgui.ini

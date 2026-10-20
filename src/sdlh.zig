@@ -6,6 +6,7 @@ const u = @import("utils.zig");
 
 const escChar = @import("escapeChar.zig");
 const input = @import("input.zig");
+const devui = @import("devui.zig");
 
 const sdl3 = @import("sdl3");
 const SdlEvTpy = sdl3.events.Type;
@@ -238,6 +239,7 @@ pub const SdlContext = struct {
 
     pub fn pollEvents(self: *Self) void {
         while (sdl3.events.poll()) |ev| {
+            devui.ProcesEvents(ev);
             self.ev_capture.inc(ev);
             // TODO: recive pad
 

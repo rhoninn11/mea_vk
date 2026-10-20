@@ -39,7 +39,7 @@ pub const Swapchain = struct {
 
     pub fn initRecycle(sc: *const SwapchainContext, allocator: Allocator, extent: vk.Extent2D, old_handle: vk.SwapchainKHR) !Swapchain {
         const gc = sc.gc;
-        const caps = try gc.instance_prox.getPhysicalDeviceSurfaceCapabilitiesKHR(gc.pdev, gc.surface);
+        const caps = try gc.instance_prox.getPhysicalDeviceSurfaceCapabilitiesKHR(gc.phy_dev, gc.surface);
         const actual_extent = findActualExtent(caps, extent);
         if (actual_extent.width == 0 or actual_extent.height == 0) {
             return error.InvalidSurfaceDimensions;
@@ -419,7 +419,7 @@ fn findSurfaceFormat(gc: *const GraphicsContext, allocator: Allocator) !vk.Surfa
         .color_space = .srgb_nonlinear_khr,
     };
 
-    const surface_formats = try gc.instance_prox.getPhysicalDeviceSurfaceFormatsAllocKHR(gc.pdev, gc.surface, allocator);
+    const surface_formats = try gc.instance_prox.getPhysicalDeviceSurfaceFormatsAllocKHR(gc.phy_dev, gc.surface, allocator);
     defer allocator.free(surface_formats);
 
     for (surface_formats) |sfmt| {
@@ -432,7 +432,7 @@ fn findSurfaceFormat(gc: *const GraphicsContext, allocator: Allocator) !vk.Surfa
 }
 
 fn findPresentMode(gc: *const GraphicsContext, allocator: Allocator) !vk.PresentModeKHR {
-    const present_modes = try gc.instance_prox.getPhysicalDeviceSurfacePresentModesAllocKHR(gc.pdev, gc.surface, allocator);
+    const present_modes = try gc.instance_prox.getPhysicalDeviceSurfacePresentModesAllocKHR(gc.phy_dev, gc.surface, allocator);
     defer allocator.free(present_modes);
 
     const preferred = [_]vk.PresentModeKHR{
@@ -469,7 +469,7 @@ pub fn findSupportedFormat(
     features: vk.FormatFeatureFlags,
 ) !vk.Format {
     for (candidates) |format| {
-        const props = gc.instance_prox.getPhysicalDeviceFormatProperties(gc.pdev, format);
+        const props = gc.instance_prox.getPhysicalDeviceFormatProperties(gc.phy_dev, format);
 
         const linear_cond = props.linear_tiling_features.intersect(features) == features;
         const optimal_cond = props.optimal_tiling_features.intersect(features) == features;

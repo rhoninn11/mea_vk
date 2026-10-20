@@ -132,15 +132,23 @@ pub fn cimguiC(b: *std.Build, o: *const Options) *std.Build.Module {
     const include = b.path("src/third_party/imgui");
     const cimgui_header = b.path("src/third_party/imgui/module.h");
 
-    const well = b.addTranslateC(.{
+    const cimgui_tc = b.addTranslateC(.{
         .target = o.target,
         .optimize = o.optimize,
         .root_source_file = cimgui_header,
     });
 
-    well.addIncludePath(include);
+    cimgui_tc.addIncludePath(include);
+    if (o.target.result.os.tag == .windows) {
+        const sdk_dir = b.graph.environ_map.get("VULKAN_SDK") orelse {
+            @panic("!!! missing VULKA_SDK env variable - install LunarSDK for windows\n");
+        };
+        cimgui_tc.addIncludePath(.{
+            .cwd_relative = b.pathJoin(&.{ sdk_dir, "Include" }),
+        });
+    }
 
-    return well.createModule();
+    return cimgui_tc.createModule();
 }
 
 const cimgui = @import("cimgui_zig");

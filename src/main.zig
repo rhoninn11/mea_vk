@@ -36,6 +36,7 @@ const Allocator = std.mem.Allocator;
 
 const motion = @import("motion.zig");
 const frame = @import("frame.zig");
+const devui = @import("devui.zig");
 
 const pipe = @import("pipe.zig");
 
@@ -75,6 +76,7 @@ var state: frame.FrameState = .{
     .layer_group = .{ .base = map.instablo.get(.layer).beg, .num = 0 },
     .grig_group = .{ .base = map.instablo.get(.cubes).beg, .num = 0 },
     .nav = &navig,
+    .img_draw_data = null,
 };
 
 pub fn gpCommandQueue(gc: *const gm.GraphicsContext) !vk.CommandPool {
@@ -329,6 +331,14 @@ fn theDeepest(access: EasyAcces) !void {
     }
     defer for (0..slot) |i| gc.device_proxy.destroyCommandPool(pools[i], null);
 
+    try devui.integrate(
+        &access.host.ctx.window.?,
+        access.gm,
+        inflight_num,
+        render_pass,
+    );
+    defer devui.shutdown();
+
     // Related to scene
     var timeline = a.Timeline.init(access.io);
     var timeline1 = a.Timeline.init(access.io);
@@ -367,6 +377,7 @@ fn theDeepest(access: EasyAcces) !void {
     // main loop
     const text_sz_base: fonts.TextSz = .{};
     var text_stack: [1024 + 512]u8 = undefined;
+    var show_demo_win: bool = true;
     while (!window.shoudClose()) {
         errdefer std.debug.print("!?! problem in main loop\n", .{});
         var fba: std.heap.FixedBufferAllocator = .init(text_stack[0..]);
@@ -380,6 +391,10 @@ fn theDeepest(access: EasyAcces) !void {
             try access.io.sleep(.fromMilliseconds(50), .real);
             continue;
         }
+
+        devui.newFrame();
+        if (show_demo_win) devui.ShowDemoWindow(&show_demo_win);
+        state.img_draw_data = devui.finalizeFrame();
 
         const win_f2 = m.vkextAsV2(win_size);
         const cursor_f2 = sdlh.peekPointer();

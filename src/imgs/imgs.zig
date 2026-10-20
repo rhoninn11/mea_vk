@@ -208,7 +208,7 @@ pub const VkImage = struct {
     };
 
     pub fn createSampler(self: *Self, gc: *const GraphicsContext, mode: ESamplerMode) !void {
-        const props = gc.instance_prox.getPhysicalDeviceProperties(gc.pdev);
+        const props = gc.instance_prox.getPhysicalDeviceProperties(gc.phy_dev);
         const filter = switch (mode) {
             .nearest => vk.Filter.nearest,
             .font => vk.Filter.linear,

@@ -252,7 +252,6 @@ pub const GraphicsContext = struct {
 
     debug_messenger: vk.DebugUtilsMessengerEXT,
     surface: vk.SurfaceKHR,
-    pdev: vk.PhysicalDevice,
     props: vk.PhysicalDeviceProperties,
     mem_props: vk.PhysicalDeviceMemoryProperties,
 
@@ -261,6 +260,7 @@ pub const GraphicsContext = struct {
 
     inst: vk.Instance,
     dev: vk.Device,
+    phy_dev: vk.PhysicalDevice,
 
     graphics_queue: Queue,
     present_queue: Queue,
@@ -321,7 +321,7 @@ pub const GraphicsContext = struct {
         errdefer self.instance_prox.destroySurfaceKHR(self.surface, null);
 
         const candidate = try pickPhysicalDevice(self.instance_prox, gpa, self.surface);
-        self.pdev = candidate.pdev;
+        self.phy_dev = candidate.pdev;
         self.props = candidate.props;
 
         const dev = try initializeCandidate(self.instance_prox, candidate);
@@ -399,7 +399,7 @@ pub const GraphicsContext = struct {
     }
 
     fn memoryPropsWithExp(self: *Self) !void {
-        const props = self.instance_prox.getPhysicalDeviceMemoryProperties(self.pdev);
+        const props = self.instance_prox.getPhysicalDeviceMemoryProperties(self.phy_dev);
         self.mem_props = props;
         // ---- explore area -----
         const mem_t_count = props.memory_type_count;
@@ -430,7 +430,7 @@ pub const GraphicsContext = struct {
             .p_next = &mv_props,
         };
 
-        self.instance_prox.getPhysicalDeviceProperties2(self.pdev, &phys_pros);
+        self.instance_prox.getPhysicalDeviceProperties2(self.phy_dev, &phys_pros);
         const lim = phys_pros.properties.limits;
         std.debug.print("------------------------ \n", .{});
         defer std.debug.print("------------------------ \n", .{});
