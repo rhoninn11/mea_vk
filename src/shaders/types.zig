@@ -47,10 +47,11 @@ pub const GridSize = struct {
     h: u16,
 
     fn g(side: u16) GridSize {
-        return .{ .w = side, .h = side, .total = side * side };
+        return .{ .w = side, .h = side, .total = @as(u32, side) * @as(u32, side) };
     }
 
     pub const default: GridSize = g(32);
     pub const g64: GridSize = g(64);
     pub const g128: GridSize = g(128);
+    pub const g256: GridSize = g(256);
 };

@@ -47,7 +47,7 @@ const uHdr = extern union {
     hdr: u16,
 };
 
-pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
+pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize, f_mult: f32) !meagen.Image {
     var pixels = try alloc.alloc(u8, g.total * @sizeOf(u16));
     const fy: f32 = 0.6;
     const f1y: f32 = 0.12;
@@ -61,7 +61,7 @@ pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
         // _ = yl_sin;
 
         for (0..g.w) |x| {
-            const x_phase = m.floaty(x) / 16;
+            const x_phase = m.floaty(x) * f_mult / 16;
             const x_sin = @sin(x_phase * std.math.tau * fx);
             const x_ufit = m.tryg2u16f(x_sin);
 
@@ -80,12 +80,26 @@ pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     };
 }
 
+pub fn monoZeroLike(gpa: std.mem.Allocator, like: *const meagen.Image) !meagen.Image {
+    var header = like.info.?;
+    const bytes = header.height * header.width;
+    header.img_type = .MONO;
+
+    const pix = try gpa.alloc(u8, bytes);
+    @memset(pix, 0);
+
+    return meagen.Image{
+        .info = header,
+        .pixels = pix,
+    };
+}
+
 pub const DualImageData = struct {
     raw_data: meagen.Image,
     layer_data: meagen.Image,
 
     pub fn initDummy(gpa: std.mem.Allocator) !DualImageData {
-        var raw_synth = try xyTrygHdr(gpa, shu.xyGrid(256, 880));
+        var raw_synth = try xyTrygHdr(gpa, shu.xyGrid(256, 880), 1);
         errdefer raw_synth.deinit(gpa);
 
         return .{
@@ -95,17 +109,20 @@ pub const DualImageData = struct {
     }
 
     pub fn initProto(io: std.Io, gpa: std.mem.Allocator, pbfr_files: []const []const u8) !DualImageData {
-        std.debug.assert(pbfr_files.len == 2);
+        std.debug.assert(pbfr_files.len > 0);
 
-        var scann = try protoImgRead(io, gpa, pbfr_files[0]);
+        const filepath = pbfr_files[0];
+        std.debug.print("reading {s}\n", .{filepath});
+        var scann = try protoImgRead(io, gpa, filepath);
         errdefer scann.deinit(gpa);
 
-        const layers = try protoImgRead(io, gpa, pbfr_files[1]);
-        errdefer scann.deinit(layers);
-
-        return .{
+        return DualImageData{
             .raw_data = scann,
-            .layer_data = layers,
+            .layer_data = switch (pbfr_files.len) {
+                1 => try monoZeroLike(gpa, &scann),
+                2 => try protoImgRead(io, gpa, pbfr_files[1]),
+                else => unreachable,
+            },
         };
     }
 
@@ -164,6 +181,82 @@ pub const DualImageData = struct {
     }
 };
 
+pub const ManyLayers = struct {
+    pub const TEST_LIMIT: u8 = 16;
+    layers: []DualImageData,
+    ziped: files.ZippedFiles,
+    current: u8,
+    count: u8,
+
+    fn init(io: std.Io, gpa: std.mem.Allocator, ziped: files.ZippedFiles) !ManyLayers {
+        const n = @min(ziped.file_sets.len, TEST_LIMIT);
+        const many = try gpa.alloc(DualImageData, n);
+        errdefer gpa.free(many);
+
+        var ready: u8 = 0;
+        errdefer for (0..ready) |i| many[i].deinit(gpa);
+
+        for (0..n) |i| {
+            many[i] = try DualImageData.initProto(io, gpa, ziped.file_sets[i]);
+            ready = @intCast(i);
+        }
+
+        return ManyLayers{
+            .layers = many,
+            .ziped = ziped,
+            .current = 0,
+            .count = @intCast(n),
+        };
+    }
+
+    pub fn deinit(self: *ManyLayers, gpa: std.mem.Allocator) void {
+        for (self.layers) |*layer| {
+            layer.deinit(gpa);
+        }
+        gpa.free(self.layers);
+        self.ziped.deinit(gpa);
+    }
+};
+
+pub fn LoadMany(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !ManyLayers {
+    var for_strings: [512]u8 = undefined;
+
+    const zip = files.zipSearch(io, gpa, prefix, &.{".serdes"});
+    var unzip = zip catch {
+        std.debug.print("!!! not even one found\n", .{});
+        const frame_num = 32;
+        var for_io_buffer: [4096]u8 = undefined;
+
+        var frames: std.ArrayList(meagen.Image) = try .initCapacity(gpa, frame_num);
+        defer frames.deinit(gpa);
+        defer for (frames.items) |*item| item.deinit(gpa);
+
+        for (0..frame_num) |i| {
+            var fba = std.heap.FixedBufferAllocator.init(for_strings[0..]);
+            const tempal = fba.allocator();
+            const basename = try std.fmt.allocPrint(tempal, "frame_{d:0>4}.serdes", .{i});
+            const write_path = try std.fs.path.join(tempal, &.{ prefix, basename });
+
+            const outfile = try std.Io.Dir.cwd().createFile(io, write_path, .{});
+            defer outfile.close(io);
+
+            var io_wr = outfile.writer(io, for_io_buffer[0..]);
+
+            const mult_var = m.progres(i, frame_num);
+            const img = try xyTrygHdr(gpa, shu.xyGrid(256, 880), 2 + mult_var);
+            try img.encode(&io_wr.interface, gpa);
+
+            try frames.append(gpa, img);
+            std.debug.print("+++ frame to {s}\n", .{write_path});
+        }
+
+        return error.justRestart;
+    };
+    errdefer unzip.deinit(gpa);
+    return try ManyLayers.init(io, gpa, unzip);
+}
+
+// --------------------------------
 pub fn serdesLoadWithFallback(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !DualImageData {
     const raw_img = serdesLoad(io, gpa, prefix) catch |err| {
         std.debug.print("+++ dummy synthesis | {s}\n", .{@errorName(err)});
@@ -171,7 +264,14 @@ pub fn serdesLoadWithFallback(io: std.Io, gpa: std.mem.Allocator, prefix: []cons
     };
     return raw_img;
 }
+pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !DualImageData {
+    var zip = try files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" });
+    defer zip.deinit(gpa);
+    return try DualImageData.initProto(io, gpa, zip.file_sets[0]);
+}
+// --------- propably to remove ^---
 
+//write could have its own version also
 pub fn protoImgRead(io: std.Io, gpa: std.mem.Allocator, filepath: []const u8) !meagen.Image {
     var read_buffer: [8096]u8 = undefined;
 
@@ -181,12 +281,6 @@ pub fn protoImgRead(io: std.Io, gpa: std.mem.Allocator, filepath: []const u8) !m
 
     var rader = serdesfile.reader(io, &read_buffer);
     return meagen.Image.decode(&rader.interface, gpa);
-}
-
-pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !DualImageData {
-    var zip = try files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" });
-    defer zip.deinit(gpa);
-    return try DualImageData.initProto(io, gpa, zip.file_sets[0]);
 }
 
 const xy = 2;
@@ -243,11 +337,19 @@ pub const LookingGlass = struct {
     win_sz: sht.GridSize,
 
     img_sz: sht.GridSize,
-    scan_raw: *meagen.Image,
-    scan_lyr: *meagen.Image,
+    scan_raw: *const meagen.Image,
+    scan_lyr: *const meagen.Image,
     inverse: bool = false,
+    layers: *const ManyLayers,
 
-    pub fn init(from: *DualImageData, g_sz: sht.GridSize) LookingGlass {
+    pub fn init2(from: *ManyLayers, g_sz: sht.GridSize, idx: u8) LookingGlass {
+        _ = idx;
+        return init(from, g_sz);
+    }
+
+    pub fn init(xd: *ManyLayers, g_sz: sht.GridSize) LookingGlass {
+        const from = &xd.layers[0];
+
         std.debug.assert(from.raw_data.info.?.img_type == meagen.ImgType.HDR);
         std.debug.assert(from.layer_data.info.?.img_type == meagen.ImgType.MONO);
 
@@ -260,6 +362,7 @@ pub const LookingGlass = struct {
             .scan_lyr = &from.layer_data,
             .img_sz = sht.shu.xyGrid(@intCast(src.width), @intCast(src.height)),
             .sliders = undefined,
+            .layers = xd,
         };
 
         self.sliders[m.X] = .init(0, m.u16cast(self.limX(self.scan_raw)));
@@ -267,11 +370,17 @@ pub const LookingGlass = struct {
 
         return self;
     }
-    inline fn limX(self: *const @This(), img: *meagen.Image) i32 {
+    pub fn select(self: *LookingGlass, idx: u8) void {
+        const selected = &self.layers.layers[idx];
+        self.scan_raw = &selected.raw_data;
+        self.scan_lyr = &selected.layer_data;
+    }
+
+    inline fn limX(self: *const @This(), img: *const meagen.Image) i32 {
         const src_size = img.info.?;
         return @as(i32, @intCast(src_size.width)) - @as(i32, @intCast(self.win_sz.w)) - 1;
     }
-    inline fn limY(self: *const @This(), img: *meagen.Image) i32 {
+    inline fn limY(self: *const @This(), img: *const meagen.Image) i32 {
         const src_size = img.info.?;
         return @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.win_sz.h)) - 1;
     }

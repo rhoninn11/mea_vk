@@ -113,11 +113,19 @@ fn theDeepest(access: EasyAcces) !void {
     // vol data
 
     const prefix = "./fs/serdes";
-    var dual_img = try proto.serdesLoadWithFallback(access.io, pages, prefix);
-    defer dual_img.deinit(pages);
+
+    var many = try proto.LoadMany(access.io, access.gpa, prefix);
+    defer many.deinit(access.gpa);
 
     const grid = sht.GridSize.g64;
-    var glass = proto.LookingGlass.init(&dual_img, grid);
+    // var glass = proto.LookingGlass.init(&many.layers[0], grid);
+    var glass = proto.LookingGlass.init2(&many, grid, 0);
+
+    // var dual_img = try proto.serdesLoadWithFallback(access.io, pages, prefix);
+    // defer dual_img.deinit(pages);
+
+    // const grid = sht.GridSize.g64;
+    // var glass = proto.LookingGlass.init(&dual_img, grid);
 
     var looking_vol = try glass.sampleVolData(access.gpa);
     defer looking_vol.deinit(access.gpa);
@@ -377,7 +385,8 @@ fn theDeepest(access: EasyAcces) !void {
     // main loop
     const text_sz_base: fonts.TextSz = .{};
     var text_stack: [1024 + 512]u8 = undefined;
-    var show_demo_win: bool = true;
+    var layer_select_window: bool = true;
+    var slider_val: c_int = 0;
     while (!window.shoudClose()) {
         errdefer std.debug.print("!?! problem in main loop\n", .{});
         var fba: std.heap.FixedBufferAllocator = .init(text_stack[0..]);
@@ -393,8 +402,14 @@ fn theDeepest(access: EasyAcces) !void {
         }
 
         devui.newFrame();
-        if (show_demo_win) devui.ShowDemoWindow(&show_demo_win);
+
+        _ = devui.beginWindow("layer selection window", &layer_select_window, 0);
+        devui.text("Scan slices selection:");
+        _ = devui.intSlider("slide", &slider_val, 0, proto.ManyLayers.TEST_LIMIT - 1);
+        devui.endWindow();
         state.img_draw_data = devui.finalizeFrame();
+
+        glass.select(@intCast(slider_val));
 
         const win_f2 = m.vkextAsV2(win_size);
         const cursor_f2 = sdlh.peekPointer();

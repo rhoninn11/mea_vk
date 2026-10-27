@@ -592,3 +592,9 @@ pub fn vkextAsV2(vkext: vk.Extent2D) vec2 {
 pub fn top(v: vec2) u8 {
     return if (v[X] > v[Y]) X else Y;
 }
+
+pub inline fn progres(i: usize, n: usize) f32 {
+    const denominator = @as(f32, @floatFromInt(n - 1));
+    const numerator = @as(f32, @floatFromInt(i));
+    return numerator / denominator;
+}

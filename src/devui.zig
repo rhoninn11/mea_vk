@@ -150,3 +150,9 @@ pub fn recordCommands(data: DevuiDrawData, cb: vk.CommandBuffer) void {
     const cb_ptr: cimgui.VkCommandBuffer = @ptrFromInt(@intFromEnum(cb));
     cimgui.cImGui_ImplVulkan_RenderDrawData(data, cb_ptr);
 }
+
+pub const beginWindow = cimgui.ImGui_Begin;
+pub const endWindow = cimgui.ImGui_End;
+
+pub const text = cimgui.ImGui_Text;
+pub const intSlider = cimgui.ImGui_SliderInt;

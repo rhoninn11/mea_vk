@@ -95,14 +95,12 @@ pub const OkUnderstanding = struct {
         const local_a = provider.allocator();
 
         var scratchpad: []sht.PerInstance = try local_a.alloc(sht.PerInstance, group.num);
-        const denominator = @as(f32, @floatFromInt(scratchpad.len - 1));
         const radius_base = 2.5;
 
         for (0..scratchpad.len) |i| {
             var edit: sht.PerInstance = scratchpad[i];
-            const i_f: f32 = @as(f32, @floatFromInt(i));
-            const progress = i_f / denominator;
 
+            const progress = m.progres(i, scratchpad.len);
             const amp = 0.2;
             const fill = std.math.tau * 0.77;
             const phi0 = (progress + phi) * fill;
@@ -112,7 +110,8 @@ pub const OkUnderstanding = struct {
 
             const ab = trajectoryPoints(radius_total, phi0);
 
-            edit.offset_4d = m.stack4(ab[0], i_f);
+            const lab_lut_idx: f32 = @as(f32, @floatFromInt(i));
+            edit.offset_4d = m.stack4(ab[0], lab_lut_idx);
 
             const front: m.vec3 = m.norm(ab[1] - ab[0]);
 
@@ -211,10 +210,8 @@ pub fn sampleInfernoAlt(alloc: std.mem.Allocator, g: *const sht.GridSize) ![]u8 
         var from: u8 = 0;
         var to: u8 = 1;
         for (0..g.w) |x| {
-            const gwf = @as(f32, @floatFromInt(g.w));
-            const sf = @as(f32, @floatFromInt(x));
             const mem_idx = (yy * g.w + x) * 4;
-            const progress = sf / (gwf - 1);
+            const progress = m.progres(x, g.w);
             while (progress > path[to].key) {
                 from += 1;
                 to += 1;
