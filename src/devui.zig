@@ -55,7 +55,7 @@ pub fn ProcesEvents(ev: sdl.events.Event) void {
 var io: [*c]cimgui.ImGuiIO = undefined;
 var imgui_ctx: ?*cimgui.struct_ImGuiContext_t = null;
 var imgui_dset_pool: ?vk.DescriptorPool = null;
-var dev_prox: ?vk.DeviceProxy = null;
+var dev_api: ?vk.DeviceProxy = null;
 
 pub fn integrate(
     window: *const sdl.video.Window,
@@ -92,9 +92,9 @@ pub fn integrate(
     desc_pool_create_info.pool_size_count = pool_sizes.len;
     desc_pool_create_info.p_pool_sizes = &pool_sizes;
 
-    dev_prox = gm.device_proxy;
-    imgui_dset_pool = try dev_prox.?.createDescriptorPool(&desc_pool_create_info, null);
-    errdefer gm.device_proxy.destroyDescriptorPool(imgui_dset_pool.?, null);
+    dev_api = gm.dev_api;
+    imgui_dset_pool = try dev_api.?.createDescriptorPool(&desc_pool_create_info, null);
+    errdefer gm.dev_api.destroyDescriptorPool(imgui_dset_pool.?, null);
 
     const winptr: *cimgui.SDL_Window = @ptrCast(window.value);
     if (!cimgui.cImGui_ImplSDL3_InitForVulkan(winptr)) return error.imguiSdlInitFail;
@@ -128,7 +128,7 @@ pub fn integrate(
 pub fn shutdown() void {
     cimgui.cImGui_ImplVulkan_Shutdown();
     cimgui.cImGui_ImplSDL3_Shutdown();
-    dev_prox.?.destroyDescriptorPool(imgui_dset_pool.?, null);
+    dev_api.?.destroyDescriptorPool(imgui_dset_pool.?, null);
     cimgui.ImGui_DestroyContext(imgui_ctx);
 }
 

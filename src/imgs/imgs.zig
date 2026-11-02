@@ -43,7 +43,7 @@ pub const DepthImage = struct {
     }
 
     pub fn init(gc: *const GraphicsContext, imga: *ImgaAllocator, extent: vk.Extent2D) !Self {
-        const devk = gc.device_proxy;
+        const devk = gc.dev_api;
         const depth_format = try Self.getDepthFormat(gc);
         _ = hasSetncilComponent(depth_format);
 
@@ -81,7 +81,7 @@ pub const DepthImage = struct {
             .components = gm.baked.identity_mapping,
         };
 
-        const img_viu = try gc.device_proxy.createImageView(&img_viu_info, null);
+        const img_viu = try gc.dev_api.createImageView(&img_viu_info, null);
 
         return Self{
             .dvk_img_view = img_viu,
@@ -91,7 +91,7 @@ pub const DepthImage = struct {
         };
     }
     pub fn deinit(self: Self, gc: *const GraphicsContext, imga: *ImgaAllocator) void {
-        const devk = gc.device_proxy;
+        const devk = gc.dev_api;
         devk.destroyImageView(self.dvk_img_view, null);
         devk.destroyImage(self.dvk_img, null);
         //TODO: imga.imgFree2(self.memspot);
@@ -140,7 +140,7 @@ pub const VkImage = struct {
     }
 
     pub fn deinit(self: *Self, imga: *memory.ImgaAllocator) void {
-        const devk = self.gc.device_proxy;
+        const devk = self.gc.dev_api;
         if (self.vk_sampler) |_sampler| {
             devk.destroySampler(_sampler, null);
         }
@@ -153,7 +153,7 @@ pub const VkImage = struct {
     }
 
     pub fn init(gc: *const GraphicsContext, imga: *memory.ImgaAllocator, g: sht.GridSize, format: vk.Format) !Self {
-        const devk = gc.device_proxy;
+        const devk = gc.dev_api;
 
         const img_create_info: vk.ImageCreateInfo = .{
             .image_type = .@"2d",
@@ -189,7 +189,7 @@ pub const VkImage = struct {
     }
 
     pub fn createImageView(self: *Self, gc: *const GraphicsContext) !void {
-        const devk = gc.device_proxy;
+        const devk = gc.dev_api;
         const image_view_create_info: vk.ImageViewCreateInfo = .{
             .image = self.dvk_img,
             .format = self.vk_format,
@@ -231,7 +231,7 @@ pub const VkImage = struct {
             .min_lod = 0.0,
             .max_lod = 0.0,
         };
-        self.vk_sampler = try gc.device_proxy.createSampler(&sample_create_info, null);
+        self.vk_sampler = try gc.dev_api.createSampler(&sample_create_info, null);
     }
 };
 
@@ -261,16 +261,6 @@ pub fn texPrep(
     test_img: *VkImage,
     mode: VkImage.ESamplerMode,
 ) !void {
-    const buff_size = memory.ImgaAllocator.block_size * @as(u64, test_img.memloc.num);
-    //TODO: maybe one omnipresent buffor for img data copying? On front of new imga indeed
-    var transport_bfr = try gm.BufferData.init(
-        pic.gc,
-        gm.baked.memory_cpu,
-        gm.baked.usage_src,
-        buff_size,
-    );
-    defer transport_bfr.deinit(pic.gc);
-
     const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
     const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
 
@@ -284,9 +274,19 @@ pub fn texPrep(
         .sync_point = gm.baked.syncAt.before_dst,
     });
 
+    //TODO: maybe one omnipresent buffor for img data copying? On front of new imga indeed
     // transport image through a buffer
+    var transport_bfr = try gm.BufferData.init(
+        pic.gc,
+        gm.baked.memory_cpu,
+        gm.baked.usage_src,
+        test_img.memloc.bytes(),
+    );
+    defer transport_bfr.deinit(pic.gc);
+
     const mapping: [*]u8 = transport_bfr.memMapping();
     @memcpy(mapping, pixdata);
+
     try bfr2ImgCopy(pic.gc, one_shot.cmds, .{
         .buffer = transport_bfr.dvk_bfr,
         .image = test_img.dvk_img,
@@ -323,7 +323,7 @@ pub fn imgLTrans(gc: *const gm.GraphicsContext, cmds: vk.CommandBuffer, cfg: t.I
             .dst_access_mask = cfg.sync_point.dst.access,
         },
     };
-    gc.device_proxy.cmdPipelineBarrier(
+    gc.dev_api.cmdPipelineBarrier(
         cmds,
         cfg.sync_point.src.stage,
         cfg.sync_point.dst.stage,
@@ -358,7 +358,7 @@ pub fn bfr2ImgCopy(gc: *const gm.GraphicsContext, cmds: vk.CommandBuffer, cfg: B
         },
     };
 
-    gc.device_proxy.cmdCopyBufferToImage(
+    gc.dev_api.cmdCopyBufferToImage(
         cmds,
         cfg.buffer,
         cfg.image,

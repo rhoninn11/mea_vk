@@ -3,6 +3,21 @@ const gm = @import("../graphics_context.zig");
 
 const GraphicsContext = gm.GraphicsContext;
 
+pub fn bfrMemTypeInfer(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags) !u32 {
+
+    // const info: vk.BufferCreate
+    const info: vk.BufferCreateInfo = .{
+        .sharing_mode = .exclusive,
+        .flags = flags,
+    };
+    const hook_bfr = gc.dev_api.createBuffer(info, null);
+    defer gc.dev_api.destroyBuffer(hook_bfr, null);
+
+    const req = gc.dev_api.getBufferMemoryRequirements(hook_bfr);
+    const idx = try gc.findMemoryTypeIndex(req.memory_type_bits, flags);
+    return idx;
+}
+
 pub fn imgMemTypeInfer(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags) !u32 {
     const img_extent: vk.Extent3D = .{ .height = 64, .width = 64, .depth = 1 };
 
@@ -37,10 +52,10 @@ pub fn imgMemTypeInfer(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags
         base.usage = config.usage;
         base.format = config.format;
 
-        const img = try gc.device_proxy.createImage(&base, null);
-        defer gc.device_proxy.destroyImage(img, null);
+        const img = try gc.dev_api.createImage(&base, null);
+        defer gc.dev_api.destroyImage(img, null);
 
-        reqs[i] = gc.device_proxy.getImageMemoryRequirements(img);
+        reqs[i] = gc.dev_api.getImageMemoryRequirements(img);
     }
 
     const basic_type_idx = try gc.findMemoryTypeIndex(reqs[0].memory_type_bits, flags);
@@ -60,6 +75,10 @@ const Shelf = std.AutoHashMap(vk.Image, LocDesc);
 pub const LocDesc = struct {
     blk_idx: u16,
     num: u16,
+
+    pub inline fn bytes(ld: LocDesc) u64 {
+        return kb_block_64 * @as(u64, ld.num);
+    }
 };
 
 pub fn MemBitmap(block_num: u16, block_size: u64) type {
@@ -208,47 +227,99 @@ test "setin and restin" {
     try std.testing.expectEqual(0, storage.count());
 }
 
-pub const ImgaAllocator = struct {
-    const total_size = 256 * 1024 * 1024; //256 MB
-    pub const block_size = 64 * 1024; //64 KB
-    const block_num = total_size / block_size;
+pub const kb_block_64 = 1024 * 64; //64 KB
+inline fn totalMB(MB: u16) u64 {
+    return 1024 * 1024 * @as(u64, MB);
+}
+fn SizedMemBitMapOfMegs(MB: u16) type {
+    const block_num = totalMB(MB) / kb_block_64;
+    return MemBitmap(block_num, kb_block_64);
+}
 
+pub const ImgaAllocator = struct {
+    const Bitmap = SizedMemBitMapOfMegs(256);
     const Self = @This();
-    const Bitmap = MemBitmap(block_num, block_size);
 
     dev_mem_idx: u32,
     dev_mem: vk.DeviceMemory,
     bitmap: Bitmap,
 
     pub fn deinit(self: *ImgaAllocator, gc: *const GraphicsContext) void {
-        gc.device_proxy.freeMemory(self.dev_mem, null);
+        gc.dev_api.freeMemory(self.dev_mem, null);
     }
 
     pub fn init(
         gc: *const GraphicsContext,
         flags: vk.MemoryPropertyFlags,
-    ) !ImgaAllocator {
+    ) !Self {
         const mem_idx = try imgMemTypeInfer(gc, flags);
-        const mem = try gc.device_proxy.allocateMemory(&.{
-            .allocation_size = total_size,
+        const mem = try gc.dev_api.allocateMemory(&.{
+            .allocation_size = totalMB(256),
             .memory_type_index = mem_idx,
         }, null);
 
-        return ImgaAllocator{
+        return Self{
             .dev_mem_idx = mem_idx,
             .dev_mem = mem,
             .bitmap = .init(),
         };
     }
 
-    pub fn imgAlloc(self: *ImgaAllocator, gc: *const GraphicsContext, img: vk.Image) !LocDesc {
-        const req = gc.device_proxy.getImageMemoryRequirements(img);
+    pub fn imgAlloc(self: *Self, gc: *const GraphicsContext, img: vk.Image) !LocDesc {
+        const req = gc.dev_api.getImageMemoryRequirements(img);
         const spot = try self.bitmap.allocateSpot(req);
         const alignment_delta = Bitmap.alignDelta(spot.blk_idx, req.alignment);
-        const offset = @as(u64, block_size) * spot.blk_idx + alignment_delta;
+        const offset = @as(u64, kb_block_64) * spot.blk_idx + alignment_delta;
 
         // std.debug.print("+++ offset is {d} alignment is {d}\n", .{ offset, req.alignment });
-        try gc.device_proxy.bindImageMemory(img, self.dev_mem, offset);
+        try gc.dev_api.bindImageMemory(img, self.dev_mem, offset);
+
+        return spot;
+    }
+
+    pub fn imgFree(self: *ImgaAllocator, spot: LocDesc) void {
+        self.bitmap.freeSpot(spot);
+    }
+};
+
+pub const StagerAllocator = struct {
+    const Bitmap = SizedMemBitMapOfMegs(32);
+    const Self = @This();
+
+    dev_mem_idx: u32,
+    dev_mem: vk.DeviceMemory,
+    bitmap: Bitmap,
+
+    pub fn deinit(self: *Self, gc: *const GraphicsContext) void {
+        gc.dev_api.freeMemory(self.dev_mem, null);
+    }
+
+    pub fn init(
+        gc: *const GraphicsContext,
+        flags: vk.MemoryPropertyFlags,
+    ) !Self {
+        const mem_idx = try bfrMemTypeInfer(gc, flags);
+        const mem = try gc.dev_api.allocateMemory(&.{
+            .allocation_size = totalMB(32),
+            .memory_type_index = mem_idx,
+        }, null);
+
+        return Self{
+            .dev_mem_idx = mem_idx,
+            .dev_mem = mem,
+            .bitmap = .init(),
+        };
+    }
+
+    pub fn imgAlloc(self: *Self, gc: *const GraphicsContext, bfr: vk.Buffer) !LocDesc {
+        const req = gc.dev_api.getBufferMemoryRequirements(bfr);
+
+        const spot = try self.bitmap.allocateSpot(req);
+        const alignment_delta = Bitmap.alignDelta(spot.blk_idx, req.alignment);
+        const offset = @as(u64, kb_block_64) * spot.blk_idx + alignment_delta;
+
+        // std.debug.print("+++ offset is {d} alignment is {d}\n", .{ offset, req.alignment });
+        try gc.dev_api.bindImageMemory(bfr, self.dev_mem, offset);
 
         return spot;
     }

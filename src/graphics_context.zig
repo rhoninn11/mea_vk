@@ -71,7 +71,7 @@ pub const OneShotCommanded = struct {
     cmds: vk.CommandBuffer,
 
     pub fn resolve(self: *const OneShotCommanded) !void {
-        const vkdev = self.pic.gc.device_proxy;
+        const vkdev = self.pic.gc.dev_api;
         const vkq = self.pic.gc.graphics_queue.handle;
 
         try vkdev.endCommandBuffer(self.cmds);
@@ -88,7 +88,7 @@ pub const OneShotCommanded = struct {
         vkdev.freeCommandBuffers(self.pic.pool, &.{self.cmds});
     }
     pub fn init(pic: *const PoolInCtx, len: u8) !OneShotCommanded {
-        const vkd = pic.gc.device_proxy;
+        const vkd = pic.gc.dev_api;
         var cmds: vk.CommandBuffer = undefined;
 
         const cb_alloc_info: vk.CommandBufferAllocateInfo = .{
@@ -114,40 +114,21 @@ pub const OneShotCommanded = struct {
     }
 };
 
+const MemProx = struct {
+    mem: vk.DeviceMemory,
+    size: u64,
+};
+
 pub const BufferData = struct {
     dvk_bfr: vk.Buffer,
     dvk_mem: vk.DeviceMemory,
     mapping: ?*anyopaque,
 
     pub fn deinit(self: *const BufferData, gc: *const GraphicsContext) void {
-        const dev_prox = gc.device_proxy;
+        const dev_prox = gc.dev_api;
         if (self.mapping) |_| dev_prox.unmapMemory(self.dvk_mem);
         dev_prox.destroyBuffer(self.dvk_bfr, null);
         dev_prox.freeMemory(self.dvk_mem, null);
-    }
-
-    const MemProx = struct {
-        mem: vk.DeviceMemory,
-        size: u64,
-    };
-
-    fn getMemory(
-        gc: *const GraphicsContext,
-        bfr: vk.Buffer,
-        mem_flags: vk.MemoryPropertyFlags,
-    ) !MemProx {
-        const r = gc.device_proxy.getBufferMemoryRequirements(bfr);
-        // INFO: requirements propably will be bigger then original size
-
-        const memory = try gc.allocate(r, mem_flags);
-        errdefer gc.device_proxy.freeMemory(memory, null);
-
-        try gc.device_proxy.bindBufferMemory(bfr, memory, 0);
-
-        return MemProx{
-            .mem = memory,
-            .size = r.size,
-        };
     }
 
     pub fn init(
@@ -156,7 +137,7 @@ pub const BufferData = struct {
         usage: vk.BufferUsageFlags,
         bsize: u64,
     ) !BufferData {
-        const devk = gc.device_proxy;
+        const devk = gc.dev_api;
         const default_size = bsize;
 
         const bfr = try devk.createBuffer(&vk.BufferCreateInfo{
@@ -177,6 +158,25 @@ pub const BufferData = struct {
             .dvk_bfr = bfr,
             .dvk_mem = prox.mem,
             .mapping = mapping,
+        };
+    }
+
+    fn getMemory(
+        gc: *const GraphicsContext,
+        bfr: vk.Buffer,
+        mem_flags: vk.MemoryPropertyFlags,
+    ) !MemProx {
+        const r = gc.dev_api.getBufferMemoryRequirements(bfr);
+        // INFO: requirements propably will be bigger then original size
+
+        const memory = try gc.allocate(r, mem_flags);
+        errdefer gc.dev_api.freeMemory(memory, null);
+
+        try gc.dev_api.bindBufferMemory(bfr, memory, 0);
+
+        return MemProx{
+            .mem = memory,
+            .size = r.size,
         };
     }
 
@@ -203,7 +203,7 @@ pub fn uploadVertices(pic: *const PoolInCtx, buffer: vk.Buffer, vert_slice: []co
 }
 
 fn copyBuffer(pic: *const PoolInCtx, dst: vk.Buffer, src: vk.Buffer, size: vk.DeviceSize) !void {
-    const vkdev = pic.gc.device_proxy;
+    const vkdev = pic.gc.dev_api;
     const one_shot = try OneShotCommanded.init(pic, 1);
     const region = &.{vk.BufferCopy{
         .src_offset = 0,
@@ -228,7 +228,7 @@ pub const FrameRecorder = struct {
 
     pub fn clear(self: *FrameRecorder, gm: *const GraphicsContext) !void {
         if (!self.flag) return;
-        try gm.device_proxy.resetCommandPool(self.pool, .{});
+        try gm.dev_api.resetCommandPool(self.pool, .{});
     }
 
     pub fn begin(self: *FrameRecorder, gm: *const GraphicsContext) !void {
@@ -238,7 +238,7 @@ pub const FrameRecorder = struct {
             .command_buffer_count = 1,
         };
 
-        try gm.device_proxy.allocateCommandBuffers(&cbai, @ptrCast(self.cmds));
+        try gm.dev_api.allocateCommandBuffers(&cbai, @ptrCast(self.cmds));
         self.flag = true;
     }
 };
@@ -256,7 +256,7 @@ pub const GraphicsContext = struct {
     mem_props: vk.PhysicalDeviceMemoryProperties,
 
     instance_prox: vk.InstanceProxy,
-    device_proxy: vk.DeviceProxy,
+    dev_api: vk.DeviceProxy,
 
     inst: vk.Instance,
     dev: vk.Device,
@@ -266,13 +266,13 @@ pub const GraphicsContext = struct {
     present_queue: Queue,
 
     pub fn deinit(self: Self) void {
-        self.device_proxy.destroyDevice(null);
+        self.dev_api.destroyDevice(null);
         self.instance_prox.destroySurfaceKHR(self.surface, null);
         self.instance_prox.destroyDebugUtilsMessengerEXT(self.debug_messenger, null);
         self.instance_prox.destroyInstance(null);
 
         // Don't forget to free the tables to prevent a memory leak.
-        self.allocator.destroy(self.device_proxy.wrapper);
+        self.allocator.destroy(self.dev_api.wrapper);
         self.allocator.destroy(self.instance_prox.wrapper);
     }
 
@@ -327,14 +327,14 @@ pub const GraphicsContext = struct {
         const dev = try initializeCandidate(self.instance_prox, candidate);
 
         vkd.* = DeviceWrapper.load(dev, self.instance_prox.wrapper.dispatch.vkGetDeviceProcAddr.?);
-        self.device_proxy = Device.init(dev, vkd);
-        errdefer self.device_proxy.destroyDevice(null);
+        self.dev_api = Device.init(dev, vkd);
+        errdefer self.dev_api.destroyDevice(null);
 
         self.inst = inst;
         self.dev = dev;
 
-        self.graphics_queue = Queue.init(self.device_proxy, candidate.queues.graphics_family);
-        self.present_queue = Queue.init(self.device_proxy, candidate.queues.present_family);
+        self.graphics_queue = Queue.init(self.dev_api, candidate.queues.graphics_family);
+        self.present_queue = Queue.init(self.dev_api, candidate.queues.present_family);
 
         try self.memoryPropsWithExp();
         try self.propsExplore();
@@ -463,7 +463,7 @@ pub const GraphicsContext = struct {
 
     pub fn allocate(self: GraphicsContext, requirements: vk.MemoryRequirements, flags: vk.MemoryPropertyFlags) !vk.DeviceMemory {
         const mem_type_idx = try self.findMemoryTypeIndex(requirements.memory_type_bits, flags);
-        return try self.device_proxy.allocateMemory(&.{
+        return try self.dev_api.allocateMemory(&.{
             .s_type = .memory_allocate_info,
             .allocation_size = requirements.size,
             .memory_type_index = mem_type_idx,

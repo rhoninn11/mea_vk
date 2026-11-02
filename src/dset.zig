@@ -152,7 +152,7 @@ pub const DescriptorPrep = struct {
                 .p_bindings = @ptrCast(&_bindings),
             };
 
-            return self.gc.device_proxy.createDescriptorSetLayout(&dslci, null);
+            return self.gc.dev_api.createDescriptorSetLayout(&dslci, null);
         }
     };
     const DSetInfo = gm.baked.DSetDataInfo;
@@ -161,7 +161,7 @@ pub const DescriptorPrep = struct {
         const alloc = ctx.gpa;
         const gc = ctx.gc;
         if (self._d_pool) |d_pool| {
-            gc.device_proxy.destroyDescriptorPool(d_pool, null);
+            gc.dev_api.destroyDescriptorPool(d_pool, null);
         }
 
         for (self.buff_arr.items) |possible_buff| {
@@ -171,7 +171,7 @@ pub const DescriptorPrep = struct {
         }
 
         if (self._d_set_layout) |layout| {
-            gc.device_proxy.destroyDescriptorSetLayout(layout, null);
+            gc.dev_api.destroyDescriptorSetLayout(layout, null);
         }
 
         self.d_set_arr.deinit(alloc);
@@ -252,8 +252,8 @@ pub const DescriptorPrep = struct {
             .max_sets = len_u32,
         };
 
-        const could_be_more_global = try self.gc.device_proxy.createDescriptorPool(&dset_pool_opt, null);
-        errdefer self.gc.device_proxy.destroyDescriptorPool(could_be_more_global, null);
+        const could_be_more_global = try self.gc.dev_api.createDescriptorPool(&dset_pool_opt, null);
+        errdefer self.gc.dev_api.destroyDescriptorPool(could_be_more_global, null);
         self._d_pool = could_be_more_global;
 
         // eg. "arr_size" bindles textures
@@ -262,7 +262,7 @@ pub const DescriptorPrep = struct {
             .p_descriptor_counts = @ptrCast(&arr_size),
         };
 
-        try self.gc.device_proxy.allocateDescriptorSets(
+        try self.gc.dev_api.allocateDescriptorSets(
             &vk.DescriptorSetAllocateInfo{
                 .s_type = .descriptor_set_allocate_info,
                 .descriptor_pool = self._d_pool.?,
@@ -299,7 +299,7 @@ pub const DescriptorPrep = struct {
                 .p_image_info = &.{},
                 .p_texel_buffer_view = &.{},
             }};
-            self.gc.device_proxy.updateDescriptorSets(write_ops, &.{});
+            self.gc.dev_api.updateDescriptorSets(write_ops, &.{});
         }
     }
 
@@ -319,7 +319,7 @@ pub const DescriptorPrep = struct {
             .p_image_info = @ptrCast(&img_info),
             .p_texel_buffer_view = &.{},
         }};
-        self.gc.device_proxy.updateDescriptorSets(write_image_dsc_set, &.{});
+        self.gc.dev_api.updateDescriptorSets(write_image_dsc_set, &.{});
     }
 
     pub fn instances(self: *const Self, link_id: u8) [*]sht.PerInstance {

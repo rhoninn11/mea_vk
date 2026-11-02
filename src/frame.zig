@@ -49,7 +49,7 @@ const CmdHelper = struct {
     models: *const v.VertRepo,
 
     pub fn push(self: *const CmdHelper, push_blob: *const gm.PushConstant.PCBlob) void {
-        self.gc.device_proxy.cmdPushConstants(
+        self.gc.dev_api.cmdPushConstants(
             self.command,
             self.draw.pipeline_layout,
             .{ .fragment_bit = true, .vertex_bit = true },
@@ -61,7 +61,7 @@ const CmdHelper = struct {
     pub fn dynUboDsets(self: *const CmdHelper, sets: []const vk.DescriptorSet, ubo_slot: u8) void {
         const UBODyn = Dynamic(sht.GroupData);
         const ubo_dynamic_offset: []const u32 = &.{UBODyn.offset(ubo_slot)};
-        self.gc.device_proxy.cmdBindDescriptorSets(
+        self.gc.dev_api.cmdBindDescriptorSets(
             self.command,
             .graphics,
             self.draw.pipeline_layout,
@@ -73,7 +73,7 @@ const CmdHelper = struct {
 
     pub fn drawInsances(self: *const CmdHelper, mdl_idx: v.EMesh, num: u32) void {
         const idx: u8 = @intFromEnum(mdl_idx);
-        self.gc.device_proxy.cmdDraw(
+        self.gc.dev_api.cmdDraw(
             self.command,
             self.models.sizes[idx],
             num,
@@ -85,7 +85,7 @@ const CmdHelper = struct {
     // TODO: use known PipeIndex
     pub fn use(self: *const CmdHelper, ptype: pipe.EBrush) void {
         const brush = self.draw.brushSel(ptype);
-        self.gc.device_proxy.cmdBindPipeline(self.command, .graphics, brush);
+        self.gc.dev_api.cmdBindPipeline(self.command, .graphics, brush);
     }
 };
 
@@ -142,12 +142,12 @@ pub fn recordFrame(
     // const instace_sz = @sizeOf(sht.PerInstance);
     // _ = instace_sz;
     {
-        try gc.device_proxy.beginCommandBuffer(cbufr, &.{});
+        try gc.dev_api.beginCommandBuffer(cbufr, &.{});
 
-        gc.device_proxy.cmdSetViewport(cbufr, 0, viewport);
-        gc.device_proxy.cmdSetScissor(cbufr, 0, scissor);
+        gc.dev_api.cmdSetViewport(cbufr, 0, viewport);
+        gc.dev_api.cmdSetScissor(cbufr, 0, scissor);
 
-        gc.device_proxy.cmdBeginRenderPass(cbufr, &.{
+        gc.dev_api.cmdBeginRenderPass(cbufr, &.{
             .render_pass = render_pass,
             .framebuffer = framebuffers[rec.id],
             .render_area = render_area,
@@ -155,8 +155,8 @@ pub fn recordFrame(
             .p_clear_values = m_clears.ptr,
         }, .@"inline");
         {
-            defer gc.device_proxy.cmdEndRenderPass(cbufr);
-            gc.device_proxy.cmdBindVertexBuffers(
+            defer gc.dev_api.cmdEndRenderPass(cbufr);
+            gc.dev_api.cmdBindVertexBuffers(
                 cbufr,
                 0,
                 &.{draw.models.vbo.?.dvk_bfr},
@@ -268,6 +268,6 @@ pub fn recordFrame(
             }
         }
 
-        try gc.device_proxy.endCommandBuffer(cbufr);
+        try gc.dev_api.endCommandBuffer(cbufr);
     }
 }
