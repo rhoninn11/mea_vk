@@ -114,84 +114,85 @@ pub const OneShotCommanded = struct {
     }
 };
 
-const MemProx = struct {
-    mem: vk.DeviceMemory,
-    size: u64,
-};
+// const MemProx = struct {
+//     mem: vk.DeviceMemory,
+//     size: u64,
+// };
 
-pub const BufferData = struct {
-    dvk_bfr: vk.Buffer,
-    dvk_mem: vk.DeviceMemory,
-    mapping: ?*anyopaque,
+// pub const BufferData = struct {
+//     buffvk: vk.Buffer,
+//     dvk_mem: vk.DeviceMemory,
+//     mapping: ?*anyopaque,
 
-    pub fn deinit(self: *const BufferData, gc: *const GraphicsContext) void {
-        const dev_prox = gc.dev_api;
-        if (self.mapping) |_| dev_prox.unmapMemory(self.dvk_mem);
-        dev_prox.destroyBuffer(self.dvk_bfr, null);
-        dev_prox.freeMemory(self.dvk_mem, null);
-    }
+//     pub fn deinit(self: *const BufferData, gc: *const GraphicsContext) void {
+//         const dev_prox = gc.dev_api;
+//         if (self.mapping) |_| dev_prox.unmapMemory(self.dvk_mem);
+//         dev_prox.destroyBuffer(self.buffvk, null);
+//         dev_prox.freeMemory(self.dvk_mem, null);
+//     }
 
-    pub fn init(
-        gc: *const GraphicsContext,
-        mem_flags: vk.MemoryPropertyFlags,
-        usage: vk.BufferUsageFlags,
-        bsize: u64,
-    ) !BufferData {
-        const devk = gc.dev_api;
-        const default_size = bsize;
+//     pub fn init(
+//         gc: *const GraphicsContext,
+//         mem_flags: vk.MemoryPropertyFlags,
+//         usage: vk.BufferUsageFlags,
+//         bsize: u64,
+//     ) !BufferData {
+//         const devk = gc.dev_api;
+//         const default_size = bsize;
 
-        const bfr = try devk.createBuffer(&vk.BufferCreateInfo{
-            .size = default_size,
-            .usage = usage,
-            .sharing_mode = .exclusive,
-        }, null);
+//         const bfr = try devk.createBuffer(&vk.BufferCreateInfo{
+//             .size = default_size,
+//             .usage = usage,
+//             .sharing_mode = .exclusive,
+//         }, null);
 
-        // TODO: propably few memory pools based on "imag" image
-        const prox = try getMemory(gc, bfr, mem_flags);
-        errdefer unreachable;
+//         // TODO: propably few memory pools based on "imag" image
+//         const prox = try getMemory(gc, bfr, mem_flags);
+//         errdefer unreachable;
 
-        var mapping: ?*anyopaque = null;
-        if (mem_flags.host_visible_bit) {
-            mapping = try devk.mapMemory(prox.mem, 0, prox.size, .{});
-        }
-        return BufferData{
-            .dvk_bfr = bfr,
-            .dvk_mem = prox.mem,
-            .mapping = mapping,
-        };
-    }
+//         var mapping: ?*anyopaque = null;
+//         if (mem_flags.host_visible_bit) {
+//             mapping = try devk.mapMemory(prox.mem, 0, prox.size, .{});
+//         }
+//         return BufferData{
+//             .buffvk = bfr,
+//             .dvk_mem = prox.mem,
+//             .mapping = mapping,
+//         };
+//     }
 
-    fn getMemory(
-        gc: *const GraphicsContext,
-        bfr: vk.Buffer,
-        mem_flags: vk.MemoryPropertyFlags,
-    ) !MemProx {
-        const r = gc.dev_api.getBufferMemoryRequirements(bfr);
-        // INFO: requirements propably will be bigger then original size
+//     fn getMemory(
+//         gc: *const GraphicsContext,
+//         bfr: vk.Buffer,
+//         mem_flags: vk.MemoryPropertyFlags,
+//     ) !MemProx {
+//         const r = gc.dev_api.getBufferMemoryRequirements(bfr);
+//         // INFO: requirements propably will be bigger then original size
 
-        const memory = try gc.allocate(r, mem_flags);
-        errdefer gc.dev_api.freeMemory(memory, null);
+//         const memory = try gc.allocate(r, mem_flags);
+//         errdefer gc.dev_api.freeMemory(memory, null);
 
-        try gc.dev_api.bindBufferMemory(bfr, memory, 0);
+//         try gc.dev_api.bindBufferMemory(bfr, memory, 0);
 
-        return MemProx{
-            .mem = memory,
-            .size = r.size,
-        };
-    }
+//         return MemProx{
+//             .mem = memory,
+//             .size = r.size,
+//         };
+//     }
 
-    pub fn memMapping(self: *BufferData) [*]u8 {
-        const mapping: [*]u8 = @ptrCast(@alignCast(self.mapping));
-        return mapping;
-    }
-};
+//     pub fn memMapping(self: *BufferData) [*]u8 {
+//         const mapping: [*]u8 = @ptrCast(@alignCast(self.mapping));
+//         return mapping;
+//     }
+// };
 
+const buffs = @import("buffs.zig");
 const BufforingVert = u.MemCalc(v.Vertex);
 // przykład przesyłania danych na gpu, też jest potrze kolejka dla tej operacji
 pub fn uploadVertices(pic: *const PoolInCtx, buffer: vk.Buffer, vert_slice: []const v.Vertex) !void {
     const buff_size = BufforingVert.memSize(vert_slice);
 
-    var buffer_ = try BufferData.init(pic.gc, //
+    var buffer_ = try buffs.BufferData.init(pic.gc, //
         baked.memory_cpu, baked.usage_src, buff_size);
     defer buffer_.deinit(pic.gc);
 
@@ -199,7 +200,7 @@ pub fn uploadVertices(pic: *const PoolInCtx, buffer: vk.Buffer, vert_slice: []co
     //does one @memcpy operation is more effective then #storagePrefill
     @memcpy(gpu_vertices, vert_slice);
 
-    try copyBuffer(pic, buffer, buffer_.dvk_bfr, buff_size);
+    try copyBuffer(pic, buffer, buffer_.buffvk, buff_size);
 }
 
 fn copyBuffer(pic: *const PoolInCtx, dst: vk.Buffer, src: vk.Buffer, size: vk.DeviceSize) !void {
@@ -414,7 +415,7 @@ pub const GraphicsContext = struct {
         const my_first_usage = vk.BufferUsageFlags{
             .transfer_src_bit = true,
         };
-        const test_buffer = try BufferData.init(self, my_first_memory_flags, my_first_usage, 4);
+        const test_buffer = try buffs.BufferData.init(self, my_first_memory_flags, my_first_usage, 4);
         std.debug.print("+++ test buffor created\n", .{});
         test_buffer.deinit(self);
     }

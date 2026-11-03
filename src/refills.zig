@@ -91,7 +91,7 @@ pub fn gridPrefilInner(inst_in_memory: [*]sht.PerInstance, grid: sht.GridSize, s
 
         const delt = ((middle - g_idx) / m.splat3d(min_dim)) * m.splat3d(6 * wave_scale);
 
-        const dist = m.len(.{ delt[m.X], delt[m.Z], 0 });
+        const dist = m.len3(.{ delt[m.X], delt[m.Z], 0 });
 
         var fresh_one: sht.PerInstance = undefined;
         const pos_1 = (g_idx - middle) * m.splat3d(spacing);

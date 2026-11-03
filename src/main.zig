@@ -580,7 +580,7 @@ fn theDeepest(access: EasyAcces) !void {
                 try glass.recoverKinecticDefault(instances);
             } else {
                 try glass.bakeScannData(instances);
-                try glass.bakeRidges(instances, &state.layer_group);
+                try glass.bakePeaks(instances, &state.layer_group);
             }
 
             try ok_snake.display(instances, state.ok_group, ok_phi);

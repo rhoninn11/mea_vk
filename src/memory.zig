@@ -1,5 +1,5 @@
 const vk = @import("vulkan-zig");
-const gm = @import("../graphics_context.zig");
+const gm = @import("graphics_context.zig");
 
 const GraphicsContext = gm.GraphicsContext;
 

@@ -4,6 +4,7 @@ const gm = @import("graphics_context.zig");
 const m = @import("math.zig");
 const imgs = @import("imgs/imgs.zig");
 const sht = @import("shaders/types.zig");
+const buffs = @import("buffs.zig");
 
 pub const ATLAS_MAX = 256;
 
@@ -87,7 +88,7 @@ pub const DescriptorPrep = struct {
     const Self = @This();
     d_set_layout_arr: std.ArrayList(vk.DescriptorSetLayout) = .empty,
     d_set_arr: std.ArrayList(vk.DescriptorSet) = .empty,
-    buff_arr: std.ArrayList(?gm.BufferData) = .empty,
+    buff_arr: std.ArrayList(?buffs.BufferData) = .empty,
 
     gc: *const gm.GraphicsContext,
     _d_set_layout: ?vk.DescriptorSetLayout = null,
@@ -224,7 +225,7 @@ pub const DescriptorPrep = struct {
             var total_buffer_sz: u32 = 0;
             for (data_info) |di| total_buffer_sz += di.element_size * di.num;
 
-            self.buff_arr.items[i] = try gm.BufferData.init(
+            self.buff_arr.items[i] = try buffs.BufferData.init(
                 self.gc,
                 using.memory_property,
                 using.usage.usage_flag,
@@ -284,7 +285,7 @@ pub const DescriptorPrep = struct {
         //for each chain link
         for (0..times_n) |i| {
             const buf_info = vk.DescriptorBufferInfo{
-                .buffer = self.buff_arr.items[i].?.dvk_bfr,
+                .buffer = self.buff_arr.items[i].?.buffvk,
                 .range = info.element_size, // relevent for dynamics offset but not exactly the same as single instance data
                 .offset = 0,
             };

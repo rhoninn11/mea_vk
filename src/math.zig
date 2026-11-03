@@ -159,13 +159,16 @@ pub fn cross(a: vec3, b: vec3) vec3 {
     };
 }
 
-pub fn len(vec: vec3) f32 {
+pub inline fn len3(vec: vec3) f32 {
     return std.math.sqrt(dot3(vec, vec));
+}
+pub inline fn len2(vec: vec2) f32 {
+    return std.math.sqrt(dot2(vec, vec));
 }
 
 test "len test" {
     const v = vec3{ 1, 0, 0 };
-    const neer_zero = len(v) - 1;
+    const neer_zero = len3(v) - 1;
     try std.testing.expect(abs(neer_zero) < 0.001);
 }
 
@@ -213,7 +216,7 @@ test "|mat_mul_vec" {
     const v = vec3{ 8, -2, 1 };
     const b = matXvec(matIden().mat, stack4(v, 1));
 
-    try std.testing.expect(len(v - trim3d(b)) < 0.001);
+    try std.testing.expect(len3(v - trim3d(b)) < 0.001);
 }
 
 pub fn matXmat3(m_a: mat3, m_b: mat3) mat3u {
@@ -255,7 +258,7 @@ test "|mat_mul_mat" {
 }
 
 pub fn norm(v: vec3) vec3 {
-    return v / @as(vec3, @splat(len(v)));
+    return v / @as(vec3, @splat(len3(v)));
 }
 
 pub fn matIden() mat4u {
@@ -369,8 +372,8 @@ test "|ortho_to_vulkan" {
     const M1 = matOrtho(10, 5, 10, 5, 1, -1);
     const v0 = matXvec(M1.mat, stack4(x0, 1));
     const v1 = matXvec(M1.mat, stack4(x1, 1));
-    try std.testing.expect(len(y0 - trim3d(v0)) < 0.001);
-    try std.testing.expect(len(y1 - trim3d(v1)) < 0.001);
+    try std.testing.expect(len3(y0 - trim3d(v0)) < 0.001);
+    try std.testing.expect(len3(y1 - trim3d(v1)) < 0.001);
 
     const x2: vec3 = .{ 1, 1, 1 };
     const x3: vec3 = .{ -1, -1, -1 };
@@ -380,8 +383,8 @@ test "|ortho_to_vulkan" {
     const M2 = mat_ortho_default();
     const v2 = matXvec(M2.mat, stack4(x2, 1));
     const v3 = matXvec(M2.mat, stack4(x3, 1));
-    try std.testing.expect(len(y2 - trim3d(v2)) < 0.001);
-    try std.testing.expect(len(y3 - trim3d(v3)) < 0.001);
+    try std.testing.expect(len3(y2 - trim3d(v2)) < 0.001);
+    try std.testing.expect(len3(y3 - trim3d(v3)) < 0.001);
 }
 pub fn matPersp(width: f32, height: f32, fov: f32, near: f32, far: f32) mat4u {
     std.debug.assert(height != 0);

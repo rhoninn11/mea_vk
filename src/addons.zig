@@ -321,7 +321,7 @@ test "panning motion" {
         sum += delta;
         pan.update(true, sum);
 
-        const dist = m.len(m.stack(pan.getDelta().delta, 0));
+        const dist = m.len3(m.stack(pan.getDelta().delta, 0));
         std.debug.print("dist is: {d}\n", .{dist});
         try std.testing.expect(dist > len);
         len = dist;
@@ -329,7 +329,7 @@ test "panning motion" {
 
     pan.update(false, .{ 128, 199 });
 
-    const dist = m.len(m.stack(pan.getDelta().delta, 0));
+    const dist = m.len3(m.stack(pan.getDelta().delta, 0));
     std.debug.print("dist is: {d}\n", .{dist});
     try std.testing.expect(dist < 0.001);
 }

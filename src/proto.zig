@@ -47,6 +47,44 @@ const uHdr = extern union {
     hdr: u16,
 };
 
+pub fn ridgesHdr(alloc: std.mem.Allocator, g: sht.GridSize, f_mult: f32) !meagen.Image {
+    var pixels = try alloc.alloc(u8, g.total * @sizeOf(u16));
+    const fx: f32 = 0.34;
+
+    const y_span = g.h;
+    const x_span = g.w;
+
+    const scaledown = 16.0;
+    const offset = 8;
+    const max = 3;
+
+    for (0..y_span) |yy| {
+        const yf = m.floaty(yy) / scaledown;
+        for (0..x_span) |x| {
+            const xf = m.floaty(x) / scaledown;
+
+            const calc_point = m.vec2{ yf, xf };
+
+            const y_loc = @sin(calc_point[0] * fx * f_mult * m.tau * 0.1) + offset;
+            const pnt_ridge = m.vec2{ calc_point[0], y_loc };
+
+            const distance = m.len2(calc_point - pnt_ridge);
+            const norm = (max - @min(max, distance)) / max;
+
+            const hdrval: uHdr = .{ .hdr = @as(u16, @intFromFloat(norm * norm * 60000)) };
+            const gdx = shu.gridI(g, x, yy);
+
+            pixels[gdx * 2] = hdrval.byte[0];
+            pixels[gdx * 2 + 1] = hdrval.byte[1];
+        }
+    }
+
+    return meagen.Image{
+        .info = info(g, meagen.ImgType.HDR),
+        .pixels = pixels,
+    };
+}
+
 pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize, f_mult: f32) !meagen.Image {
     var pixels = try alloc.alloc(u8, g.total * @sizeOf(u16));
     const fy: f32 = 0.6;
@@ -242,8 +280,9 @@ pub fn LoadMany(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !ManyLay
 
             var io_wr = outfile.writer(io, for_io_buffer[0..]);
 
-            const mult_var = m.progres(i, frame_num);
-            const img = try xyTrygHdr(gpa, shu.xyGrid(256, 880), 2 + mult_var);
+            const mult_var = m.progres(i, frame_num) * 8;
+            // const img = try xyTrygHdr(gpa, shu.xyGrid(256, 880), 2 + mult_var);
+            const img = try ridgesHdr(gpa, shu.xyGrid(256, 880), 2 + mult_var);
             try img.encode(&io_wr.interface, gpa);
 
             try frames.append(gpa, img);
@@ -460,13 +499,14 @@ pub const LookingGlass = struct {
     const INST_LIM = 8096 + 4096;
 
     pub fn bakeScannData(self: *LookingGlass, instances: [*]sht.PerInstance) !void {
-        return bakeScann(self, instances, true);
+        return bakeRidges(self, instances, true);
     }
     pub fn recoverKinecticDefault(self: *LookingGlass, instances: [*]sht.PerInstance) !void {
-        return bakeScann(self, instances, false);
+        return bakeRidges(self, instances, false);
     }
 
-    pub fn bakeScann(self: *LookingGlass, instances: [*]sht.PerInstance, enabled: bool) !void {
+    // write ridge points as instance data for visualisation
+    pub fn bakeRidges(self: *LookingGlass, instances: [*]sht.PerInstance, enabled: bool) !void {
         const total = self.win_sz.total;
 
         std.debug.assert(total <= INST_LIM);
@@ -494,7 +534,8 @@ pub const LookingGlass = struct {
         @memcpy(instances, scratchpad);
     }
 
-    pub fn bakeRidges(
+    // write ridge points as instance data for visualisation
+    pub fn bakePeaks(
         self: *LookingGlass,
         instances: [*]sht.PerInstance,
         group: *f.InstGroup,

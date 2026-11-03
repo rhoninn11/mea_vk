@@ -2,6 +2,7 @@ const std = @import("std");
 const gm = @import("graphics_context.zig");
 const vk = @import("vulkan-zig");
 const m = @import("math.zig");
+const buffs = @import("buffs.zig");
 
 const X = 0;
 const Y = 1;
@@ -390,7 +391,7 @@ pub const VertRepo = struct {
     sizes: [MODEL_MAX]u32 = .{0} ** MODEL_MAX,
     head: u8 = 0,
     total: u32 = 0,
-    vbo: ?gm.BufferData = null,
+    vbo: ?buffs.BufferData = null,
 
     pub fn register(self: *VertRepo, new: []const Vertex) void {
         self.sizes[self.head] = @intCast(new.len);
@@ -416,13 +417,13 @@ pub fn repoSpawn(alloc: std.mem.Allocator, pic: *const gm.PoolInCtx) !VertRepo {
     var repo: VertRepo = .{};
     try repo.populate(arean.allocator(), &verts);
 
-    const vert_buffer = try gm.BufferData.init(
+    const vert_buffer = try buffs.BufferData.init(
         pic.gc,
         gm.baked.memory_gpu,
         gm.baked.usage_vert_dst,
         @sizeOf(Vertex) * verts.items.len,
     );
-    gm.uploadVertices(pic, vert_buffer.dvk_bfr, verts.items) catch unreachable;
+    gm.uploadVertices(pic, vert_buffer.buffvk, verts.items) catch unreachable;
     repo.vbo = vert_buffer;
     return repo;
 }

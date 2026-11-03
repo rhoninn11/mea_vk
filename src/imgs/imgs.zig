@@ -6,12 +6,13 @@ const m = @import("../math.zig");
 const swpchn = @import("../swapchain.zig");
 const sht = @import("../shaders/types.zig");
 const shut = @import("../shaders/utils.zig");
+const buffs = @import("../buffs.zig");
 
 const gm = @import("../graphics_context.zig");
 const GraphicsContext = gm.GraphicsContext;
 
 const root = @import("root.zig");
-const memory = @import("memory.zig");
+const memory = @import("../memory.zig");
 pub const demo_tex_size = root.demo_tex_r;
 // Checkboard texture spawned in memory
 pub const demo_tex_rgb = root.demo_tex_rgb;
@@ -276,7 +277,7 @@ pub fn texPrep(
 
     //TODO: maybe one omnipresent buffor for img data copying? On front of new imga indeed
     // transport image through a buffer
-    var transport_bfr = try gm.BufferData.init(
+    var transport_bfr = try buffs.BufferData.init(
         pic.gc,
         gm.baked.memory_cpu,
         gm.baked.usage_src,
@@ -288,7 +289,7 @@ pub fn texPrep(
     @memcpy(mapping, pixdata);
 
     try bfr2ImgCopy(pic.gc, one_shot.cmds, .{
-        .buffer = transport_bfr.dvk_bfr,
+        .buffer = transport_bfr.buffvk,
         .image = test_img.dvk_img,
         .layout = dst_layout,
         .g = g64,

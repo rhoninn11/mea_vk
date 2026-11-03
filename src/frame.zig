@@ -159,7 +159,7 @@ pub fn recordFrame(
             gc.dev_api.cmdBindVertexBuffers(
                 cbufr,
                 0,
-                &.{draw.models.vbo.?.dvk_bfr},
+                &.{draw.models.vbo.?.buffvk},
                 &.{0},
             );
 
