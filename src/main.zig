@@ -114,12 +114,17 @@ fn theDeepest(access: EasyAcces) !void {
 
     const prefix = "./fs/serdes";
 
-    var many = try proto.LoadMany(access.io, access.gpa, prefix);
+    var many = proto.LoadMany(access.io, access.gpa, prefix) catch |err| {
+        std.debug.print("!!! failed to laod many | {s}\n", .{@errorName(err)});
+        return error.LoadManyFail;
+    };
     defer many.deinit(access.gpa);
 
     const grid = sht.GridSize.g64;
     // var glass = proto.LookingGlass.init(&many.layers[0], grid);
+    std.debug.print("+++ are we here\n", .{});
     var glass = proto.LookingGlass.init2(&many, grid, 0);
+    std.debug.print("+++ are we here\n", .{});
 
     // var dual_img = try proto.serdesLoadWithFallback(access.io, pages, prefix);
     // defer dual_img.deinit(pages);

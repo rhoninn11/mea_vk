@@ -85,6 +85,42 @@ pub fn ridgesHdr(alloc: std.mem.Allocator, g: sht.GridSize, f_mult: f32) !meagen
     };
 }
 
+pub fn ridgesMono(alloc: std.mem.Allocator, g: sht.GridSize, f_mult: f32) !meagen.Image {
+    var pixels = try alloc.alloc(u8, g.total * @sizeOf(u8));
+    const fx: f32 = 0.34;
+
+    const y_span = g.h;
+    const x_span = g.w;
+
+    const scaledown = 16.0;
+    const offset = 8;
+    const max: f32 = 3;
+
+    for (0..y_span) |yy| {
+        const yf = m.floaty(yy) / scaledown;
+        for (0..x_span) |x| {
+            const xf = m.floaty(x) / scaledown;
+
+            const calc_point = m.vec2{ yf, xf };
+
+            const y_loc = @sin(calc_point[0] * fx * f_mult * m.tau * 0.1) + offset;
+            const pnt_ridge = m.vec2{ calc_point[0], y_loc };
+
+            const distance = m.len2(calc_point - pnt_ridge);
+            const norm = (max - @min(max, distance)) / max;
+            const to_mark: u8 = if (norm > 0.95) 1 else 0;
+
+            const gdx = shu.gridI(g, x, yy);
+            pixels[gdx] = to_mark;
+        }
+    }
+
+    return meagen.Image{
+        .info = info(g, meagen.ImgType.MONO),
+        .pixels = pixels,
+    };
+}
+
 pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize, f_mult: f32) !meagen.Image {
     var pixels = try alloc.alloc(u8, g.total * @sizeOf(u16));
     const fy: f32 = 0.6;
@@ -150,7 +186,7 @@ pub const DualImageData = struct {
         std.debug.assert(pbfr_files.len > 0);
 
         const filepath = pbfr_files[0];
-        std.debug.print("reading {s}\n", .{filepath});
+        std.debug.print("reading {s} {d}\n", .{ filepath, pbfr_files.len });
         var scann = try protoImgRead(io, gpa, filepath);
         errdefer scann.deinit(gpa);
 
@@ -256,37 +292,52 @@ pub const ManyLayers = struct {
     }
 };
 
+fn imgToFile(io: std.Io, gpa: std.mem.Allocator, img: meagen.Image, path: []const u8) !void {
+    var for_io_buffer: [4096]u8 = undefined;
+    const protfile = try std.Io.Dir.cwd().createFile(io, path, .{});
+    defer protfile.close(io);
+
+    var w = protfile.writer(io, &for_io_buffer);
+    const wio = &w.interface;
+
+    try img.encode(wio, gpa);
+}
+
 pub fn LoadMany(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !ManyLayers {
     var for_strings: [512]u8 = undefined;
 
     const zip = files.zipSearch(io, gpa, prefix, &.{".serdes"});
+    // const zip = files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" });
     var unzip = zip catch {
         std.debug.print("!!! not even one found\n", .{});
         const frame_num = 32;
-        var for_io_buffer: [4096]u8 = undefined;
+        const frame_size = shu.xyGrid(256, 880);
 
-        var frames: std.ArrayList(meagen.Image) = try .initCapacity(gpa, frame_num);
+        var frames: std.ArrayList(meagen.Image) = try .initCapacity(gpa, frame_num * 2);
         defer frames.deinit(gpa);
-        defer for (frames.items) |*item| item.deinit(gpa);
+        defer for (frames.items) |*item| {
+            item.deinit(gpa);
+        };
 
         for (0..frame_num) |i| {
-            var fba = std.heap.FixedBufferAllocator.init(for_strings[0..]);
-            const tempal = fba.allocator();
-            const basename = try std.fmt.allocPrint(tempal, "frame_{d:0>4}.serdes", .{i});
-            const write_path = try std.fs.path.join(tempal, &.{ prefix, basename });
-
-            const outfile = try std.Io.Dir.cwd().createFile(io, write_path, .{});
-            defer outfile.close(io);
-
-            var io_wr = outfile.writer(io, for_io_buffer[0..]);
-
             const mult_var = m.progres(i, frame_num) * 8;
-            // const img = try xyTrygHdr(gpa, shu.xyGrid(256, 880), 2 + mult_var);
-            const img = try ridgesHdr(gpa, shu.xyGrid(256, 880), 2 + mult_var);
-            try img.encode(&io_wr.interface, gpa);
 
-            try frames.append(gpa, img);
-            std.debug.print("+++ frame to {s}\n", .{write_path});
+            var _fba = std.heap.FixedBufferAllocator.init(for_strings[0..]);
+            const fba = _fba.allocator();
+            const basename = try std.fmt.allocPrint(fba, "frame_{d:0>4}.serdes", .{i});
+
+            const hdr_path = try std.fs.path.join(fba, &.{ prefix, basename });
+            const mono_path = try std.fmt.allocPrint(fba, "{s}{s}", .{ hdr_path, ".mono" });
+
+            const hdr_img = try ridgesHdr(gpa, frame_size, 2 + mult_var);
+            // const mono_img = try ridgesHdr(gpa, frame_size, 2 + mult_var);
+
+            try imgToFile(io, gpa, hdr_img, hdr_path);
+            // try imgToFile(io, gpa, mono_img, mono_path);
+            try frames.append(gpa, hdr_img);
+            // try frames.append(gpa, mono_img);
+
+            std.debug.print("+++ saved to {s}\n", .{mono_path});
         }
 
         return error.justRestart;
@@ -393,6 +444,7 @@ pub const LookingGlass = struct {
         std.debug.assert(from.layer_data.info.?.img_type == meagen.ImgType.MONO);
 
         const src = &from.raw_data.info.?;
+        std.debug.print("++++ we are in looking glass\n", .{});
 
         var self = LookingGlass{
             .pos = .{ 0, 0 },
