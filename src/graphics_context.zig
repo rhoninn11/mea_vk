@@ -509,7 +509,6 @@ fn checkLayerSupport(vk_lib_wrap: *const BaseWrapper, alloc: Allocator, layers_2
         .{ available_layers.len, layers_2_check.len },
     );
 
-    //https://claude.ai/chat/c91e18de-8740-4c55-bcd9-21280657196e
     var result = true;
     for (layers_2_check) |required_layer| {
         for (available_layers) |layer| {

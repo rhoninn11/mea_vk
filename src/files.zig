@@ -226,3 +226,17 @@ pub fn zipSearch(
     // TODO: fill zipout names with names_of_sort
     return zipout;
 }
+
+pub fn ensureExists(io: std.Io, prefix: []const u8) !void {
+    const cwd = std.Io.Dir.cwd();
+    _ = cwd.statFile(io, prefix, .{
+        .follow_symlinks = true,
+    }) catch |err| {
+        std.debug.print("!!! we got {s} for {s}\n", .{ @errorName(err), prefix });
+        if (err == std.Io.File.OpenError.FileNotFound) {
+            try cwd.createDirPath(io, prefix);
+            return;
+        }
+        return err;
+    };
+}

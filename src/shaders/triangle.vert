@@ -4,7 +4,6 @@
 #define TAU 6.2831853071
 #define PI 3.1415926538
 
-// https://claude.ai/chat/59d09e00-0e18-4956-a051-34a4defa311a
 layout(constant_id = 0) const int MAX_LIGHTS = 16;
 layout(constant_id = 1) const float INTENSITY = 1.0;
 

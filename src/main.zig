@@ -25,6 +25,7 @@ const phys = @import("phys.zig");
 const imgs = @import("imgs/imgs.zig");
 const refils = @import("refills.zig");
 const oklab = @import("oklab.zig");
+const files = @import("files.zig");
 
 const oct = @import("oct");
 const well = oct.f32_arr_3d_t;
@@ -58,7 +59,35 @@ const proto = @import("proto.zig");
 const fonts = @import("fonts.zig");
 
 pub fn main(init: std.process.Init) !void {
-    try host.sdlHost(init, deeper);
+    const MAX_ARGS = 32;
+    var opts = host.Opts{};
+    {
+        const flds = @typeInfo(host.Opts).@"struct".fields;
+        var over_args = try init.minimal.args.iterateAllocator(init.gpa);
+        defer over_args.deinit();
+
+        std.debug.print(" ------------------------------------------------\n", .{});
+        defer std.debug.print(" ------------------------------------------------\n", .{});
+        var i: i8 = 0;
+        while (over_args.next()) |arg| {
+            defer i = i + 1;
+            std.debug.assert(i < MAX_ARGS);
+            std.debug.print("| args used by program {d} {s}\n", .{ i, arg });
+
+            inline for (flds) |fld| {
+                const fld_name = fld.name;
+                const arg_val = arg.ptr;
+                if (std.mem.eql(u8, std.mem.span(arg_val), fld_name)) {
+                    std.debug.print("+ {s} matched\n", .{fld_name});
+                    @field(opts, fld_name) = true;
+                }
+            }
+        }
+    }
+    std.debug.print("!!!!!!!!!! {any}\n", .{opts});
+    try host.sdlHost(init, opts, deeper);
+
+    std.debug.print("+++ leaving host\n", .{});
 }
 
 const OK_SWEEP: u8 = 128;
@@ -112,7 +141,13 @@ fn theDeepest(access: EasyAcces) !void {
 
     // vol data
 
-    const prefix = "./fs/serdes";
+    const prefix = "fs/serdes";
+    try files.ensureExists(access.io, prefix);
+
+    if (access.opts.to_clear) {
+        try std.Io.Dir.cwd().deleteTree(access.io, prefix);
+        try files.ensureExists(access.io, prefix);
+    }
 
     var many = proto.LoadMany(access.io, access.gpa, prefix) catch |err| {
         std.debug.print("!!! failed to laod many | {s}\n", .{@errorName(err)});

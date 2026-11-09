@@ -8,12 +8,19 @@ const sdlh = @import("sdlh.zig");
 const imgs = @import("imgs/imgs.zig");
 const devui = @import("devui.zig");
 
+pub const Opts = struct {
+    to_clear: bool = false,
+    fake_one: bool = false,
+    fake_two: bool = false,
+};
+
 pub const EasyAcces = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
     host: SdlHost,
     gm: *const gc.GraphicsContext,
     imga: *imgs.ImgaAllocator,
+    opts: Opts,
 };
 
 pub const OnHostErrors = error{
@@ -47,7 +54,7 @@ pub const SdlHost = struct {
 const glfw_name = "glfw app name form host function";
 const sdl_name = "sld app name form host function";
 
-pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
+pub fn sdlHost(init: std.process.Init, ex_opts: Opts, passenger: DeeperClient) !void {
     var sdl_ctx = sdlh.initSDL() catch |err| {
         std.debug.print("!!! sdl init failed with |> {s}\n", .{@errorName(err)});
         return err;
@@ -87,6 +94,7 @@ pub fn sdlHost(init: std.process.Init, passenger: DeeperClient) !void {
         .gpa = init.gpa,
         .io = init.io,
         .imga = &imga,
+        .opts = ex_opts,
     };
 
     passenger(access) catch |err| {

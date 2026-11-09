@@ -306,8 +306,8 @@ fn imgToFile(io: std.Io, gpa: std.mem.Allocator, img: meagen.Image, path: []cons
 pub fn LoadMany(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !ManyLayers {
     var for_strings: [512]u8 = undefined;
 
-    const zip = files.zipSearch(io, gpa, prefix, &.{".serdes"});
-    // const zip = files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" });
+    // const zip = files.zipSearch(io, gpa, prefix, &.{".serdes"});
+    const zip = files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" });
     var unzip = zip catch {
         std.debug.print("!!! not even one found\n", .{});
         const frame_num = 32;
@@ -330,12 +330,12 @@ pub fn LoadMany(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !ManyLay
             const mono_path = try std.fmt.allocPrint(fba, "{s}{s}", .{ hdr_path, ".mono" });
 
             const hdr_img = try ridgesHdr(gpa, frame_size, 2 + mult_var);
-            // const mono_img = try ridgesHdr(gpa, frame_size, 2 + mult_var);
+            const mono_img = try ridgesHdr(gpa, frame_size, 2 + mult_var);
 
             try imgToFile(io, gpa, hdr_img, hdr_path);
-            // try imgToFile(io, gpa, mono_img, mono_path);
+            try imgToFile(io, gpa, mono_img, mono_path);
             try frames.append(gpa, hdr_img);
-            // try frames.append(gpa, mono_img);
+            try frames.append(gpa, mono_img);
 
             std.debug.print("+++ saved to {s}\n", .{mono_path});
         }

@@ -276,12 +276,15 @@ pub fn build(b: *std.Build) !void {
         // });
     }
 
-    const triangle_run_cmd = b.addRunArtifact(triangle_exe);
-    triangle_run_cmd.step.dependOn(b.getInstallStep());
+    const triangle_example_run = b.addRunArtifact(triangle_exe);
+    triangle_example_run.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        triangle_example_run.addArgs(args);
+    }
     // triangle_run_cmd.skip_foreign_checks = true;
 
     const triangle_run_step = b.step("main", "Run the triangle example");
-    triangle_run_step.dependOn(&triangle_run_cmd.step);
+    triangle_run_step.dependOn(&triangle_example_run.step);
 
     const tests = testInit(b, &o, &libs_from_c, vk_import);
     const test_run_cmd = b.addRunArtifact(tests);
@@ -291,7 +294,6 @@ pub fn build(b: *std.Build) !void {
 }
 
 fn zig2spirv(b: *std.Build, user_exe: *std.Build.Step.Compile) void {
-    // https://claude.ai/chat/77a20a99-779d-4ab5-9b05-55416f09f559
     const spirv_target = b.resolveTargetQuery(.{
         .cpu_arch = .spirv32,
         .os_tag = .vulkan,
