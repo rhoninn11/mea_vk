@@ -47,9 +47,12 @@ const uHdr = extern union {
     hdr: u16,
 };
 
-pub fn ridgesHdr(alloc: std.mem.Allocator, g: sht.GridSize, f_mult: f32) !meagen.Image {
+const synth = @import("synth.zig");
+
+const ridge_freq = 0.2;
+pub fn ridgesHdr(alloc: std.mem.Allocator, g: sht.GridSize, frac: f32) !meagen.Image {
     var pixels = try alloc.alloc(u8, g.total * @sizeOf(u16));
-    const fx: f32 = 0.34;
+    const freq: f32 = ridge_freq;
 
     const y_span = g.h;
     const x_span = g.w;
@@ -65,7 +68,9 @@ pub fn ridgesHdr(alloc: std.mem.Allocator, g: sht.GridSize, f_mult: f32) !meagen
 
             const calc_point = m.vec2{ yf, xf };
 
-            const y_loc = @sin(calc_point[0] * fx * f_mult * m.tau * 0.1) + offset;
+            const phase = calc_point[0] * m.tau * freq;
+            const y_loc = synth.wave(phase, frac) + offset;
+
             const pnt_ridge = m.vec2{ calc_point[0], y_loc };
 
             const distance = m.len2(calc_point - pnt_ridge);
@@ -85,9 +90,9 @@ pub fn ridgesHdr(alloc: std.mem.Allocator, g: sht.GridSize, f_mult: f32) !meagen
     };
 }
 
-pub fn ridgesMono(alloc: std.mem.Allocator, g: sht.GridSize, f_mult: f32) !meagen.Image {
+pub fn ridgesMono(alloc: std.mem.Allocator, g: sht.GridSize, frac: f32) !meagen.Image {
     var pixels = try alloc.alloc(u8, g.total * @sizeOf(u8));
-    const fx: f32 = 0.34;
+    const freq: f32 = ridge_freq;
 
     const y_span = g.h;
     const x_span = g.w;
@@ -103,12 +108,14 @@ pub fn ridgesMono(alloc: std.mem.Allocator, g: sht.GridSize, f_mult: f32) !meage
 
             const calc_point = m.vec2{ yf, xf };
 
-            const y_loc = @sin(calc_point[0] * fx * f_mult * m.tau * 0.1) + offset;
+            const phase = calc_point[0] * m.tau * freq;
+            const y_loc = synth.wave(phase, frac) + offset;
+
             const pnt_ridge = m.vec2{ calc_point[0], y_loc };
 
             const distance = m.len2(calc_point - pnt_ridge);
             const norm = (max - @min(max, distance)) / max;
-            const to_mark: u8 = if (norm > 0.95) 1 else 0;
+            const to_mark: u8 = if (norm > 0.98) 1 else 0;
 
             const gdx = shu.gridI(g, x, yy);
             pixels[gdx] = to_mark;
@@ -168,6 +175,10 @@ pub fn monoZeroLike(gpa: std.mem.Allocator, like: *const meagen.Image) !meagen.I
     };
 }
 
+inline fn imgType(img: meagen.Image) meagen.ImgType {
+    return img.info.?.img_type;
+}
+
 pub const DualImageData = struct {
     raw_data: meagen.Image,
     layer_data: meagen.Image,
@@ -190,7 +201,7 @@ pub const DualImageData = struct {
         var scann = try protoImgRead(io, gpa, filepath);
         errdefer scann.deinit(gpa);
 
-        return DualImageData{
+        const fresh = DualImageData{
             .raw_data = scann,
             .layer_data = switch (pbfr_files.len) {
                 1 => try monoZeroLike(gpa, &scann),
@@ -198,6 +209,16 @@ pub const DualImageData = struct {
                 else => unreachable,
             },
         };
+        const debug: bool = true;
+        if (debug) {
+            std.debug.print("raw: {s}, layers: {s}\n", //
+                .{
+                    @tagName(imgType(fresh.raw_data)),
+                    @tagName(imgType(fresh.layer_data)),
+                });
+        }
+
+        return fresh;
     }
 
     fn genLayers(gpa: std.mem.Allocator, _info: *const meagen.ImgInfo) !meagen.Image {
@@ -303,6 +324,10 @@ fn imgToFile(io: std.Io, gpa: std.mem.Allocator, img: meagen.Image, path: []cons
     try img.encode(wio, gpa);
 }
 
+pub const cases = error{
+    justRestart,
+};
+
 pub fn LoadMany(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !ManyLayers {
     var for_strings: [512]u8 = undefined;
 
@@ -310,7 +335,7 @@ pub fn LoadMany(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !ManyLay
     const zip = files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" });
     var unzip = zip catch {
         std.debug.print("!!! not even one found\n", .{});
-        const frame_num = 32;
+        const frame_num = ManyLayers.TEST_LIMIT;
         const frame_size = shu.xyGrid(256, 880);
 
         var frames: std.ArrayList(meagen.Image) = try .initCapacity(gpa, frame_num * 2);
@@ -320,7 +345,7 @@ pub fn LoadMany(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !ManyLay
         };
 
         for (0..frame_num) |i| {
-            const mult_var = m.progres(i, frame_num) * 8;
+            const prog = m.progres(i, frame_num);
 
             var _fba = std.heap.FixedBufferAllocator.init(for_strings[0..]);
             const fba = _fba.allocator();
@@ -329,18 +354,21 @@ pub fn LoadMany(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !ManyLay
             const hdr_path = try std.fs.path.join(fba, &.{ prefix, basename });
             const mono_path = try std.fmt.allocPrint(fba, "{s}{s}", .{ hdr_path, ".mono" });
 
-            const hdr_img = try ridgesHdr(gpa, frame_size, 2 + mult_var);
-            const mono_img = try ridgesHdr(gpa, frame_size, 2 + mult_var);
+            // const hdr_img = try ridgesHdr(gpa, frame_size, 1);
+            const hdr_img = try ridgesHdr(gpa, frame_size, prog);
+            // const mono_img = try ridgesMono(gpa, frame_size, 0);
+            const mono_img = try ridgesMono(gpa, frame_size, prog);
 
             try imgToFile(io, gpa, hdr_img, hdr_path);
             try imgToFile(io, gpa, mono_img, mono_path);
             try frames.append(gpa, hdr_img);
             try frames.append(gpa, mono_img);
 
-            std.debug.print("+++ saved to {s}\n", .{mono_path});
+            std.debug.print("+++ prog {d:.2} saved to {s}\n", //
+                .{ prog, mono_path });
         }
 
-        return error.justRestart;
+        return cases.justRestart;
     };
     errdefer unzip.deinit(gpa);
     return try ManyLayers.init(io, gpa, unzip);

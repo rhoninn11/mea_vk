@@ -144,14 +144,16 @@ fn theDeepest(access: EasyAcces) !void {
     const prefix = "fs/serdes";
     try files.ensureExists(access.io, prefix);
 
-    if (access.opts.to_clear) {
+    if (access.opts.clear) {
         try std.Io.Dir.cwd().deleteTree(access.io, prefix);
         try files.ensureExists(access.io, prefix);
     }
 
-    var many = proto.LoadMany(access.io, access.gpa, prefix) catch |err| {
-        std.debug.print("!!! failed to laod many | {s}\n", .{@errorName(err)});
-        return error.LoadManyFail;
+    var many = proto.LoadMany(access.io, access.gpa, prefix) catch |err| blk: {
+        if (err == proto.cases.justRestart) {
+            break :blk try proto.LoadMany(access.io, access.gpa, prefix);
+        }
+        return error.manyLayersFailed;
     };
     defer many.deinit(access.gpa);
 

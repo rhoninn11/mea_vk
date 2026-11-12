@@ -139,16 +139,23 @@ pub inline fn splat3d(a: f32) vec3 {
 pub inline fn splat2d(a: f32) vec2 {
     return @splat(a);
 }
-pub fn trim3d(a: vec4) vec3 {
+pub inline fn trim3d(a: vec4) vec3 {
     return .{ a[0], a[1], a[2] };
 }
 
-pub fn dot2(a: vec2, b: vec2) f32 {
+pub inline fn dot2(a: vec2, b: vec2) f32 {
     return @reduce(.Add, a * b);
 }
 
-pub fn dot3(a: vec3, b: vec3) f32 {
+pub inline fn dot3(a: vec3, b: vec3) f32 {
     return @reduce(.Add, a * b);
+}
+pub inline fn lerp1(a: f32, b: f32, frac: f32) f32 {
+    return a * frac + b * (1 - frac);
+}
+
+pub inline fn lerp3(a: vec3, b: vec3, frac: f32) vec3 {
+    return a * frac + b * (1 - frac);
 }
 
 pub fn cross(a: vec3, b: vec3) vec3 {

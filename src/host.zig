@@ -9,7 +9,7 @@ const imgs = @import("imgs/imgs.zig");
 const devui = @import("devui.zig");
 
 pub const Opts = struct {
-    to_clear: bool = false,
+    clear: bool = false,
     fake_one: bool = false,
     fake_two: bool = false,
 };
