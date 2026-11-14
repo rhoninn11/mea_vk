@@ -3,29 +3,33 @@
     .fingerprint = 0x60508bcca14cfc6d,
     .version = "0.1.0",
     .dependencies = .{
-        .vulkan_zig = .{
-            .url = "git+https://github.com/Snektron/vulkan-zig#b496a6a561ffbbeb530b0f9ed4e059f88c0723a5",
-            .hash = "vulkan-0.0.0-r7Ytx7N9AwD7IZt5_XNHtkJ4G9qY0pCH-cpcOsbL8wzD",
+        .vulkan = .{
+            .url = "git+https://github.com/Snektron/vulkan-zig#5fdcec267c5fdfdb7d3618d5db0475372b17d3d1",
+            .hash = "vulkan-0.0.0-r7Ytx_uJAwBcp9ZoGQHwEQ0OWIfSErGulcgjKI8lZRPS",
         },
         .vulkan_headers = .{
             .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/v1.4.349.tar.gz",
             .hash = "N-V-__8AAC1ZbAIG2kVq3iPpAWaOlDTQ3MOyOyQQR0o_-9ez",
         },
         .protobuf = .{
-            .url = "git+https://github.com/arwalk/zig-protobuf.git?ref=v5.0.0#1f6cb06156b3ff4f52f98bc14f829c0b8393a6fc",
-            .hash = "protobuf-5.0.0-0e82avKUKAAVwTWJzTIEZ14Fu0zC11_lElR8tE6H__y1",
+            .url = "https://github.com/Arwalk/zig-protobuf/archive/refs/tags/v7.0.0.zip",
+            .hash = "protobuf-7.0.0-0e82al-1OwBluM-Yzp86AUg3dvrhHETggVKXt6s854le",
         },
         .sdl3 = .{ //binding
-            .url = "git+https://codeberg.org/7Games/zig-sdl3?ref=v0.2.0#40c2e4b579aa556db37a502c936426aa1c8b5c95",
-            .hash = "sdl3-0.2.0-NmT1Q0mFJwBi9kZmArzh2rfJ_mFshydV0zPGULVlpACc",
+            .url = "git+https://codeberg.org/7Games/zig-sdl3?ref=v0.2.4#89dc02e78d93f791d547d3afca694cc9ad4a74be",
+            .hash = "sdl3-0.2.4-NmT1Q4EeKgAy2b_3kL04FrPamqVaJPMG5qNM1vbok7e_",
         },
         .sdl = .{ //lib compilation
             .url = "git+https://github.com/allyourcodebase/SDL#540fe66af2ca5050fc1aabdf7a19cf462ea0312e",
             .hash = "sdl-1.0.2+3.4.16-i4QD0fCvqQBBggvApPLDHmSCoZSBDZALnEyM9m_-CQXY",
         },
         .cimgui_zig = .{
-            .url = "git+https://github.com/tiawl/cimgui.zig#80a2af71acb84a9c3d0ef904e3da989c407589dd",
-            .hash = "cimgui_zig-1.0.0-2XubkkvOvwAVHKlV3TlmvxEWffNz-Xcds0NWMmC2m5UI",
+            .url = "https://github.com/tiawl/cimgui.zig/archive/refs/tags/dear_bindings-v0.27.zip",
+            .hash = "cimgui_zig-1.0.0-2XubkioxzABQHnIDB6W6643LsEAQSHUMd_ITe1W8y7GV",
+        },
+        .freetype = .{
+            .url = "git+https://github.com/allyourcodebase/freetype.git#4317b65493b7acf63b8c4e5e8818597aa50c39d0",
+            .hash = "freetype-2.14.3-C3-WdcEaAAD-lcpr49B1QSWrwRLJbTI47BrkJJe5202A",
         },
     },
     .paths = .{""},

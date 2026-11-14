@@ -17,8 +17,8 @@ const Vertex = v.Vertex;
 
 const slot_len: u8 = slots.len;
 const slots: []const vk.ShaderStageFlags = &.{
-    vk.ShaderStageFlags{ .vertex_bit = true },
-    vk.ShaderStageFlags{ .fragment_bit = true },
+    vk.ShaderStageFlags{ .vertex = true },
+    vk.ShaderStageFlags{ .fragment = true },
 };
 
 const PSSCI = vk.PipelineShaderStageCreateInfo;
@@ -104,10 +104,10 @@ pub const Moduler = struct {
 
 fn blending(brush: EBrush) vk.PipelineColorBlendAttachmentState {
     const color_components = vk.ColorComponentFlags{
-        .r_bit = true,
-        .g_bit = true,
-        .b_bit = true,
-        .a_bit = true,
+        .r = true,
+        .g = true,
+        .b = true,
+        .a = true,
     };
     const blend_config = switch (brush) {
         .triangle, .sprite, .dsprite => vk.PipelineColorBlendAttachmentState{
@@ -170,7 +170,7 @@ fn restOfPipeline(
         .depth_clamp_enable = .false,
         .rasterizer_discard_enable = .false,
         .polygon_mode = .fill,
-        .cull_mode = .{ .back_bit = false },
+        .cull_mode = .{ .back = false },
         .front_face = .clockwise, // couse we assume Y axis flip
         .depth_bias_enable = .false,
         .depth_bias_constant_factor = 0,
@@ -180,7 +180,7 @@ fn restOfPipeline(
     };
 
     const pmsci = vk.PipelineMultisampleStateCreateInfo{
-        .rasterization_samples = .{ .@"1_bit" = true },
+        .rasterization_samples = .{ .@"1" = true },
         .sample_shading_enable = .false,
         .min_sample_shading = 1,
         .alpha_to_coverage_enable = .false,
@@ -235,14 +235,14 @@ fn restOfPipeline(
             .layout = layout,
             .render_pass = render_pass,
             .subpass = 0,
-            .base_pipeline_handle = .null_handle,
+            .base_pipeline_handle = .null,
             .base_pipeline_index = -1,
         },
     };
 
     var pipeline: vk.Pipeline = undefined;
     const result = try gc.dev_api.createGraphicsPipelines(
-        .null_handle,
+        .null,
         gpci,
         null,
         @ptrCast(&pipeline),
@@ -254,7 +254,7 @@ fn restOfPipeline(
 pub fn createRenderPass(gc: *const gm.GraphicsContext, color_format: vk.Format, depth_format: vk.Format) !vk.RenderPass {
     const color_attachment = vk.AttachmentDescription{
         .format = color_format,
-        .samples = .{ .@"1_bit" = true },
+        .samples = .{ .@"1" = true },
         .load_op = .clear,
         .store_op = .store,
         .stencil_load_op = .dont_care,
@@ -266,7 +266,7 @@ pub fn createRenderPass(gc: *const gm.GraphicsContext, color_format: vk.Format, 
     // const depth_attachment = vk.AttachmentDescription{};
     const depth_attachment = vk.AttachmentDescription{
         .format = depth_format,
-        .samples = .{ .@"1_bit" = true },
+        .samples = .{ .@"1" = true },
         .load_op = .clear,
         .store_op = .dont_care,
         .stencil_load_op = .dont_care,
@@ -295,21 +295,21 @@ pub fn createRenderPass(gc: *const gm.GraphicsContext, color_format: vk.Format, 
         // Na co czekam
         .src_subpass = vk.SUBPASS_EXTERNAL,
         .src_stage_mask = .{
-            .color_attachment_output_bit = true,
-            .late_fragment_tests_bit = true,
+            .color_attachment_output = true,
+            .late_fragment_tests = true,
         },
         .src_access_mask = .{
-            .depth_stencil_attachment_write_bit = true,
+            .depth_stencil_attachment_write = true,
         },
         // co wstrzymuję u siebie
         .dst_subpass = 0,
         .dst_stage_mask = .{
-            .color_attachment_output_bit = true,
-            .early_fragment_tests_bit = true,
+            .color_attachment_output = true,
+            .early_fragment_tests = true,
         },
         .dst_access_mask = .{
-            .color_attachment_write_bit = true,
-            .depth_stencil_attachment_write_bit = true,
+            .color_attachment_write = true,
+            .depth_stencil_attachment_write = true,
         },
     };
 

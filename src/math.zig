@@ -188,20 +188,9 @@ test "if it even crossing" {
     try std.testing.expect(x[2] < 0.0001);
 }
 
-pub const vec3u = extern union {
-    vec: vec3,
-    arr: [3]f32,
-};
-
-pub const mat4u = extern union {
-    mat: mat4,
-    arr: [16]f32,
-    rmat: rmath.struct_Matrix,
-};
-pub const mat3u = extern union {
-    mat: mat3,
-    arr: [12]f32,
-};
+pub const vec3u = vec3;
+pub const mat4u = mat4;
+pub const mat3u = mat3;
 
 test "do mat3 take 12b of space?" {
     try std.testing.expectEqual(12 * 4, @sizeOf(mat3u));
@@ -228,21 +217,17 @@ test "|mat_mul_vec" {
 
 pub fn matXmat3(m_a: mat3, m_b: mat3) mat3u {
     return .{
-        .mat = .{
-            matXvec3(m_a, m_b[0]), //column-major
-            matXvec3(m_a, m_b[1]),
-            matXvec3(m_a, m_b[2]),
-        },
+        matXvec3(m_a, m_b[0]), //column-major
+        matXvec3(m_a, m_b[1]),
+        matXvec3(m_a, m_b[2]),
     };
 }
 pub fn matXmat(m_a: mat4, m_b: mat4) mat4u {
     return .{
-        .mat = .{
-            matXvec(m_a, m_b[0]), //column-major
-            matXvec(m_a, m_b[1]),
-            matXvec(m_a, m_b[2]),
-            matXvec(m_a, m_b[3]),
-        },
+        matXvec(m_a, m_b[0]), //column-major
+        matXvec(m_a, m_b[1]),
+        matXvec(m_a, m_b[2]),
+        matXvec(m_a, m_b[3]),
     };
 }
 
@@ -268,36 +253,30 @@ pub fn norm(v: vec3) vec3 {
     return v / @as(vec3, @splat(len3(v)));
 }
 
-pub fn matIden() mat4u {
-    return mat4u{
-        .mat = .{
-            .{ 1, 0, 0, 0 }, //column-major
-            .{ 0, 1, 0, 0 },
-            .{ 0, 0, 1, 0 },
-            .{ 0, 0, 0, 1 },
-        },
+pub fn matIden() mat4 {
+    return .{
+        .{ 1, 0, 0, 0 }, //column-major
+        .{ 0, 1, 0, 0 },
+        .{ 0, 0, 1, 0 },
+        .{ 0, 0, 0, 1 },
     };
 }
 
-pub fn matTrans(t: vec3) mat4u {
-    return mat4u{
-        .mat = .{
-            .{ 1, 0, 0, 0 }, //column-major
-            .{ 0, 1, 0, 0 },
-            .{ 0, 0, 1, 0 },
-            .{ t[0], t[1], t[2], 1 },
-        },
+pub fn matTrans(t: vec3) mat4 {
+    return .{
+        .{ 1, 0, 0, 0 }, //column-major
+        .{ 0, 1, 0, 0 },
+        .{ 0, 0, 1, 0 },
+        .{ t[0], t[1], t[2], 1 },
     };
 }
 
 pub fn matScale(s: vec3) mat4u {
-    return mat4u{
-        .mat = .{
-            .{ s[0], 0, 0, 0 }, //column-major
-            .{ 0, s[1], 0, 0 },
-            .{ 0, 0, s[2], 0 },
-            .{ 0, 0, 0, 1 },
-        },
+    return .{
+        .{ s[0], 0, 0, 0 }, //column-major
+        .{ 0, s[1], 0, 0 },
+        .{ 0, 0, s[2], 0 },
+        .{ 0, 0, 0, 1 },
     };
 }
 
@@ -327,13 +306,11 @@ pub fn lookRotation(pos: vec3, target: vec3, ref_up: vec3) mat4u {
     const up = cross(forward, right);
 
     return .{
-        .mat = .{
-            // ratation transposition
-            stack4(.{ right[X], up[X], forward[X] }, 0), //column-major
-            stack4(.{ right[Y], up[Y], forward[Y] }, 0),
-            stack4(.{ right[Z], up[Z], forward[Z] }, 0),
-            stack4(zero3(), 1),
-        },
+        // ratation transposition
+        stack4(.{ right[X], up[X], forward[X] }, 0), //column-major
+        stack4(.{ right[Y], up[Y], forward[Y] }, 0),
+        stack4(.{ right[Z], up[Z], forward[Z] }, 0),
+        stack4(zero3(), 1),
     };
 }
 
@@ -342,12 +319,10 @@ pub fn matOrtho(right: f32, left: f32, up: f32, down: f32, far: f32, near: f32) 
     const h = down - up; // Vk has -Y axis
     const d = (far - near);
     return mat4u{
-        .mat = .{
-            .{ 2 / w, 0, 0, 0 }, // column-major
-            .{ 0, 2 / h, 0, 0 },
-            .{ 0, 0, 1 / d, 0 },
-            .{ -(right + left) / w, -(down + up) / h, -near / d, 1 },
-        },
+        .{ 2 / w, 0, 0, 0 }, // column-major
+        .{ 0, 2 / h, 0, 0 },
+        .{ 0, 0, 1 / d, 0 },
+        .{ -(right + left) / w, -(down + up) / h, -near / d, 1 },
     };
 }
 pub fn matDeepOrtho(right: f32, left: f32, up: f32, down: f32) mat4u {
@@ -400,12 +375,10 @@ pub fn matPersp(width: f32, height: f32, fov: f32, near: f32, far: f32) mat4u {
     const tan_val = std.math.tan(fov / 2);
     const depth = far - near;
     return mat4u{
-        .mat = .{
-            .{ 1 / (aspect * tan_val), 0, 0, 0 }, //column-major
-            .{ 0, -1 / tan_val, 0, 0 },
-            .{ 0, 0, far / depth, 1 },
-            .{ 0, 0, -far * near / depth, 0 },
-        },
+        .{ 1 / (aspect * tan_val), 0, 0, 0 }, //column-major
+        .{ 0, -1 / tan_val, 0, 0 },
+        .{ 0, 0, far / depth, 1 },
+        .{ 0, 0, -far * near / depth, 0 },
     };
 }
 

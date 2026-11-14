@@ -15,8 +15,8 @@ const EvCapture = struct {
     const HistorySlots: u8 = 16;
     bins: std.EnumMap(SdlEvTpy, u32),
 
-    key_u_history: [HistorySlots]?[:0]const u8 = .{null} ** HistorySlots,
-    key_d_history: [HistorySlots]?[:0]const u8 = .{null} ** HistorySlots,
+    key_u_history: [HistorySlots]?[:0]const u8 = @splat(null),
+    key_d_history: [HistorySlots]?[:0]const u8 = @splat(null),
 
     fn init() EvCapture {
         return EvCapture{ .bins = .initFull(0) };
@@ -312,19 +312,20 @@ pub const SdlContext = struct {
         std.debug.print("+++ connected to gamepad: {s}\n", .{name_str});
 
         const props = try gamepad.getProperties();
-        inline for (@typeInfo(@TypeOf(props)).@"struct".fields) |field| {
-            const val = @field(props, field.name);
-            std.debug.print("+++ property: {s:20} | {any}\n", .{ field.name, val });
+        inline for (@typeInfo(@TypeOf(props)).@"struct".field_names) |fld_name| {
+            const val = @field(props, fld_name);
+            std.debug.print("+++ property: {s:20} | {any}\n", .{ fld_name, val });
         }
 
         const touchpad_num = gamepad.getNumTouchpads();
         std.debug.print("+++ has {d} touchpads\n", .{touchpad_num});
 
         const SensorType = sdl3.sensor.Type;
-        inline for (std.meta.fields(SensorType)) |field| {
-            const key = @field(SensorType, field.name);
+        const field_names = @typeInfo(SensorType).@"enum".field_names;
+        inline for (field_names) |name| {
+            const key = @field(SensorType, name);
             const presence = gamepad.sensorEnabled(key);
-            std.debug.print("+++ pad has sensor {s:20} | {any}\n", .{ field.name, presence });
+            std.debug.print("+++ pad has sensor {s:20} | {any}\n", .{ name, presence });
         }
 
         const mapping_what = try gamepad.getMapping();

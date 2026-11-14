@@ -128,27 +128,76 @@ pub fn libsFromC(b: *std.Build, o: *const Options) LibsFromC {
         .compile = stb_truetype_build,
     };
 }
-pub fn cimguiC(b: *std.Build, o: *const Options) *std.Build.Module {
-    const include = b.path("src/third_party/imgui");
-    const cimgui_header = b.path("src/third_party/imgui/module.h");
 
-    const cimgui_tc = b.addTranslateC(.{
+fn addIncludePathsToTranslateC(translate_c: *std.Build.Step.TranslateC, lib: *std.Build.Step.Compile) void {
+    std.debug.print("++++ no way a\n", .{});
+    for (lib.root_module.include_dirs.items) |*included| {
+        switch (included.*) {
+            .path => translate_c.addIncludePath(included.path),
+            .config_header_step => translate_c.addConfigHeader(included.config_header_step),
+            .path_system => translate_c.addSystemIncludePath(included.path_system),
+            .other_step => addIncludePathsToTranslateC(translate_c, included.other_step),
+            else => unreachable,
+        }
+
+        std.debug.print("++++ no way\n", .{});
+        // switch (included.*) {
+        //     .path => {
+        //         const p = included.path;
+        //         translate_c.addIncludePath(p);
+        //     },
+        //     .config_header_step => {
+        //         const h = included.config_header_step;
+        //         translate_c.addConfigHeader(h);
+        //     },
+        //     .path_system => {
+        //         const p = included.path_system;
+        //         translate_c.addSystemIncludePath(p);
+        //     },
+        //     .other_step => {
+        //         const s = included.other_step;
+        //         addIncludePathsToTranslateC(translate_c, s);
+        //     },
+        //     else => unreachable,
+        // }
+    }
+}
+
+pub fn cimguiC(b: *std.Build, o: *const Options, lib: *std.Build.Step.Compile) *std.Build.Module {
+    const wf = b.addWriteFiles();
+    const hdr = wf.add("c.h",
+        \\#include "dcimgui.h"
+        \\#include "backends/dcimgui_impl_sdl3.h"
+        \\#include "backends/dcimgui_impl_vulkan.h"
+        \\
+    );
+    const add_main_h = &b.addInstallHeaderFile(hdr, "c.h").step;
+    b.getInstallStep().dependOn(add_main_h);
+
+    _ = lib;
+    // @compileLog("are we passing this point");
+    const bind_header = b.path("zig-out/include/c.h");
+    const include_dir = b.path("zig-out/include");
+    const translate_c = b.addTranslateC(.{
         .target = o.target,
         .optimize = o.optimize,
-        .root_source_file = cimgui_header,
+        .root_source_file = bind_header,
     });
+    translate_c.addIncludePath(include_dir);
+    // translate_c.step.dependOn(add_main_h);
 
-    cimgui_tc.addIncludePath(include);
-    if (o.target.result.os.tag == .windows) {
-        const sdk_dir = b.graph.environ_map.get("VULKAN_SDK") orelse {
-            @panic("!!! missing VULKA_SDK env variable - install LunarSDK for windows\n");
-        };
-        cimgui_tc.addIncludePath(.{
-            .cwd_relative = b.pathJoin(&.{ sdk_dir, "Include" }),
-        });
-    }
+    // TODO: im curious if that also fix vulkan dependency on windows:D
+    // if (o.target.result.os.tag == .windows) {
+    //     const sdk_dir = b.graph.environ_map.get("VULKAN_SDK") orelse {
+    //         @panic("!!! missing VULKA_SDK env variable - install LunarSDK for windows\n");
+    //     };
+    //     translate_c.addIncludePath(.{
+    //     .cwd_relative = b.pathJoin(&.{ sdk_dir, "Include" }),
+    //     });
+    // }
 
-    return cimgui_tc.createModule();
+    const module = translate_c.createModule();
+    return module;
 }
 
 const cimgui = @import("cimgui_zig");
@@ -171,14 +220,14 @@ pub fn build(b: *std.Build) !void {
 
     const vk_registry_path = b.dependency("vulkan_headers", .{}).path("registry/vk.xml");
     const vulkan_bind = b.dependency(
-        "vulkan_zig",
+        "vulkan",
         .{ .registry = vk_registry_path },
     ).module("vulkan-zig");
     const cimgui_dep = b.dependency("cimgui_zig", .{
         .target = o.target,
         .optimize = o.optimize,
-        .platforms = &[_]cimgui.Platform{.SDL3},
-        .renderers = &[_]cimgui.Renderer{.Vulkan},
+        .platforms = &[_]cimgui.Platform{.sdl3},
+        .renderers = &[_]cimgui.Renderer{.vulkan},
     });
     const cimgui_lib = cimgui_dep.artifact("cimgui");
 
@@ -195,7 +244,7 @@ pub fn build(b: *std.Build) !void {
                 .{ .name = "stbtt", .module = libs_from_c.stb_tt_module },
                 .{ .name = "rmath", .module = libs_from_c.raymath_module },
                 .{ .name = "oct", .module = libs_from_c.api_module },
-                .{ .name = "cimgui", .module = cimguiC(b, &o) },
+                .{ .name = "cimgui", .module = cimguiC(b, &o, cimgui_lib) },
                 vk_import,
             },
         }),
@@ -278,9 +327,7 @@ pub fn build(b: *std.Build) !void {
 
     const triangle_example_run = b.addRunArtifact(triangle_exe);
     triangle_example_run.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        triangle_example_run.addArgs(args);
-    }
+    triangle_example_run.addPassthruArgs();
     // triangle_run_cmd.skip_foreign_checks = true;
 
     const triangle_run_step = b.step("main", "Run the triangle example");
@@ -352,20 +399,19 @@ fn find_glsl_files(b: *std.Build, prefix: []const u8) !bt.DersMap {
 }
 
 fn protoGen(b: *std.Build, dep: *Dependency, target: std.Build.ResolvedTarget) void {
-    const gen_step = protobuf.RunProtocStep.create(
-        dep.builder,
-        target,
-        .{
-            .destination_directory = b.path("src/gen"),
-            .source_files = &.{
-                b.path("./proto/comfy.proto"),
-                b.path("./proto/cache.proto"),
-            },
-            .include_directories = &.{b.path("./proto")},
+    const protoc_step = protobuf.RunProtocStep.create(dep.builder, target, .{
+        .destination_directory = b.path("src/proto"),
+        .source_files = &.{
+            b.path("./proto/comfy.proto"),
+            b.path("./proto/cache.proto"),
         },
-    );
+        .include_directories = &.{
+            b.path("./proto"),
+        },
+        .preserve_unknown_fields = false,
+    });
     const cmdname: []const u8 = "proto";
     std.debug.print("You can always call {s}! (wink, wink)\n", .{cmdname});
     const run_step = b.step(cmdname, "compilation of .proto file in proto/");
-    run_step.dependOn(&gen_step.step);
+    run_step.dependOn(protoc_step.step);
 }

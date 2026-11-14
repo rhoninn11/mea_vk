@@ -40,7 +40,7 @@ pub const BufferData = struct {
         errdefer unreachable;
 
         var mapping: ?*anyopaque = null;
-        if (mem_flags.host_visible_bit) {
+        if (mem_flags.host_visible) {
             mapping = try devk.mapMemory(prox.mem, 0, prox.size, .{});
         }
         return BufferData{

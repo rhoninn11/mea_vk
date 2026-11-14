@@ -52,7 +52,7 @@ const CmdHelper = struct {
         self.gc.dev_api.cmdPushConstants(
             self.command,
             self.draw.pipeline_layout,
-            .{ .fragment_bit = true, .vertex_bit = true },
+            .{ .fragment = true, .vertex = true },
             0,
             @sizeOf(@TypeOf(push_blob.*)),
             push_blob,
@@ -72,7 +72,7 @@ const CmdHelper = struct {
     }
 
     pub fn drawInsances(self: *const CmdHelper, mdl_idx: v.EMesh, num: u32) void {
-        const idx: u8 = @intFromEnum(mdl_idx);
+        const idx: u8 = @backingInt(mdl_idx);
         self.gc.dev_api.cmdDraw(
             self.command,
             self.models.sizes[idx],
@@ -179,7 +179,7 @@ pub fn recordFrame(
 
                 if (state.layer_group.num > 0) {
                     const layerpush = gm.PushConstant.PCBlob{
-                        .model = m.matTrans(.{ 0, 0, 0 }).mat,
+                        .model = @bitCast(m.matTrans(.{ 0, 0, 0 })),
                         .inst_base = state.layer_group.base,
                         .mode = 1, // triangle mode
                     };
@@ -191,7 +191,7 @@ pub fn recordFrame(
             {
                 hl_cmds.use(.dsprite);
                 const okpush = gm.PushConstant.PCBlob{
-                    .model = m.matTrans(.{ 0, -6, 0 }).mat,
+                    .model = @bitCast(m.matTrans(.{ 0, -6, 0 })),
                     .inst_base = state.ok_group.base,
                     .tex_base = state.ok_tex_base,
                     // triangle mode ???
@@ -205,10 +205,10 @@ pub fn recordFrame(
                 hl_cmds.use(.triangle);
                 const cursor = state.nav.cursor;
                 const guipush = gm.PushConstant.PCBlob{
-                    .model = m.matXmat(
-                        m.matTrans(.{ cursor[m.X], cursor[m.Y], 0 }).mat,
-                        m.matScale(.{ 25, 25, 1 }).mat,
-                    ).mat,
+                    .model = @bitCast(m.matXmat(
+                        m.matTrans(.{ cursor[m.X], cursor[m.Y], 0 }),
+                        m.matScale(.{ 25, 25, 1 }),
+                    )),
                     .inst_base = 0,
                     .tex_base = state.nav.cursor_tex,
                     .mode = 3, //triangle mode
@@ -221,7 +221,7 @@ pub fn recordFrame(
                 hl_cmds.use(.sprite);
                 const scann_mat = state.nav.scanPlacement();
                 var scan_push = gm.PushConstant.PCBlob{
-                    .model = scann_mat,
+                    .model = @bitCast(scann_mat),
                     .tex_base = 2,
                     .mode = 2, //sprite mode
                     .scale2D = state.nav.uv_map.mult,
@@ -232,16 +232,16 @@ pub fn recordFrame(
 
                 var closer = m.matTrans(.{ 0, 0, -0.1 });
                 _ = &closer;
-                scan_push.model = m.matXmat(closer.mat, scann_mat).mat;
+                scan_push.model = @bitCast(m.matXmat(closer, scann_mat));
                 scan_push.tex_base = 3;
                 hl_cmds.push(&scan_push);
                 hl_cmds.drawInsances(.quad, 1); // scann layers
 
                 closer = m.matTrans(.{ 0, 0, -0.05 });
-                const delta_store = m.matXmat(closer.mat, scann_mat).mat;
+                const delta_store = m.matXmat(closer, scann_mat);
                 // delta_store[0][3] = 0.5;
                 var scan_push_sdf = gm.PushConstant.PCBlob{
-                    .model = delta_store,
+                    .model = @bitCast(delta_store),
                     .tex_base = 5,
                     .mode = 4, // sprite mode
                     .scale2D = state.nav.uv_map.mult,
@@ -254,7 +254,7 @@ pub fn recordFrame(
             {
                 hl_cmds.use(.fontsdf);
                 const letter_push = gm.PushConstant.PCBlob{
-                    .model = m.matTrans(.{ 0, -32, 0 }).mat,
+                    .model = @bitCast(m.matTrans(.{ 0, -32, 0 })),
                     .inst_base = state.char_group.base,
                     .tex_base = 4,
                     .mode = 1, //sdf mode

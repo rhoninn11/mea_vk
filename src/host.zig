@@ -82,7 +82,7 @@ pub fn sdlHost(init: std.process.Init, ex_opts: Opts, passenger: DeeperClient) !
 
     var imga = try imgs.ImgaAllocator.init(
         &gm,
-        .{ .device_local_bit = true },
+        .{ .device_local = true },
     );
     defer imga.deinit(&gm);
     // imga.verbose = true;

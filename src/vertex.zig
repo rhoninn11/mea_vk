@@ -72,9 +72,9 @@ pub const Math = struct {
     pub fn matApply(tris: []Vertex, mat: m.mat3) void {
         const len = tris.len;
         for (0..len) |i| {
-            const vert = m.vec3u{ .arr = tris[i].pos };
-            const newpos = m.vec3u{ .vec = m.matXvec3(mat, vert.vec) };
-            tris[i].pos = newpos.arr;
+            const vert: m.vec3 = @bitCast(tris[i].pos);
+            const newpos = m.matXvec3(mat, vert);
+            tris[i].pos = newpos;
         }
     }
     pub fn matApply4(tris: []Vertex, mat: m.mat4) void {
@@ -87,17 +87,17 @@ pub const Math = struct {
     pub fn scaleApply(verts: []Vertex, scale: m.vec3) void {
         const len = verts.len;
         for (0..len) |i| {
-            const vert = m.vec3u{ .arr = verts[i].pos };
-            const newpos = m.vec3u{ .vec = vert.vec * scale };
-            verts[i].pos = newpos.arr;
+            const vert = verts[i].pos;
+            const newpos = vert * scale;
+            verts[i].pos = newpos;
         }
     }
     pub fn transApply(verts: []Vertex, offset: m.vec3) void {
         const len = verts.len;
         for (0..len) |i| {
-            const vert = m.vec3u{ .arr = verts[i].pos };
-            const newpos = m.vec3u{ .vec = vert.vec + offset };
-            verts[i].pos = newpos.arr;
+            const vert = verts[i].pos;
+            const newpos = vert + offset;
+            verts[i].pos = newpos;
         }
     }
     pub const xrot45 = m.rotMatX(0.125);
@@ -123,9 +123,9 @@ pub const Utils = struct {
         const triangles = try Plane(alloc);
 
         Math.matApply4(triangles.items, m.matXmat(
-            m.matScale(m.splat3d(0.5)).mat,
-            m.matTrans(.{ 1, -1, 0 }).mat,
-        ).mat);
+            m.matScale(m.splat3d(0.5)),
+            m.matTrans(.{ 1, -1, 0 }),
+        ));
         return triangles;
     }
 
@@ -387,8 +387,8 @@ pub const Utils = struct {
 
 const MODEL_MAX: u8 = 8;
 pub const VertRepo = struct {
-    offsets: [MODEL_MAX]u32 = .{0} ** MODEL_MAX,
-    sizes: [MODEL_MAX]u32 = .{0} ** MODEL_MAX,
+    offsets: [MODEL_MAX]u32 = @splat(0),
+    sizes: [MODEL_MAX]u32 = @splat(0),
     head: u8 = 0,
     total: u32 = 0,
     vbo: ?buffs.BufferData = null,

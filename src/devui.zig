@@ -25,7 +25,7 @@ pub const Loader = struct {
     }
 
     fn loadGlobal(name: [*c]const u8) vk.PfnVoidFunction {
-        return getInstanceProcAddress(vk.Instance.null_handle, name);
+        return getInstanceProcAddress(null, name);
     }
 
     fn loadInstance(self: *const @This(), name: [*c]const u8) vk.PfnVoidFunction {
@@ -77,15 +77,15 @@ pub fn integrate(
     const pool_sizes = [_]vk.DescriptorPoolSize{
         .{
             .type = .sampled_image,
-            .descriptor_count = cimgui.IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE,
+            .descriptor_count = cimgui.IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE,
         },
         .{
             .type = .sampler,
-            .descriptor_count = cimgui.IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE,
+            .descriptor_count = cimgui.IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE,
         },
     };
     var desc_pool_create_info = vk.DescriptorPoolCreateInfo{
-        .flags = .{ .free_descriptor_set_bit = true },
+        .flags = .{ .free_descriptor_set = true },
         .max_sets = 0,
     };
     for (pool_sizes) |pool_size| desc_pool_create_info.max_sets += pool_size.descriptor_count;
@@ -101,22 +101,22 @@ pub fn integrate(
     errdefer cimgui.cImGui_ImplSDL3_Shutdown();
 
     var init_info = cimgui.ImGui_ImplVulkan_InitInfo{};
-    init_info.Instance = @ptrFromInt(@intFromEnum(gm.inst));
-    init_info.PhysicalDevice = @ptrFromInt(@intFromEnum(gm.phy_dev));
-    init_info.Device = @ptrFromInt(@intFromEnum(gm.dev));
+    init_info.Instance = @ptrCast(gm.inst);
+    init_info.PhysicalDevice = @ptrCast(gm.phy_dev);
+    init_info.Device = @ptrCast(gm.dev);
     init_info.QueueFamily = gm.graphics_queue.family;
-    init_info.Queue = @ptrFromInt(@intFromEnum(gm.graphics_queue.handle));
+    init_info.Queue = @ptrCast(gm.graphics_queue.handle);
     init_info.PipelineCache = null;
-    init_info.DescriptorPool = @ptrFromInt(@intFromEnum(imgui_dset_pool.?));
+    init_info.DescriptorPool = @ptrFromInt(@backingInt(imgui_dset_pool.?));
     init_info.MinImageCount = 2;
     init_info.ImageCount = inflight_count;
 
     init_info.UseDynamicRendering = false;
 
-    const one_msaa_sample = vk.SampleCountFlags{ .@"1_bit" = true };
+    const one_msaa_sample = vk.SampleCountFlags{ .@"1" = true };
     init_info.PipelineInfoMain.MSAASamples = one_msaa_sample.toInt();
     init_info.PipelineInfoMain.Subpass = 0;
-    init_info.PipelineInfoMain.RenderPass = @ptrFromInt(@intFromEnum(render_pass));
+    init_info.PipelineInfoMain.RenderPass = @ptrFromInt(@backingInt(render_pass));
 
     init_info.Allocator = null;
     init_info.CheckVkResultFn = null;
@@ -147,7 +147,7 @@ pub fn finalizeFrame() DevuiDrawData {
 }
 
 pub fn recordCommands(data: DevuiDrawData, cb: vk.CommandBuffer) void {
-    const cb_ptr: cimgui.VkCommandBuffer = @ptrFromInt(@intFromEnum(cb));
+    const cb_ptr: cimgui.VkCommandBuffer = @ptrCast(cb);
     cimgui.cImGui_ImplVulkan_RenderDrawData(data, cb_ptr);
 }
 

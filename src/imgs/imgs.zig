@@ -36,7 +36,7 @@ pub const DepthImage = struct {
             gc,
             &.{ vk.Format.d32_sfloat, vk.Format.d32_sfloat_s8_uint, vk.Format.d24_unorm_s8_uint },
             vk.ImageTiling.optimal,
-            .{ .depth_stencil_attachment_bit = true },
+            .{ .depth_stencil_attachment = true },
         );
     }
     fn hasSetncilComponent(format: vk.Format) bool {
@@ -59,9 +59,9 @@ pub const DepthImage = struct {
             .tiling = .optimal,
             .mip_levels = 1,
             .array_layers = 1,
-            .samples = .{ .@"1_bit" = true },
+            .samples = .{ .@"1" = true },
             .usage = .{
-                .depth_stencil_attachment_bit = true,
+                .depth_stencil_attachment = true,
             },
             .sharing_mode = .exclusive,
             .initial_layout = .undefined,
@@ -162,11 +162,11 @@ pub const VkImage = struct {
             .extent = .{ .height = g.h, .width = g.w, .depth = 1 },
             .mip_levels = 1,
             .array_layers = 1,
-            .samples = .{ .@"1_bit" = true },
+            .samples = .{ .@"1" = true },
             .tiling = .optimal,
             .usage = .{
-                .sampled_bit = true,
-                .transfer_dst_bit = true,
+                .sampled = true,
+                .transfer_dst = true,
             },
             .sharing_mode = .exclusive,
             .initial_layout = .undefined,

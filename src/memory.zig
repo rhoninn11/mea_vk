@@ -25,11 +25,11 @@ pub fn imgMemTypeInfer(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags
     const configs: []const Pair = &.{
         Pair{
             .format = .d32_sfloat,
-            .usage = .{ .depth_stencil_attachment_bit = true, .transfer_src_bit = true },
+            .usage = .{ .depth_stencil_attachment = true, .transfer_src = true },
         },
         Pair{
             .format = .a8b8g8r8_srgb_pack32,
-            .usage = .{ .color_attachment_bit = true, .transfer_src_bit = true },
+            .usage = .{ .color_attachment = true, .transfer_src = true },
         },
     };
 
@@ -42,7 +42,7 @@ pub fn imgMemTypeInfer(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags
         .tiling = .optimal,
         .mip_levels = 1,
         .array_layers = 1,
-        .samples = .{ .@"1_bit" = true },
+        .samples = .{ .@"1" = true },
         .usage = undefined,
         .sharing_mode = .exclusive,
         .initial_layout = .undefined,

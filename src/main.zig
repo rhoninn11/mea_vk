@@ -62,7 +62,7 @@ pub fn main(init: std.process.Init) !void {
     const MAX_ARGS = 32;
     var opts = host.Opts{};
     {
-        const flds = @typeInfo(host.Opts).@"struct".fields;
+        const fld_names = @typeInfo(host.Opts).@"struct".field_names;
         var over_args = try init.minimal.args.iterateAllocator(init.gpa);
         defer over_args.deinit();
 
@@ -74,8 +74,7 @@ pub fn main(init: std.process.Init) !void {
             std.debug.assert(i < MAX_ARGS);
             std.debug.print("| args used by program {d} {s}\n", .{ i, arg });
 
-            inline for (flds) |fld| {
-                const fld_name = fld.name;
+            inline for (fld_names) |fld_name| {
                 const arg_val = arg.ptr;
                 if (std.mem.eql(u8, std.mem.span(arg_val), fld_name)) {
                     std.debug.print("+ {s} matched\n", .{fld_name});
@@ -112,7 +111,7 @@ pub fn gpCommandQueue(gc: *const gm.GraphicsContext) !vk.CommandPool {
     const pool_cinfo: vk.CommandPoolCreateInfo = .{
         .queue_family_index = gc.graphics_queue.family,
         .flags = .{
-            .reset_command_buffer_bit = true,
+            .reset_command_buffer = true,
             // .transient_bit = true,
         },
     };
@@ -365,7 +364,7 @@ fn theDeepest(access: EasyAcces) !void {
     const recorders: []gm.FrameRecorder = try loc_fba.alloc(gm.FrameRecorder, inflight_num);
     const frame_cmd_pool_cfg: vk.CommandPoolCreateInfo = .{
         .queue_family_index = gc.graphics_queue.family,
-        .flags = .{ .transient_bit = true },
+        .flags = .{ .transient = true },
     };
 
     var slot: u8 = 0;

@@ -174,7 +174,7 @@ pub fn zipSearch(
         };
     }
 
-    const EMPTY_BINS: Bins = .{null} ** N;
+    const EMPTY_BINS: Bins = @splat(null);
     var found_map: FileMap = .init(aa);
     try found_map.ensureTotalCapacity(32);
 

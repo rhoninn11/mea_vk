@@ -121,16 +121,16 @@ pub const DescriptorPrep = struct {
             }
 
             const bindless_textures_flags: vk.DescriptorBindingFlags = .{
-                .partially_bound_bit = true,
-                .variable_descriptor_count_bit = true,
-                .update_after_bind_bit = true,
+                .partially_bound = true,
+                .variable_descriptor_count = true,
+                .update_after_bind = true,
             };
             const more_flags: vk.DescriptorSetLayoutBindingFlagsCreateInfo = .{
                 .p_binding_flags = @ptrCast(&bindless_textures_flags),
                 .binding_count = 1,
             };
             const more_flexibility: vk.DescriptorSetLayoutCreateFlags = .{
-                .update_after_bind_pool_bit = true,
+                .update_after_bind_pool = true,
             };
 
             var slot_used: u8 = 0;
@@ -244,7 +244,7 @@ pub const DescriptorPrep = struct {
         // std.debug.print("+++ pool is {s}\n", .{@tagName(p_size.type)});
 
         const pool_flags: vk.DescriptorPoolCreateFlags = .{
-            .update_after_bind_bit = true,
+            .update_after_bind = true,
         };
         const dset_pool_opt = vk.DescriptorPoolCreateInfo{
             .flags = pool_flags,

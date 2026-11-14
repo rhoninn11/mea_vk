@@ -57,14 +57,14 @@ pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: EPersp) !MatPack {
     const ref_up: m.vec3 = .{ 0, 1, 0 };
     const trans = m.matTrans(-pos);
     const rot = m.lookRotation(pos, targ, ref_up);
-    const view_mat = m.matXmat(rot.mat, trans.mat);
+    const view_mat = m.matXmat(rot, trans);
 
     const model_mat = m.lookRotation(m.zero3(), .{ 1, 0, 0 }, .{ 0, 1, 0 });
 
     const interm = MatPack{
-        .proj = persp_window.arr,
-        .view = view_mat.arr,
-        .model = model_mat.arr,
+        .proj = @bitCast(persp_window),
+        .view = @bitCast(view_mat),
+        .model = @bitCast(model_mat),
         // .view = m.mat_translate(-pos).arr,
         // .view = m.lookRotation(.{ 0, 0, -1 }, pos).arr,
     };
@@ -73,9 +73,9 @@ pub fn paramatricVariation(pos: m.vec3, targ: m.vec3, persp: EPersp) !MatPack {
 
 pub fn guiVisor(x: f32, y: f32) MatPack {
     const interm = MatPack{
-        .proj = m.matOrtho(x, 0, 0, -y, 16, -16).arr,
-        .view = m.matIden().arr,
-        .model = m.matIden().arr,
+        .proj = @bitCast(m.matOrtho(x, 0, 0, -y, 16, -16)),
+        .view = @bitCast(m.matIden()),
+        .model = @bitCast(m.matIden()),
         // .view = m.mat_translate(-pos).arr,
         // .view = m.lookRotation(.{ 0, 0, -1 }, pos).arr,
     };
@@ -216,7 +216,7 @@ pub const Navig = struct {
 
         const saled = m.matScale(s);
         const moved = m.matTrans(.{ padding, -padding, 0 });
-        const combinde = m.matXmat(moved.mat, saled.mat).mat;
+        const combinde = m.matXmat(moved, saled);
 
         return combinde;
     }

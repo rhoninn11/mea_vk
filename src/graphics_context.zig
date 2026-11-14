@@ -20,8 +20,8 @@ const required_layer_names = [_][*:0]const u8{
 };
 
 const required_device_extensions = [_][*:0]const u8{
-    vk.extensions.khr_swapchain.name,
-    vk.extensions.khr_synchronization_2.name,
+    vk.device_extensions.khr_swapchain.name,
+    vk.device_extensions.khr_synchronization_2.name,
 };
 
 /// There are 3 levels of bindings in vulkan-zig:
@@ -82,7 +82,7 @@ pub const OneShotCommanded = struct {
                 .p_command_buffers = @ptrCast(&self.cmds),
             },
         };
-        try vkdev.queueSubmit(vkq, submmit_info, .null_handle);
+        try vkdev.queueSubmit(vkq, submmit_info, .null);
         try vkdev.queueWaitIdle(vkq);
 
         vkdev.freeCommandBuffers(self.pic.pool, &.{self.cmds});
@@ -103,7 +103,7 @@ pub const OneShotCommanded = struct {
         );
 
         const begin_info: vk.CommandBufferBeginInfo = .{
-            .flags = .{ .one_time_submit_bit = true },
+            .flags = .{ .one_time_submit = true },
         };
         try vkd.beginCommandBuffer(cmds, &begin_info);
 
@@ -305,7 +305,7 @@ pub const GraphicsContext = struct {
             .enabled_extension_count = @intCast(ext_names.items.len),
             .pp_enabled_extension_names = ext_names.items.ptr,
 
-            .flags = .{ .enumerate_portability_bit_khr = false }, //true for apple
+            .flags = .{ .enumerate_portability_khr = false }, //true for apple
         }, null);
 
         // dispatch wrappers
@@ -347,7 +347,7 @@ pub const GraphicsContext = struct {
     fn getExtNamesList(gpa: Allocator) !std.ArrayList([*:0]const u8) {
         var extension_names: std.ArrayList([*:0]const u8) = .empty;
         errdefer extension_names.deinit(gpa);
-        try extension_names.append(gpa, vk.extensions.ext_debug_utils.name);
+        try extension_names.append(gpa, vk.instance_extensions.ext_debug_utils.name);
         // try extension_names.append(allocator, vk.extensions.khr_portability_enumeration.name); //for apple
         try extension_names.appendSlice(gpa, try sdl.vulkan.getInstanceExtensions());
         // try extension_names.append(gpa, vk.extensions.ext_validation_features);
@@ -376,13 +376,13 @@ pub const GraphicsContext = struct {
             .message_severity = .{
                 //.verbose_bit_ext = true,
                 //.info_bit_ext = true,
-                .warning_bit_ext = true,
-                .error_bit_ext = true,
+                .warning_ext = true,
+                .error_ext = true,
             },
             .message_type = .{
-                .general_bit_ext = true,
-                .validation_bit_ext = true,
-                .performance_bit_ext = true,
+                .general_ext = true,
+                .validation_ext = true,
+                .performance_ext = true,
             },
             .pfn_user_callback = &debugUtilsMessengerCallback,
             .p_user_data = null,
@@ -409,11 +409,11 @@ pub const GraphicsContext = struct {
         std.debug.print("+++ memory types ({d}), memory heaps ({d})\n", .{ mem_t_count, mem_h_count });
 
         const my_first_memory_flags = vk.MemoryPropertyFlags{
-            .host_visible_bit = true,
-            .host_coherent_bit = true,
+            .host_visible = true,
+            .host_coherent = true,
         };
         const my_first_usage = vk.BufferUsageFlags{
-            .transfer_src_bit = true,
+            .transfer_src = true,
         };
         const test_buffer = try buffs.BufferData.init(self, my_first_memory_flags, my_first_usage, 4);
         std.debug.print("+++ test buffor created\n", .{});
@@ -475,14 +475,14 @@ pub const GraphicsContext = struct {
 // up to 128 bytes of cheep control data
 pub const PushConstant = struct {
     pub const PCBlob = struct {
-        model: m.mat4 = m.matIden().mat,
+        model: [16]f32 = @bitCast(m.matIden()),
         inst_base: u32 = 0,
         tex_base: u32 = 0,
         mode: u32 = 0,
         _not_used_0: u32 = 0,
-        point2D: [2]f32 = .{0} ** 2,
-        scale2D: [2]f32 = .{1} ** 2,
-        _not_used: [8]u32 = .{0} ** 8,
+        point2D: [2]f32 = @splat(0),
+        scale2D: [2]f32 = @splat(1),
+        _not_used: [8]u32 = @splat(0),
     };
 
     pub fn Ranges() []const vk.PushConstantRange {
@@ -493,8 +493,8 @@ pub const PushConstant = struct {
             .offset = 0,
             .size = @sizeOf(PCBlob),
             .stage_flags = .{
-                .fragment_bit = true,
-                .vertex_bit = true,
+                .fragment = true,
+                .vertex = true,
             },
         }};
     }
@@ -538,18 +538,17 @@ pub const Queue = struct {
 fn createSurface(instance: InstanceProxy, window: *glfw.Window) !vk.SurfaceKHR {
     var surface: u64 = undefined;
 
-    if (glfw.createWindowSurface(@intFromEnum(instance.handle), window, null, &surface) != .success) {
+    if (glfw.createWindowSurface(@backingInt(instance.handle), window, null, &surface) != .success) {
         return error.SurfaceInitFailed;
     }
 
-    return @enumFromInt(surface);
+    return @fromBackingInt(@intCast(surface));
 }
 
 fn createSurfaceSdl(instance: vk.Instance, window: sdl.video.Window) !vk.SurfaceKHR {
-    const instance_int = @intFromEnum(instance);
-    const sdl_surface = try sdl.vulkan.Surface.init(window, @ptrFromInt(instance_int), null);
+    const sdl_surface = try sdl.vulkan.Surface.init(window, @ptrCast(instance), null);
     const surface_int = @intFromPtr(sdl_surface.surface);
-    return @enumFromInt(surface_int);
+    return @fromBackingInt(@intCast(surface_int));
 }
 
 fn initializeCandidate(instance: InstanceProxy, candidate: DeviceCandidate) !vk.Device {
@@ -618,18 +617,18 @@ const QueueAllocation = struct {
 };
 
 fn severityTag(sev: vk.DebugUtilsMessageSeverityFlagsEXT) []const u8 {
-    if (sev.verbose_bit_ext) return "\x1b[34m verbose \x1b[0m";
-    if (sev.info_bit_ext) return "\x1b[34m info \x1b[0m";
-    if (sev.warning_bit_ext) return "\x1b[33m warning \x1b[0m";
-    if (sev.error_bit_ext) return "\x1b[31m error \x1b[0m";
+    if (sev.verbose_ext) return "\x1b[34m verbose \x1b[0m";
+    if (sev.info_ext) return "\x1b[34m info \x1b[0m";
+    if (sev.warning_ext) return "\x1b[33m warning \x1b[0m";
+    if (sev.error_ext) return "\x1b[31m error \x1b[0m";
     return "\x1b[34m unknown\x1b[0m";
 }
 
 fn typeBit(msg_type: vk.DebugUtilsMessageTypeFlagsEXT) []const u8 {
-    if (msg_type.general_bit_ext) return "general";
-    if (msg_type.validation_bit_ext) return "validation";
-    if (msg_type.performance_bit_ext) return "performance";
-    if (msg_type.device_address_binding_bit_ext) return "device addr";
+    if (msg_type.general_ext) return "general";
+    if (msg_type.validation_ext) return "validation";
+    if (msg_type.performance_ext) return "performance";
+    if (msg_type.device_address_binding_ext) return "device addr";
     return "unknown";
 }
 
@@ -736,7 +735,7 @@ fn allocateQueues(instance: InstanceProxy, pdev: vk.PhysicalDevice, allocator: A
     for (families, 0..) |properties, i| {
         const family: u32 = @intCast(i);
 
-        if (graphics_family == null and properties.queue_flags.graphics_bit) {
+        if (graphics_family == null and properties.queue_flags.graphics) {
             graphics_family = family;
         }
 
@@ -798,10 +797,10 @@ pub const baked = struct {
         descriptor_type: vk.DescriptorType,
     };
 
-    pub const usage_src: vk.BufferUsageFlags = .{ .transfer_src_bit = true };
-    pub const usage_vert_dst: vk.BufferUsageFlags = .{ .transfer_dst_bit = true, .vertex_buffer_bit = true };
-    pub const usage_as_uniform: vk.BufferUsageFlags = .{ .uniform_buffer_bit = true };
-    pub const usage_as_storage: vk.BufferUsageFlags = .{ .storage_buffer_bit = true };
+    pub const usage_src: vk.BufferUsageFlags = .{ .transfer_src = true };
+    pub const usage_vert_dst: vk.BufferUsageFlags = .{ .transfer_dst = true, .vertex_buffer = true };
+    pub const usage_as_uniform: vk.BufferUsageFlags = .{ .uniform_buffer = true };
+    pub const usage_as_storage: vk.BufferUsageFlags = .{ .storage_buffer = true };
 
     const uniform_usage: UsageType = .{
         .usage_flag = usage_as_uniform,
@@ -826,17 +825,17 @@ pub const baked = struct {
     };
 
     pub const memory_cpu: vk.MemoryPropertyFlags = .{
-        .host_visible_bit = true,
-        .host_coherent_bit = true,
+        .host_visible = true,
+        .host_coherent = true,
     };
 
     pub const memory_gpu: vk.MemoryPropertyFlags = .{
-        .device_local_bit = true,
+        .device_local = true,
     };
 
-    pub const shader_both: vk.ShaderStageFlags = .{ .vertex_bit = true, .fragment_bit = true };
-    pub const shader_vert_only: vk.ShaderStageFlags = .{ .vertex_bit = true };
-    pub const shader_frag_only: vk.ShaderStageFlags = .{ .fragment_bit = true };
+    pub const shader_both: vk.ShaderStageFlags = .{ .vertex = true, .fragment = true };
+    pub const shader_vert_only: vk.ShaderStageFlags = .{ .vertex = true };
+    pub const shader_frag_only: vk.ShaderStageFlags = .{ .fragment = true };
 
     pub const uniform_frag_vert = DSetInit{
         .usage = uniform_usage,
@@ -871,10 +870,10 @@ pub const baked = struct {
     };
 
     const depth_flag: vk.ImageAspectFlags = .{
-        .depth_bit = true,
+        .depth = true,
     };
     const color_flag: vk.ImageAspectFlags = .{
-        .color_bit = true,
+        .color = true,
     };
 
     pub const depth_img_subrng: vk.ImageSubresourceRange = .{
@@ -904,22 +903,22 @@ pub const baked = struct {
         pub const before_dst: t.SyncPrep = .{
             .src = .{
                 .access = .{},
-                .stage = .{ .top_of_pipe_bit = true },
+                .stage = .{ .top_of_pipe = true },
             },
             .dst = .{
-                .access = .{ .transfer_write_bit = true },
-                .stage = .{ .transfer_bit = true },
+                .access = .{ .transfer_write = true },
+                .stage = .{ .transfer = true },
             },
         };
 
         pub const tex_ready: t.SyncPrep = .{
             .src = .{
-                .access = .{ .transfer_write_bit = true },
-                .stage = .{ .transfer_bit = true },
+                .access = .{ .transfer_write = true },
+                .stage = .{ .transfer = true },
             },
             .dst = .{
-                .access = .{ .shader_read_bit = true },
-                .stage = .{ .fragment_shader_bit = true },
+                .access = .{ .shader_read = true },
+                .stage = .{ .fragment_shader = true },
             },
         };
     };
