@@ -202,6 +202,59 @@ pub const VkImage = struct {
         self.vk_img_view = try devk.createImageView(&image_view_create_info, null);
     }
 
+    pub fn texPrep(
+        test_img: *Self,
+        pic: *const gm.PoolInCtx,
+        g64: sht.GridSize,
+        pixdata: []const u8,
+        mode: VkImage.ESamplerMode,
+    ) !void {
+        const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
+        const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
+
+        const one_shot = try gm.OneShotCommanded.init(pic, 3);
+
+        // prepare to recive transfer
+        try imgLTrans(pic.gc, one_shot.cmds, .{
+            .old_layout = .undefined,
+            .new_layout = dst_layout,
+            .image = test_img.dvk_img,
+            .sync_point = gm.baked.syncAt.before_dst,
+        });
+
+        //TODO: maybe one omnipresent buffor for img data copying? On front of new imga indeed
+        // transport image through a buffer
+        var transport_bfr = try buffs.BufferData.init(
+            pic.gc,
+            gm.baked.memory_cpu,
+            gm.baked.usage_src,
+            test_img.memloc.mySizing(),
+        );
+        defer transport_bfr.deinit(pic.gc);
+
+        const mapping: [*]u8 = transport_bfr.memMapping();
+        @memcpy(mapping, pixdata);
+
+        try bfr2ImgCopy(pic.gc, one_shot.cmds, .{
+            .buffer = transport_bfr.buffvk,
+            .image = test_img.dvk_img,
+            .layout = dst_layout,
+            .g = g64,
+        });
+
+        try imgLTrans(pic.gc, one_shot.cmds, .{
+            .old_layout = dst_layout,
+            .new_layout = shader_read_layout,
+            .image = test_img.dvk_img,
+            .sync_point = gm.baked.syncAt.tex_ready,
+        });
+
+        try one_shot.resolve();
+
+        try test_img.createImageView(pic.gc);
+        try test_img.createSampler(pic.gc, mode);
+    }
+
     const ESamplerMode = enum(u8) {
         nearest = 0,
         font,
@@ -252,60 +305,8 @@ pub fn vulkanTexture(
     var test_img = try RGBImage.init(pic.gc, imga, g64);
     errdefer test_img.deinit(imga);
 
-    try texPrep(pic, g64, pixdata, &test_img, mode);
+    try test_img.texPrep(pic, g64, pixdata, mode);
     return test_img;
-}
-pub fn texPrep(
-    pic: *const gm.PoolInCtx,
-    g64: sht.GridSize,
-    pixdata: []const u8,
-    test_img: *VkImage,
-    mode: VkImage.ESamplerMode,
-) !void {
-    const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
-    const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
-
-    const one_shot = try gm.OneShotCommanded.init(pic, 3);
-
-    // prepare to recive transfer
-    try imgLTrans(pic.gc, one_shot.cmds, .{
-        .old_layout = .undefined,
-        .new_layout = dst_layout,
-        .image = test_img.dvk_img,
-        .sync_point = gm.baked.syncAt.before_dst,
-    });
-
-    //TODO: maybe one omnipresent buffor for img data copying? On front of new imga indeed
-    // transport image through a buffer
-    var transport_bfr = try buffs.BufferData.init(
-        pic.gc,
-        gm.baked.memory_cpu,
-        gm.baked.usage_src,
-        test_img.memloc.bytes(),
-    );
-    defer transport_bfr.deinit(pic.gc);
-
-    const mapping: [*]u8 = transport_bfr.memMapping();
-    @memcpy(mapping, pixdata);
-
-    try bfr2ImgCopy(pic.gc, one_shot.cmds, .{
-        .buffer = transport_bfr.buffvk,
-        .image = test_img.dvk_img,
-        .layout = dst_layout,
-        .g = g64,
-    });
-
-    try imgLTrans(pic.gc, one_shot.cmds, .{
-        .old_layout = dst_layout,
-        .new_layout = shader_read_layout,
-        .image = test_img.dvk_img,
-        .sync_point = gm.baked.syncAt.tex_ready,
-    });
-
-    try one_shot.resolve();
-
-    try test_img.createImageView(pic.gc);
-    try test_img.createSampler(pic.gc, mode);
 }
 
 pub fn imgLTrans(gc: *const gm.GraphicsContext, cmds: vk.CommandBuffer, cfg: t.ImgLTranConfig) !void {

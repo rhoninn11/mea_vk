@@ -76,8 +76,11 @@ pub const LocDesc = struct {
     blk_idx: u16,
     num: u16,
 
-    pub inline fn bytes(ld: LocDesc) u64 {
+    pub inline fn mySizing(ld: LocDesc) u64 {
         return kb_block_64 * @as(u64, ld.num);
+    }
+    pub inline fn myOffset(ld: LocDesc) u64 {
+        return kb_block_64 * @as(u64, ld.blk_idx);
     }
 };
 
@@ -311,7 +314,7 @@ pub const StagerAllocator = struct {
         };
     }
 
-    pub fn imgAlloc(self: *Self, gc: *const GraphicsContext, bfr: vk.Buffer) !LocDesc {
+    pub fn stageAlloc(self: *Self, gc: *const GraphicsContext, bfr: vk.Buffer) !LocDesc {
         const req = gc.dev_api.getBufferMemoryRequirements(bfr);
 
         const spot = try self.bitmap.allocateSpot(req);
@@ -319,12 +322,12 @@ pub const StagerAllocator = struct {
         const offset = @as(u64, kb_block_64) * spot.blk_idx + alignment_delta;
 
         // std.debug.print("+++ offset is {d} alignment is {d}\n", .{ offset, req.alignment });
-        try gc.dev_api.bindImageMemory(bfr, self.dev_mem, offset);
+        try gc.dev_api.bindBufferMemory(bfr, self.dev_mem, offset);
 
         return spot;
     }
 
-    pub fn imgFree(self: *ImgaAllocator, spot: LocDesc) void {
+    pub fn stageFree(self: *ImgaAllocator, spot: LocDesc) void {
         self.bitmap.freeSpot(spot);
     }
 };

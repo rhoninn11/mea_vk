@@ -311,7 +311,7 @@ fn theDeepest(access: EasyAcces) !void {
         const basic_tex_set: [4]anyerror!imgs.VkImage = .{
             imgs.vulkanTexture(&tctx, g64, &imgs.demo_tex_rgb, .default),
             imgs.vulkanTexture(&tctx, g64, &imgs.demo_tex_r, .default),
-            imgs.vulkanTexture(&tctx, looking_vol.grid, looking_vol.pix, .nearest),
+            imgs.vulkanTexture(&tctx, looking_vol.grid, looking_vol.pix, .nearest), // can be removed
             imgs.vulkanTexture(&tctx, looking_lyr.grid, looking_lyr.pix, .nearest),
         };
         const basic_idx = 0;
@@ -320,25 +320,25 @@ fn theDeepest(access: EasyAcces) !void {
             try all_imgs.append(&rgba);
             lazy_shady.omnitex.updateTexture(0, &rgba, basic_idx + i);
         }
+        // NOT EVEN USED?
     }
+    const imga = access.imga;
     {
         // TEXMAP: 4 for atlas
         const gridsz_abc = fonts.font_g;
-        var vki_glyph_atlas = try imgs.U8Image.init(access.gm, access.imga, gridsz_abc);
-        try imgs.texPrep(&pic, gridsz_abc, abc.char_atlas, &vki_glyph_atlas, .font);
+        var vki_glyph_atlas = try imgs.U8Image.init(access.gm, imga, gridsz_abc);
+        errdefer vki_glyph_atlas.deinit(imga);
+        try vki_glyph_atlas.texPrep(&pic, gridsz_abc, abc.char_atlas, .font);
         try all_imgs.append(&vki_glyph_atlas);
-
-        lazy_shady.omnitex.updateTexture(0, &vki_glyph_atlas, 4);
         // try d.ppmU8Debug(access.io, abc.char_atlas, gridsz_abc);
-    }
 
-    {
         // TEXMAP: 5 scan data
-        var mono = try imgs.U16Image.init(access.gm, access.imga, glass.img_sz);
-        errdefer mono.deinit(access.imga);
-        try imgs.texPrep(&pic, glass.img_sz, glass.scan_raw.pixels, &mono, .nearest);
+        var mono = try imgs.U16Image.init(access.gm, imga, glass.img_sz);
+        errdefer mono.deinit(imga);
+        try mono.texPrep(&pic, glass.img_sz, glass.scan_raw.pixels, .nearest);
         try all_imgs.append(&mono);
 
+        lazy_shady.omnitex.updateTexture(0, &vki_glyph_atlas, 4);
         lazy_shady.omnitex.updateTexture(0, &mono, 5);
     }
 
