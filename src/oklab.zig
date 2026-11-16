@@ -159,7 +159,7 @@ pub const OkUnderstanding = struct {
     const Self = @This();
     pub fn init(
         gpa: std.mem.Allocator,
-        tctx: *const imgs.TexCtx,
+        tctx: *const imgs.TexInfo,
         omnitex: *dset.DescriptorPrep,
         img_store: *imgs.ManyImages,
         tex_grid: sht.GridSize,

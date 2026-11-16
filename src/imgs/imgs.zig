@@ -125,6 +125,14 @@ pub const U8Image = struct {
     }
 };
 
+pub const PrepBy = struct {
+    pic: *const gm.PoolInCtx,
+    staga: *memory.StagerAllocator,
+};
+
+const SizeOfFormat = //
+    @import("shorts.zig").SizeOfFormat;
+
 pub const VkImage = struct {
     const show_size_at_init = false;
     const Self = @This();
@@ -154,28 +162,11 @@ pub const VkImage = struct {
     }
 
     pub fn init(gc: *const GraphicsContext, imga: *memory.ImgaAllocator, g: sht.GridSize, format: vk.Format) !Self {
-        const devk = gc.dev_api;
-
-        const img_create_info: vk.ImageCreateInfo = .{
-            .image_type = .@"2d",
-            .format = format,
-            .extent = .{ .height = g.h, .width = g.w, .depth = 1 },
-            .mip_levels = 1,
-            .array_layers = 1,
-            .samples = .{ .@"1" = true },
-            .tiling = .optimal,
-            .usage = .{
-                .sampled = true,
-                .transfer_dst = true,
-            },
-            .sharing_mode = .exclusive,
-            .initial_layout = .undefined,
-        };
-
+        const img_create_info = SizeOfFormat(g, format);
         if (Self.show_size_at_init) shut.printGrid(&g, "+++ rgb_img_init");
 
-        const vk_img = try devk.createImage(&img_create_info, null);
-        errdefer devk.destroyImage(vk_img, null);
+        const vk_img = try gc.dev_api.createImage(&img_create_info, null);
+        errdefer gc.dev_api.destroyImage(vk_img, null);
 
         const slot = try imga.imgAlloc(gc, vk_img);
         errdefer imga.imgFree(slot);
@@ -189,6 +180,62 @@ pub const VkImage = struct {
         };
     }
 
+    pub fn texPrep(
+        self: *Self,
+        prep_by: PrepBy,
+        g64: sht.GridSize,
+        pixdata: []const u8,
+        mode: VkImage.ESamplerMode,
+    ) !void {
+        const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
+        const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
+        const pic = prep_by.pic;
+
+        const one_shot = try gm.OneShotCommanded.init(pic, 3);
+
+        // const gc = pic.gc;
+        {
+            // prepare to recive transfer
+            try imgLTrans(pic.gc, one_shot.cmds, .{
+                .old_layout = .undefined,
+                .new_layout = dst_layout,
+                .image = self.dvk_img,
+                .sync_point = gm.baked.syncAt.before_dst,
+            });
+
+            //TODO: maybe one omnipresent buffor for img data copying? On front of new imga indeed
+            // transport image through a buffer
+            var thin_buff = try buffs.BufferData2.init(
+                pic.gc,
+                prep_by.staga,
+                gm.baked.memory_cpu,
+                gm.baked.usage_src,
+                self.memloc.mySizing(),
+            );
+            defer thin_buff.deinit(pic.gc);
+            @memcpy(thin_buff.mmap, pixdata);
+
+            try bfr2ImgCopy(pic.gc, one_shot.cmds, .{
+                .buffer = thin_buff.buffvk,
+                .image = self.dvk_img,
+                .layout = dst_layout,
+                .g = g64,
+            });
+
+            try imgLTrans(pic.gc, one_shot.cmds, .{
+                .old_layout = dst_layout,
+                .new_layout = shader_read_layout,
+                .image = self.dvk_img,
+                .sync_point = gm.baked.syncAt.tex_ready,
+            });
+
+            try one_shot.resolve();
+
+            try self.createImageView(pic.gc);
+            try self.createSampler(pic.gc, mode);
+        }
+    }
+
     pub fn createImageView(self: *Self, gc: *const GraphicsContext) !void {
         const devk = gc.dev_api;
         const image_view_create_info: vk.ImageViewCreateInfo = .{
@@ -200,59 +247,6 @@ pub const VkImage = struct {
         };
 
         self.vk_img_view = try devk.createImageView(&image_view_create_info, null);
-    }
-
-    pub fn texPrep(
-        test_img: *Self,
-        pic: *const gm.PoolInCtx,
-        g64: sht.GridSize,
-        pixdata: []const u8,
-        mode: VkImage.ESamplerMode,
-    ) !void {
-        const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
-        const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
-
-        const one_shot = try gm.OneShotCommanded.init(pic, 3);
-
-        // prepare to recive transfer
-        try imgLTrans(pic.gc, one_shot.cmds, .{
-            .old_layout = .undefined,
-            .new_layout = dst_layout,
-            .image = test_img.dvk_img,
-            .sync_point = gm.baked.syncAt.before_dst,
-        });
-
-        //TODO: maybe one omnipresent buffor for img data copying? On front of new imga indeed
-        // transport image through a buffer
-        var transport_bfr = try buffs.BufferData.init(
-            pic.gc,
-            gm.baked.memory_cpu,
-            gm.baked.usage_src,
-            test_img.memloc.mySizing(),
-        );
-        defer transport_bfr.deinit(pic.gc);
-
-        const mapping: [*]u8 = transport_bfr.memMapping();
-        @memcpy(mapping, pixdata);
-
-        try bfr2ImgCopy(pic.gc, one_shot.cmds, .{
-            .buffer = transport_bfr.buffvk,
-            .image = test_img.dvk_img,
-            .layout = dst_layout,
-            .g = g64,
-        });
-
-        try imgLTrans(pic.gc, one_shot.cmds, .{
-            .old_layout = dst_layout,
-            .new_layout = shader_read_layout,
-            .image = test_img.dvk_img,
-            .sync_point = gm.baked.syncAt.tex_ready,
-        });
-
-        try one_shot.resolve();
-
-        try test_img.createImageView(pic.gc);
-        try test_img.createSampler(pic.gc, mode);
     }
 
     const ESamplerMode = enum(u8) {
@@ -294,18 +288,28 @@ pub const TexCtx = struct {
     imga: *memory.ImgaAllocator,
 };
 
+pub const TexInfo = struct {
+    pic: *const gm.PoolInCtx,
+    imga: *memory.ImgaAllocator,
+    staga: *memory.StagerAllocator,
+};
+
 pub fn vulkanTexture(
-    tctx: *const TexCtx,
+    info: *const TexInfo,
     g64: sht.GridSize,
     pixdata: []const u8,
     mode: VkImage.ESamplerMode,
 ) !VkImage {
-    const pic = tctx.pic;
-    const imga = tctx.imga;
+    const pic = info.pic;
+
+    const imga = info.imga;
     var test_img = try RGBImage.init(pic.gc, imga, g64);
     errdefer test_img.deinit(imga);
 
-    try test_img.texPrep(pic, g64, pixdata, mode);
+    try test_img.texPrep(PrepBy{
+        .pic = pic,
+        .staga = info.staga,
+    }, g64, pixdata, mode);
     return test_img;
 }
 

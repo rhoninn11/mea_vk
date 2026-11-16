@@ -7,6 +7,7 @@ const input = @import("input.zig");
 const sdlh = @import("sdlh.zig");
 const imgs = @import("imgs/imgs.zig");
 const devui = @import("devui.zig");
+const memory = @import("memory.zig");
 
 pub const Opts = struct {
     clear: bool = false,
@@ -20,6 +21,7 @@ pub const EasyAcces = struct {
     host: SdlHost,
     gm: *const gc.GraphicsContext,
     imga: *imgs.ImgaAllocator,
+    staga: *memory.StagerAllocator,
     opts: Opts,
 };
 
@@ -80,11 +82,11 @@ pub fn sdlHost(init: std.process.Init, ex_opts: Opts, passenger: DeeperClient) !
     if (!ok) return error.devuiVkBindFailed;
     // devui.Loader
 
-    var imga = try imgs.ImgaAllocator.init(
-        &gm,
-        .{ .device_local = true },
-    );
+    var imga = try imgs.ImgaAllocator.init(&gm, gc.baked.memory_gpu);
     defer imga.deinit(&gm);
+
+    var staga = try memory.StagerAllocator.init(&gm, gc.baked.memory_cpu);
+    defer staga.deinit(&gm);
     // imga.verbose = true;
 
     std.log.debug("Using device: {s}", .{gm.deviceName()});
@@ -94,6 +96,7 @@ pub fn sdlHost(init: std.process.Init, ex_opts: Opts, passenger: DeeperClient) !
         .gpa = init.gpa,
         .io = init.io,
         .imga = &imga,
+        .staga = &staga,
         .opts = ex_opts,
     };
 

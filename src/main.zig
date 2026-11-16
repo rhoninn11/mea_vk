@@ -302,17 +302,18 @@ fn theDeepest(access: EasyAcces) !void {
     var all_imgs: imgs.ManyImages = try .init(access.gpa, access.imga);
     defer all_imgs.deinit();
 
-    const tctx = imgs.TexCtx{
+    const tex_info = imgs.TexInfo{
         .pic = &pic,
         .imga = access.imga,
+        .staga = access.staga,
     };
     {
         // TEXMAP: 0 - 3 few, mostly test textures
         const basic_tex_set: [4]anyerror!imgs.VkImage = .{
-            imgs.vulkanTexture(&tctx, g64, &imgs.demo_tex_rgb, .default),
-            imgs.vulkanTexture(&tctx, g64, &imgs.demo_tex_r, .default),
-            imgs.vulkanTexture(&tctx, looking_vol.grid, looking_vol.pix, .nearest), // can be removed
-            imgs.vulkanTexture(&tctx, looking_lyr.grid, looking_lyr.pix, .nearest),
+            imgs.vulkanTexture(&tex_info, g64, &imgs.demo_tex_rgb, .default),
+            imgs.vulkanTexture(&tex_info, g64, &imgs.demo_tex_r, .default),
+            imgs.vulkanTexture(&tex_info, looking_vol.grid, looking_vol.pix, .nearest), // can be removed
+            imgs.vulkanTexture(&tex_info, looking_lyr.grid, looking_lyr.pix, .nearest),
         };
         const basic_idx = 0;
         inline for (0.., basic_tex_set) |i, risky_rgba| {
@@ -324,18 +325,24 @@ fn theDeepest(access: EasyAcces) !void {
     }
     const imga = access.imga;
     {
+        const prep_by: imgs.PrepBy = .{
+            .pic = &pic,
+            .staga = access.staga,
+        };
         // TEXMAP: 4 for atlas
+        // TEXMAP: 5 scan data
+
         const gridsz_abc = fonts.font_g;
         var vki_glyph_atlas = try imgs.U8Image.init(access.gm, imga, gridsz_abc);
         errdefer vki_glyph_atlas.deinit(imga);
-        try vki_glyph_atlas.texPrep(&pic, gridsz_abc, abc.char_atlas, .font);
-        try all_imgs.append(&vki_glyph_atlas);
-        // try d.ppmU8Debug(access.io, abc.char_atlas, gridsz_abc);
 
-        // TEXMAP: 5 scan data
         var mono = try imgs.U16Image.init(access.gm, imga, glass.img_sz);
         errdefer mono.deinit(imga);
-        try mono.texPrep(&pic, glass.img_sz, glass.scan_raw.pixels, .nearest);
+
+        try vki_glyph_atlas.texPrep(prep_by, gridsz_abc, abc.char_atlas, .font);
+        try mono.texPrep(prep_by, glass.img_sz, glass.scan_raw.pixels, .nearest);
+
+        try all_imgs.append(&vki_glyph_atlas);
         try all_imgs.append(&mono);
 
         lazy_shady.omnitex.updateTexture(0, &vki_glyph_atlas, 4);
@@ -344,7 +351,7 @@ fn theDeepest(access: EasyAcces) !void {
 
     const ok_snake = try oklab.OkUnderstanding.init(
         gpa,
-        &tctx,
+        &tex_info,
         &lazy_shady.omnitex,
         &all_imgs,
         sht.GridSize.g128,

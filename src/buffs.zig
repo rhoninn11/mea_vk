@@ -78,52 +78,38 @@ pub const BufferData = struct {
 
 const memory = @import("memory.zig");
 pub const BufferData2 = struct {
+    const Self = @This();
+    mmap: [*]u8,
     buffvk: vk.Buffer,
-    // dvk_mem: vk.DeviceMemory,
     loc: memory.LocDesc,
-    dvk_mem: vk.DeviceMemory,
 
-    mapping: ?*anyopaque,
-
-    pub fn deinit(self: *const BufferData, gc: *const GraphicsContext) void {
-        const dev_prox = gc.dev_api;
-        if (self.mapping) |_| dev_prox.unmapMemory(self.dvk_mem);
-        dev_prox.destroyBuffer(self.buffvk, null);
-        dev_prox.freeMemory(self.dvk_mem, null);
+    pub fn deinit(self: *Self, gc: *const GraphicsContext) void {
+        gc.dev_api.destroyBuffer(self.buffvk, null);
     }
 
     pub fn init(
         gc: *const GraphicsContext,
+        staga: *memory.StagerAllocator,
         mem_flags: vk.MemoryPropertyFlags,
         usage: vk.BufferUsageFlags,
         bsize: u64,
-        stager: memory.StagerAllocator,
-    ) !BufferData {
-        const devk = gc.dev_api;
-        const default_size = bsize;
+    ) !Self {
+        std.debug.assert(mem_flags.host_visible);
 
-        const bfr = try devk.createBuffer(&vk.BufferCreateInfo{
-            .size = default_size,
+        const create_b = vk.BufferCreateInfo{
+            .size = bsize,
             .usage = usage,
             .sharing_mode = .exclusive,
-        }, null);
-
-        const loc = try stager.stageAlloc(gc, bfr);
-        const mem = stager.dev_mem;
-
-        std.debug.assert(mem_flags.host_visible);
-        const mapping = try gc.dev_api.mapMemory(mem, loc.myOffset(), loc.mySizing(), .{});
-
-        return BufferData2{
-            .dvk_mem = mem,
-            .loc = loc,
-            .mapping = mapping,
-            .buffvk = bfr,
         };
-    }
 
-    pub fn memMapping(self: *BufferData) [*]u8 {
-        const mapping: [*]u8 = @ptrCast(@alignCast(self.mapping));
-        return mapping;
+        const buff = try gc.dev_api.createBuffer(&create_b, null);
+        errdefer gc.dev_api.destroyBuffer(buff, null);
+
+        const loc = try staga.stageAlloc(gc, buff);
+        return .{
+            .mmap = staga.memMapping(loc),
+            .buffvk = buff,
+            .loc = loc,
+        };
     }
 };

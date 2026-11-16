@@ -6,11 +6,12 @@ const GraphicsContext = gm.GraphicsContext;
 pub fn bfrMemTypeInfer(gc: *const GraphicsContext, flags: vk.MemoryPropertyFlags) !u32 {
 
     // const info: vk.BufferCreate
-    const info: vk.BufferCreateInfo = .{
+    const info = vk.BufferCreateInfo{
+        .size = 1024 * 1024 * 1024,
+        .usage = gm.baked.usage_src,
         .sharing_mode = .exclusive,
-        .flags = flags,
     };
-    const hook_bfr = gc.dev_api.createBuffer(info, null);
+    const hook_bfr = try gc.dev_api.createBuffer(&info, null);
     defer gc.dev_api.destroyBuffer(hook_bfr, null);
 
     const req = gc.dev_api.getBufferMemoryRequirements(hook_bfr);
@@ -292,6 +293,7 @@ pub const StagerAllocator = struct {
     dev_mem_idx: u32,
     dev_mem: vk.DeviceMemory,
     bitmap: Bitmap,
+    mmap: ?*anyopaque,
 
     pub fn deinit(self: *Self, gc: *const GraphicsContext) void {
         gc.dev_api.freeMemory(self.dev_mem, null);
@@ -301,16 +303,24 @@ pub const StagerAllocator = struct {
         gc: *const GraphicsContext,
         flags: vk.MemoryPropertyFlags,
     ) !Self {
+        const sz = totalMB(32);
         const mem_idx = try bfrMemTypeInfer(gc, flags);
         const mem = try gc.dev_api.allocateMemory(&.{
-            .allocation_size = totalMB(32),
+            .allocation_size = sz,
             .memory_type_index = mem_idx,
         }, null);
+        const mapping = try gc.dev_api.mapMemory(
+            mem,
+            0,
+            sz,
+            .{},
+        );
 
         return Self{
             .dev_mem_idx = mem_idx,
             .dev_mem = mem,
             .bitmap = .init(),
+            .mmap = mapping,
         };
     }
 
@@ -327,7 +337,13 @@ pub const StagerAllocator = struct {
         return spot;
     }
 
-    pub fn stageFree(self: *ImgaAllocator, spot: LocDesc) void {
+    pub fn stageFree(self: *Self, spot: LocDesc) void {
         self.bitmap.freeSpot(spot);
+    }
+
+    pub fn memMapping(self: *const Self, spot: LocDesc) [*]u8 {
+        const mapping: [*]u8 = @ptrCast(@alignCast(self.mmap));
+        const off = spot.myOffset();
+        return mapping[off .. off + spot.mySizing()].ptr;
     }
 };
