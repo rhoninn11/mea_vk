@@ -143,6 +143,7 @@ pub const VkImage = struct {
     vk_format: vk.Format,
     vk_img_view: ?vk.ImageView = null,
     vk_sampler: ?vk.Sampler = null,
+    counter: u32 = 0,
 
     pub fn memSize(g: sht.GridSize) usize {
         return g.total * @sizeOf(u32);
@@ -179,32 +180,25 @@ pub const VkImage = struct {
             .vk_format = format,
         };
     }
+    pub fn imgCompleate(self: *Self, gc: *const GraphicsContext, mode: VkImage.ESamplerMode) !void {
+        try self.createImageView(gc);
+        try self.createSampler(gc, mode);
+    }
 
     pub fn texPrep(
         self: *Self,
         prep_by: PrepBy,
         g64: sht.GridSize,
         pixdata: []const u8,
-        mode: VkImage.ESamplerMode,
     ) !void {
         const dst_layout: vk.ImageLayout = .transfer_dst_optimal;
         const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
         const pic = prep_by.pic;
 
-        const one_shot = try gm.OneShotCommanded.init(pic, 3);
-
+        errdefer std.debug.print("marker\n", .{});
+        const one_shot = try gm.OneShotCommanded.init(pic);
         // const gc = pic.gc;
         {
-            // prepare to recive transfer
-            try imgLTrans(pic.gc, one_shot.cmds, .{
-                .old_layout = .undefined,
-                .new_layout = dst_layout,
-                .image = self.dvk_img,
-                .sync_point = gm.baked.syncAt.before_dst,
-            });
-
-            //TODO: maybe one omnipresent buffor for img data copying? On front of new imga indeed
-            // transport image through a buffer
             var thin_buff = try buffs.BufferData2.init(
                 pic.gc,
                 prep_by.staga,
@@ -212,31 +206,38 @@ pub const VkImage = struct {
                 gm.baked.usage_src,
                 self.memloc.mySizing(),
             );
-            defer thin_buff.deinit(pic.gc);
+            defer {
+                std.debug.print("{d} buffer deinit: 0x{x} {d}x{d} cmd buff: 0x{x}\n", //
+                    .{ self.counter, thin_buff.buffvk, g64.w, g64.h, @intFromPtr(one_shot.cmds) });
+                thin_buff.deinit(pic.gc);
+                self.counter += 1;
+            }
             @memcpy(thin_buff.mmap, pixdata);
 
+            try imgLTrans(pic.gc, one_shot.cmds, .{
+                .old_layout = .undefined,
+                .new_layout = dst_layout,
+                .image = self.dvk_img,
+                .sync_point = gm.baked.syncAt.before_dst,
+            }); // ready for recive
             try bfr2ImgCopy(pic.gc, one_shot.cmds, .{
                 .buffer = thin_buff.buffvk,
                 .image = self.dvk_img,
                 .layout = dst_layout,
                 .g = g64,
-            });
-
+            }); // data loaded
             try imgLTrans(pic.gc, one_shot.cmds, .{
                 .old_layout = dst_layout,
                 .new_layout = shader_read_layout,
                 .image = self.dvk_img,
                 .sync_point = gm.baked.syncAt.tex_ready,
-            });
+            }); // ready for shader read
 
             try one_shot.resolve();
-
-            try self.createImageView(pic.gc);
-            try self.createSampler(pic.gc, mode);
         }
     }
 
-    pub fn createImageView(self: *Self, gc: *const GraphicsContext) !void {
+    fn createImageView(self: *Self, gc: *const GraphicsContext) !void {
         const devk = gc.dev_api;
         const image_view_create_info: vk.ImageViewCreateInfo = .{
             .image = self.dvk_img,
@@ -255,7 +256,7 @@ pub const VkImage = struct {
         default,
     };
 
-    pub fn createSampler(self: *Self, gc: *const GraphicsContext, mode: ESamplerMode) !void {
+    fn createSampler(self: *Self, gc: *const GraphicsContext, mode: ESamplerMode) !void {
         const props = gc.instance_prox.getPhysicalDeviceProperties(gc.phy_dev);
         const filter = switch (mode) {
             .nearest => vk.Filter.nearest,
@@ -306,10 +307,12 @@ pub fn vulkanTexture(
     var test_img = try RGBImage.init(pic.gc, imga, g64);
     errdefer test_img.deinit(imga);
 
+    try test_img.imgCompleate(pic.gc, mode);
+
     try test_img.texPrep(PrepBy{
         .pic = pic,
         .staga = info.staga,
-    }, g64, pixdata, mode);
+    }, g64, pixdata);
     return test_img;
 }
 

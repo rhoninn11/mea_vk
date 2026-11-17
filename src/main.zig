@@ -324,30 +324,35 @@ fn theDeepest(access: EasyAcces) !void {
         // NOT EVEN USED?
     }
     const imga = access.imga;
-    {
-        const prep_by: imgs.PrepBy = .{
-            .pic = &pic,
-            .staga = access.staga,
-        };
+    const tex_prepers: imgs.PrepBy = .{
+        .pic = &pic,
+        .staga = access.staga,
+    };
+    var updatable = blk: {
         // TEXMAP: 4 for atlas
         // TEXMAP: 5 scan data
 
-        const gridsz_abc = fonts.font_g;
-        var vki_glyph_atlas = try imgs.U8Image.init(access.gm, imga, gridsz_abc);
+        const atlas_sz = fonts.font_g;
+        var vki_glyph_atlas = try imgs.U8Image.init(access.gm, imga, atlas_sz);
         errdefer vki_glyph_atlas.deinit(imga);
 
         var mono = try imgs.U16Image.init(access.gm, imga, glass.img_sz);
         errdefer mono.deinit(imga);
 
-        try vki_glyph_atlas.texPrep(prep_by, gridsz_abc, abc.char_atlas, .font);
-        try mono.texPrep(prep_by, glass.img_sz, glass.scan_raw.pixels, .nearest);
+        try vki_glyph_atlas.imgCompleate(pic.gc, .font);
+        try mono.imgCompleate(pic.gc, .nearest);
 
         try all_imgs.append(&vki_glyph_atlas);
         try all_imgs.append(&mono);
 
         lazy_shady.omnitex.updateTexture(0, &vki_glyph_atlas, 4);
         lazy_shady.omnitex.updateTexture(0, &mono, 5);
-    }
+
+        // uploading data
+        try vki_glyph_atlas.texPrep(tex_prepers, atlas_sz, abc.char_atlas);
+        try mono.texPrep(tex_prepers, glass.img_sz, glass.scan_raw.pixels);
+        break :blk mono;
+    };
 
     const ok_snake = try oklab.OkUnderstanding.init(
         gpa,
@@ -449,15 +454,22 @@ fn theDeepest(access: EasyAcces) !void {
             continue;
         }
 
-        devui.newFrame();
+        const tex_to_update = blk: {
+            devui.newFrame();
 
-        _ = devui.beginWindow("layer selection window", &layer_select_window, 0);
-        devui.text("Scan slices selection:");
-        _ = devui.intSlider("slide", &slider_val, 0, proto.ManyLayers.TEST_LIMIT - 1);
-        devui.endWindow();
-        state.img_draw_data = devui.finalizeFrame();
+            _ = devui.beginWindow("layer selection window", &layer_select_window, 0);
+            devui.text("Scan slices selection:");
+            _ = devui.intSlider("slide", &slider_val, 0, proto.ManyLayers.TEST_LIMIT - 1);
+            devui.endWindow();
+            state.img_draw_data = devui.finalizeFrame();
 
-        glass.select(@intCast(slider_val));
+            break :blk glass.selectionRefresh(@intCast(slider_val));
+        };
+        errdefer std.debug.print("!?! half banner\n", .{});
+        if (tex_to_update) {
+            const pix = glass.scan_raw.pixels;
+            try updatable.texPrep(tex_prepers, glass.img_sz, pix);
+        }
 
         const win_f2 = m.vkextAsV2(win_size);
         const cursor_f2 = sdlh.peekPointer();

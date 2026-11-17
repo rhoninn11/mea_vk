@@ -12,6 +12,7 @@ const m = @import("math.zig");
 const input = @import("input.zig");
 const files = @import("files.zig");
 const oklab = @import("oklab.zig");
+const img = @import("imgs/imgs.zig");
 
 const Errorset = error{
     constrained,
@@ -175,8 +176,8 @@ pub fn monoZeroLike(gpa: std.mem.Allocator, like: *const meagen.Image) !meagen.I
     };
 }
 
-inline fn imgType(img: meagen.Image) meagen.ImgType {
-    return img.info.?.img_type;
+inline fn imgType(_img: meagen.Image) meagen.ImgType {
+    return _img.info.?.img_type;
 }
 
 pub const DualImageData = struct {
@@ -313,7 +314,7 @@ pub const ManyLayers = struct {
     }
 };
 
-fn imgToFile(io: std.Io, gpa: std.mem.Allocator, img: meagen.Image, path: []const u8) !void {
+fn imgToFile(io: std.Io, gpa: std.mem.Allocator, _img: meagen.Image, path: []const u8) !void {
     var for_io_buffer: [4096]u8 = undefined;
     const protfile = try std.Io.Dir.cwd().createFile(io, path, .{});
     defer protfile.close(io);
@@ -321,7 +322,7 @@ fn imgToFile(io: std.Io, gpa: std.mem.Allocator, img: meagen.Image, path: []cons
     var w = protfile.writer(io, &for_io_buffer);
     const wio = &w.interface;
 
-    try img.encode(wio, gpa);
+    try _img.encode(wio, gpa);
 }
 
 pub const cases = error{
@@ -459,6 +460,7 @@ pub const LookingGlass = struct {
     scan_lyr: *const meagen.Image,
     inverse: bool = false,
     layers: *const ManyLayers,
+    prev_idx: u8 = 255,
 
     pub fn init2(from: *ManyLayers, g_sz: sht.GridSize, idx: u8) LookingGlass {
         _ = idx;
@@ -489,18 +491,22 @@ pub const LookingGlass = struct {
 
         return self;
     }
-    pub fn select(self: *LookingGlass, idx: u8) void {
+    pub fn selectionRefresh(self: *LookingGlass, idx: u8) bool {
+        if (idx == self.prev_idx) return false;
+        defer self.prev_idx = idx;
+
         const selected = &self.layers.layers[idx];
         self.scan_raw = &selected.raw_data;
         self.scan_lyr = &selected.layer_data;
+        return true;
     }
 
-    inline fn limX(self: *const @This(), img: *const meagen.Image) i32 {
-        const src_size = img.info.?;
+    inline fn limX(self: *const @This(), _img: *const meagen.Image) i32 {
+        const src_size = _img.info.?;
         return @as(i32, @intCast(src_size.width)) - @as(i32, @intCast(self.win_sz.w)) - 1;
     }
-    inline fn limY(self: *const @This(), img: *const meagen.Image) i32 {
-        const src_size = img.info.?;
+    inline fn limY(self: *const @This(), _img: *const meagen.Image) i32 {
+        const src_size = _img.info.?;
         return @as(i32, @intCast(src_size.height)) - @as(i32, @intCast(self.win_sz.h)) - 1;
     }
 

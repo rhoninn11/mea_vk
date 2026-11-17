@@ -87,15 +87,14 @@ pub const OneShotCommanded = struct {
 
         vkdev.freeCommandBuffers(self.pic.pool, &.{self.cmds});
     }
-    pub fn init(pic: *const PoolInCtx, len: u8) !OneShotCommanded {
+    pub fn init(pic: *const PoolInCtx) !OneShotCommanded {
         const vkd = pic.gc.dev_api;
         var cmds: vk.CommandBuffer = undefined;
 
         const cb_alloc_info: vk.CommandBufferAllocateInfo = .{
-            .s_type = .command_buffer_allocate_info,
             .command_pool = pic.pool,
             .level = .primary,
-            .command_buffer_count = len,
+            .command_buffer_count = 1,
         };
         try vkd.allocateCommandBuffers(
             &cb_alloc_info,
@@ -205,7 +204,7 @@ pub fn uploadVertices(pic: *const PoolInCtx, buffer: vk.Buffer, vert_slice: []co
 
 fn copyBuffer(pic: *const PoolInCtx, dst: vk.Buffer, src: vk.Buffer, size: vk.DeviceSize) !void {
     const vkdev = pic.gc.dev_api;
-    const one_shot = try OneShotCommanded.init(pic, 1);
+    const one_shot = try OneShotCommanded.init(pic);
     const region = &.{vk.BufferCopy{
         .src_offset = 0,
         .dst_offset = 0,
