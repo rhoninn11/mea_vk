@@ -83,8 +83,9 @@ pub const BufferData2 = struct {
     buffvk: vk.Buffer,
     loc: memory.LocDesc,
 
-    pub fn deinit(self: *Self, gc: *const GraphicsContext) void {
+    pub fn deinit(self: *Self, gc: *const GraphicsContext, stage: *memory.StagerAllocator) void {
         gc.dev_api.destroyBuffer(self.buffvk, null);
+        stage.stageFree(self.loc);
     }
 
     pub fn init(

@@ -399,8 +399,9 @@ fn find_glsl_files(b: *std.Build, prefix: []const u8) !bt.DersMap {
 }
 
 fn protoGen(b: *std.Build, dep: *Dependency, target: std.Build.ResolvedTarget) void {
+    const gen_dst = b.path("src/gen");
     const protoc_step = protobuf.RunProtocStep.create(dep.builder, target, .{
-        .destination_directory = b.path("src/proto"),
+        .destination_directory = gen_dst,
         .source_files = &.{
             b.path("./proto/comfy.proto"),
             b.path("./proto/cache.proto"),

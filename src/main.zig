@@ -198,7 +198,7 @@ fn theDeepest(access: EasyAcces) !void {
 
     const general_cpool = try gpCommandQueue(gc);
     defer gc.dev_api.destroyCommandPool(general_cpool, null);
-    const pic = gm.PoolInCtx{ .gc = gc, .pool = general_cpool };
+    const pic = gm.CmdsCtx{ .gc = gc, .pool = general_cpool };
 
     //descriptor sets
     {
@@ -443,7 +443,7 @@ fn theDeepest(access: EasyAcces) !void {
     while (!window.shoudClose()) {
         errdefer std.debug.print("!?! problem in main loop\n", .{});
         var fba: std.heap.FixedBufferAllocator = .init(text_stack[0..]);
-        const txta = fba.allocator();
+        const textal = fba.allocator();
 
         access.host.pollEvents();
         const win_size = try access.host.winExtent();
@@ -465,7 +465,6 @@ fn theDeepest(access: EasyAcces) !void {
 
             break :blk glass.selectionRefresh(@intCast(slider_val));
         };
-        errdefer std.debug.print("!?! half banner\n", .{});
         if (tex_to_update) {
             const pix = glass.scan_raw.pixels;
             try updatable.texPrep(tex_prepers, glass.img_sz, pix);
@@ -573,10 +572,10 @@ fn theDeepest(access: EasyAcces) !void {
             }
         }
 
-        var dyn_text: std.ArrayList(u8) = try .initCapacity(txta, 1024 + 512);
+        var dyn_text: std.ArrayList(u8) = try .initCapacity(textal, 1024 + 512);
         const px, const py = glass.pos;
-        try dyn_text.print(txta, "\n\n", .{}); //young blit space
-        try dyn_text.print(txta, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
+        try dyn_text.print(textal, "\n\n", .{}); //young blit space
+        try dyn_text.print(textal, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
         // try dyn_text.print(txta, "blit info x:{d:>6.2}|y:{d:>6.2}\n", .{ blit_x.w, blit_x.h });
 
         {
@@ -586,7 +585,7 @@ fn theDeepest(access: EasyAcces) !void {
             var writer = std.Io.Writer.fixed(&line);
             try mdbg.basicV3(ppos, &writer);
             try writer.flush();
-            try dyn_text.print(txta, "{s}", .{writer.buffered()});
+            try dyn_text.print(textal, "{s}", .{writer.buffered()});
         }
 
         const hit = coords.hit();
@@ -608,8 +607,8 @@ fn theDeepest(access: EasyAcces) !void {
 
             const pd = panner.delta;
 
-            try dyn_text.print(txta, "{s:<16} | x:{d:>6} y:{d:>6}\n", .{ "pixel pos", m.uinty(p_x), m.uinty(p_y) });
-            try dyn_text.print(txta, "{s:<16} | x:{d:>6} y:{d:>6}\n", .{ "pan delta", pd[0], pd[1] });
+            try dyn_text.print(textal, "{s:<16} | x:{d:>6} y:{d:>6}\n", .{ "pixel pos", m.uinty(p_x), m.uinty(p_y) });
+            try dyn_text.print(textal, "{s:<16} | x:{d:>6} y:{d:>6}\n", .{ "pan delta", pd[0], pd[1] });
             // try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
         } else {
             _ = input.sample_tirg.fired();

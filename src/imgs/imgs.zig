@@ -126,7 +126,7 @@ pub const U8Image = struct {
 };
 
 pub const PrepBy = struct {
-    pic: *const gm.PoolInCtx,
+    pic: *const gm.CmdsCtx,
     staga: *memory.StagerAllocator,
 };
 
@@ -172,7 +172,6 @@ pub const VkImage = struct {
         const slot = try imga.imgAlloc(gc, vk_img);
         errdefer imga.imgFree(slot);
 
-        // gfctx.createBuffer(gc, gfctx.baked.cpu_accesible_memory, mem_req.size , .{ .transfer_src_bit = true });
         return Self{
             .gc = gc,
             .dvk_img = vk_img,
@@ -195,8 +194,10 @@ pub const VkImage = struct {
         const shader_read_layout: vk.ImageLayout = .shader_read_only_optimal;
         const pic = prep_by.pic;
 
-        errdefer std.debug.print("marker\n", .{});
-        const one_shot = try gm.OneShotCommanded.init(pic);
+        const one_shot = gm.OneShotCommanded.init(pic) catch |err| {
+            std.debug.panic("!!! we had error here: {s}\n", .{@errorName(err)});
+            unreachable;
+        };
         // const gc = pic.gc;
         {
             var thin_buff = try buffs.BufferData2.init(
@@ -206,12 +207,8 @@ pub const VkImage = struct {
                 gm.baked.usage_src,
                 self.memloc.mySizing(),
             );
-            defer {
-                std.debug.print("{d} buffer deinit: 0x{x} {d}x{d} cmd buff: 0x{x}\n", //
-                    .{ self.counter, thin_buff.buffvk, g64.w, g64.h, @intFromPtr(one_shot.cmds) });
-                thin_buff.deinit(pic.gc);
-                self.counter += 1;
-            }
+            defer thin_buff.deinit(pic.gc, prep_by.staga);
+
             @memcpy(thin_buff.mmap, pixdata);
 
             try imgLTrans(pic.gc, one_shot.cmds, .{
@@ -257,7 +254,7 @@ pub const VkImage = struct {
     };
 
     fn createSampler(self: *Self, gc: *const GraphicsContext, mode: ESamplerMode) !void {
-        const props = gc.instance_prox.getPhysicalDeviceProperties(gc.phy_dev);
+        const props = gc.inst_api.getPhysicalDeviceProperties(gc.phy_dev);
         const filter = switch (mode) {
             .nearest => vk.Filter.nearest,
             .font => vk.Filter.linear,
@@ -285,12 +282,12 @@ pub const VkImage = struct {
 };
 
 pub const TexCtx = struct {
-    pic: *const gm.PoolInCtx,
+    pic: *const gm.CmdsCtx,
     imga: *memory.ImgaAllocator,
 };
 
 pub const TexInfo = struct {
-    pic: *const gm.PoolInCtx,
+    pic: *const gm.CmdsCtx,
     imga: *memory.ImgaAllocator,
     staga: *memory.StagerAllocator,
 };

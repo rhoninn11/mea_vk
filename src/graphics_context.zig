@@ -10,6 +10,7 @@ const m = @import("math.zig");
 const v = @import("vertex.zig");
 const u = @import("utils.zig");
 const pipe = @import("pipe.zig");
+const imgs = @import("imgs/imgs.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -24,21 +25,7 @@ const required_device_extensions = [_][*:0]const u8{
     vk.device_extensions.khr_synchronization_2.name,
 };
 
-/// There are 3 levels of bindings in vulkan-zig:
-/// - The Dispatch types (vk.BaseDispatch, vk.InstanceDispatch, vk.DeviceDispatch)
-///   are "plain" structs which just contain the function pointers for a particular
-///   object.
-/// - The Wrapper types (vk.Basewrapper, vk.InstanceWrapper, vk.DeviceWrapper) contains
-///   the Dispatch type, as well as Ziggified Vulkan functions - these return Zig errors,
-///   etc.
-/// - The Proxy types (vk.InstanceProxy, vk.DeviceProxy, vk.CommandBufferProxy,
-///   vk.QueueProxy) contain a pointer to a Wrapper and also contain the object's handle.
-///   Calling Ziggified functions on these types automatically passes the handle as
-///   the first parameter of each function. Note that this type accepts a pointer to
-///   a wrapper struct as there is a problem with LLVM where embedding function pointers
-///   and object pointer in the same struct leads to missed optimizations. If the wrapper
-///   member is a pointer, LLVM will try to optimize it as any other vtable.
-/// The wrappers contain
+/// There are 3 levels of vk api bindings vulkan-zig:
 const BaseWrapper = vk.BaseWrapper;
 const InstanceWrapper = vk.InstanceWrapper;
 const DeviceWrapper = vk.DeviceWrapper;
@@ -64,10 +51,13 @@ pub const DrawInfo = struct {
     }
 };
 
-const imgs = @import("imgs/imgs.zig");
+pub const CmdsCtx = struct {
+    gc: *const GraphicsContext,
+    pool: vk.CommandPool,
+};
 
 pub const OneShotCommanded = struct {
-    pic: *const PoolInCtx,
+    pic: *const CmdsCtx,
     cmds: vk.CommandBuffer,
 
     pub fn resolve(self: *const OneShotCommanded) !void {
@@ -87,7 +77,7 @@ pub const OneShotCommanded = struct {
 
         vkdev.freeCommandBuffers(self.pic.pool, &.{self.cmds});
     }
-    pub fn init(pic: *const PoolInCtx) !OneShotCommanded {
+    pub fn init(pic: *const CmdsCtx) !OneShotCommanded {
         const vkd = pic.gc.dev_api;
         var cmds: vk.CommandBuffer = undefined;
 
@@ -113,82 +103,10 @@ pub const OneShotCommanded = struct {
     }
 };
 
-// const MemProx = struct {
-//     mem: vk.DeviceMemory,
-//     size: u64,
-// };
-
-// pub const BufferData = struct {
-//     buffvk: vk.Buffer,
-//     dvk_mem: vk.DeviceMemory,
-//     mapping: ?*anyopaque,
-
-//     pub fn deinit(self: *const BufferData, gc: *const GraphicsContext) void {
-//         const dev_prox = gc.dev_api;
-//         if (self.mapping) |_| dev_prox.unmapMemory(self.dvk_mem);
-//         dev_prox.destroyBuffer(self.buffvk, null);
-//         dev_prox.freeMemory(self.dvk_mem, null);
-//     }
-
-//     pub fn init(
-//         gc: *const GraphicsContext,
-//         mem_flags: vk.MemoryPropertyFlags,
-//         usage: vk.BufferUsageFlags,
-//         bsize: u64,
-//     ) !BufferData {
-//         const devk = gc.dev_api;
-//         const default_size = bsize;
-
-//         const bfr = try devk.createBuffer(&vk.BufferCreateInfo{
-//             .size = default_size,
-//             .usage = usage,
-//             .sharing_mode = .exclusive,
-//         }, null);
-
-//         // TODO: propably few memory pools based on "imag" image
-//         const prox = try getMemory(gc, bfr, mem_flags);
-//         errdefer unreachable;
-
-//         var mapping: ?*anyopaque = null;
-//         if (mem_flags.host_visible_bit) {
-//             mapping = try devk.mapMemory(prox.mem, 0, prox.size, .{});
-//         }
-//         return BufferData{
-//             .buffvk = bfr,
-//             .dvk_mem = prox.mem,
-//             .mapping = mapping,
-//         };
-//     }
-
-//     fn getMemory(
-//         gc: *const GraphicsContext,
-//         bfr: vk.Buffer,
-//         mem_flags: vk.MemoryPropertyFlags,
-//     ) !MemProx {
-//         const r = gc.dev_api.getBufferMemoryRequirements(bfr);
-//         // INFO: requirements propably will be bigger then original size
-
-//         const memory = try gc.allocate(r, mem_flags);
-//         errdefer gc.dev_api.freeMemory(memory, null);
-
-//         try gc.dev_api.bindBufferMemory(bfr, memory, 0);
-
-//         return MemProx{
-//             .mem = memory,
-//             .size = r.size,
-//         };
-//     }
-
-//     pub fn memMapping(self: *BufferData) [*]u8 {
-//         const mapping: [*]u8 = @ptrCast(@alignCast(self.mapping));
-//         return mapping;
-//     }
-// };
-
 const buffs = @import("buffs.zig");
 const BufforingVert = u.MemCalc(v.Vertex);
 // przykład przesyłania danych na gpu, też jest potrze kolejka dla tej operacji
-pub fn uploadVertices(pic: *const PoolInCtx, buffer: vk.Buffer, vert_slice: []const v.Vertex) !void {
+pub fn uploadVertices(pic: *const CmdsCtx, buffer: vk.Buffer, vert_slice: []const v.Vertex) !void {
     const buff_size = BufforingVert.memSize(vert_slice);
 
     var buffer_ = try buffs.BufferData.init(pic.gc, //
@@ -202,7 +120,7 @@ pub fn uploadVertices(pic: *const PoolInCtx, buffer: vk.Buffer, vert_slice: []co
     try copyBuffer(pic, buffer, buffer_.buffvk, buff_size);
 }
 
-fn copyBuffer(pic: *const PoolInCtx, dst: vk.Buffer, src: vk.Buffer, size: vk.DeviceSize) !void {
+fn copyBuffer(pic: *const CmdsCtx, dst: vk.Buffer, src: vk.Buffer, size: vk.DeviceSize) !void {
     const vkdev = pic.gc.dev_api;
     const one_shot = try OneShotCommanded.init(pic);
     const region = &.{vk.BufferCopy{
@@ -213,11 +131,6 @@ fn copyBuffer(pic: *const PoolInCtx, dst: vk.Buffer, src: vk.Buffer, size: vk.De
     vkdev.cmdCopyBuffer(one_shot.cmds, src, dst, region);
     try one_shot.resolve();
 }
-
-pub const PoolInCtx = struct {
-    gc: *const GraphicsContext,
-    pool: vk.CommandPool,
-};
 
 pub const FrameRecorder = struct {
     gm: *const GraphicsContext,
@@ -244,7 +157,9 @@ pub const FrameRecorder = struct {
 };
 
 pub const GraphicsContext = struct {
-    const deeper_validation = false;
+    // flips
+    const deep_validation = false;
+
     pub const CommandBuffer = vk.CommandBufferProxy;
     const Self = @This();
 
@@ -255,7 +170,7 @@ pub const GraphicsContext = struct {
     props: vk.PhysicalDeviceProperties,
     mem_props: vk.PhysicalDeviceMemoryProperties,
 
-    instance_prox: vk.InstanceProxy,
+    inst_api: vk.InstanceProxy,
     dev_api: vk.DeviceProxy,
 
     inst: vk.Instance,
@@ -267,25 +182,25 @@ pub const GraphicsContext = struct {
 
     pub fn deinit(self: Self) void {
         self.dev_api.destroyDevice(null);
-        self.instance_prox.destroySurfaceKHR(self.surface, null);
-        self.instance_prox.destroyDebugUtilsMessengerEXT(self.debug_messenger, null);
-        self.instance_prox.destroyInstance(null);
+        self.inst_api.destroySurfaceKHR(self.surface, null);
+        self.inst_api.destroyDebugUtilsMessengerEXT(self.debug_messenger, null);
+        self.inst_api.destroyInstance(null);
 
         // Don't forget to free the tables to prevent a memory leak.
         self.allocator.destroy(self.dev_api.wrapper);
-        self.allocator.destroy(self.instance_prox.wrapper);
+        self.allocator.destroy(self.inst_api.wrapper);
     }
 
     pub fn initUnderSdl(gpa: Allocator, app_name: [*:0]const u8, window: sdl.video.Window) !GraphicsContext {
         var self: GraphicsContext = undefined;
         self.allocator = gpa;
 
-        // ofc signature is for extern function, but signature should reflect that as callconv(.c)
-        // const Pfn = *const fn (instance: vk.Instance, procname: [*:0]const u8) callconv(.c) vk.PfnVoidFunction;
+        //binding with vulkan
         const callback: vk.PfnGetInstanceProcAddr = @ptrCast(try sdl.vulkan.getVkGetInstanceProcAddr());
-        const vk_lib_base = BaseWrapper.load(callback);
+        const vk_base_api = BaseWrapper.load(callback);
 
-        if (try checkLayerSupport(&vk_lib_base, self.allocator, required_layer_names[0..]) == false) {
+        const layers_ok = try checkLayerSupport(&vk_base_api, self.allocator, required_layer_names[0..]);
+        if (!layers_ok) {
             return error.MissingLayer;
         }
 
@@ -293,42 +208,46 @@ pub const GraphicsContext = struct {
         defer ext_names.deinit(gpa);
 
         const validation_features = validationFeatures();
+        const next = if (Self.deep_validation) &validation_features else null;
 
-        const inst = try vk_lib_base.createInstance(&.{
-            .p_next = if (Self.deeper_validation) &validation_features else null,
-            .p_application_info = &appInfo(app_name),
+        // binding with vk instance
+        const vk_inst_api = try gpa.create(InstanceWrapper);
+        errdefer gpa.destroy(vk_inst_api);
+        const inst = try vk_base_api.createInstance( //
+            &vk.InstanceCreateInfo{
+                .p_next = next,
+                .p_application_info = &appInfo(app_name),
 
-            .enabled_layer_count = required_layer_names.len,
-            .pp_enabled_layer_names = @ptrCast(&required_layer_names),
+                .enabled_layer_count = required_layer_names.len,
+                .pp_enabled_layer_names = @ptrCast(&required_layer_names),
 
-            .enabled_extension_count = @intCast(ext_names.items.len),
-            .pp_enabled_extension_names = ext_names.items.ptr,
+                .enabled_extension_count = @intCast(ext_names.items.len),
+                .pp_enabled_extension_names = ext_names.items.ptr,
 
-            .flags = .{ .enumerate_portability_khr = false }, //true for apple
-        }, null);
+                .flags = vk.InstanceCreateFlags{
+                    .enumerate_portability_khr = false, //apple excluded | intel included
+                },
+            }, null //
+        );
+        vk_inst_api.* = InstanceWrapper.load(inst, vk_base_api.dispatch.vkGetInstanceProcAddr.?);
+        self.inst_api = InstanceProxy.init(inst, vk_inst_api);
+        errdefer self.inst_api.destroyInstance(null);
 
-        // dispatch wrappers
-        const vki = try gpa.create(InstanceWrapper);
-        errdefer gpa.destroy(vki);
-        const vkd = try gpa.create(DeviceWrapper);
-        errdefer gpa.destroy(vkd);
+        // window of surface
+        self.surface = try createSurfaceSdl(self.inst_api.handle, window);
+        errdefer self.inst_api.destroySurfaceKHR(self.surface, null);
 
-        vki.* = InstanceWrapper.load(inst, vk_lib_base.dispatch.vkGetInstanceProcAddr.?);
-        self.instance_prox = InstanceProxy.init(inst, vki);
-        errdefer self.instance_prox.destroyInstance(null);
+        // binding with vk device
+        const vk_dev_api = try gpa.create(DeviceWrapper);
+        errdefer gpa.destroy(vk_dev_api);
+        const candidate = try pickPhysicalDevice(self.inst_api, gpa, self.surface);
+        const dev = try initializeCandidate(self.inst_api, candidate);
+        vk_dev_api.* = DeviceWrapper.load(dev, self.inst_api.wrapper.dispatch.vkGetDeviceProcAddr.?);
+        self.dev_api = Device.init(dev, vk_dev_api);
+        errdefer self.dev_api.destroyDevice(null);
 
-        self.surface = try createSurfaceSdl(self.instance_prox.handle, window);
-        errdefer self.instance_prox.destroySurfaceKHR(self.surface, null);
-
-        const candidate = try pickPhysicalDevice(self.instance_prox, gpa, self.surface);
         self.phy_dev = candidate.pdev;
         self.props = candidate.props;
-
-        const dev = try initializeCandidate(self.instance_prox, candidate);
-
-        vkd.* = DeviceWrapper.load(dev, self.instance_prox.wrapper.dispatch.vkGetDeviceProcAddr.?);
-        self.dev_api = Device.init(dev, vkd);
-        errdefer self.dev_api.destroyDevice(null);
 
         self.inst = inst;
         self.dev = dev;
@@ -337,7 +256,7 @@ pub const GraphicsContext = struct {
         self.present_queue = Queue.init(self.dev_api, candidate.queues.present_family);
 
         try self.memoryPropsWithExp();
-        try self.propsExplore();
+        try self.exploreLimits();
         try self.setupDebug();
 
         return self;
@@ -371,7 +290,7 @@ pub const GraphicsContext = struct {
     }
 
     fn setupDebug(self: *Self) !void {
-        self.debug_messenger = try self.instance_prox.createDebugUtilsMessengerEXT(&.{
+        self.debug_messenger = try self.inst_api.createDebugUtilsMessengerEXT(&.{
             .message_severity = .{
                 //.verbose_bit_ext = true,
                 //.info_bit_ext = true,
@@ -399,7 +318,7 @@ pub const GraphicsContext = struct {
     }
 
     fn memoryPropsWithExp(self: *Self) !void {
-        const props = self.instance_prox.getPhysicalDeviceMemoryProperties(self.phy_dev);
+        const props = self.inst_api.getPhysicalDeviceMemoryProperties(self.phy_dev);
         self.mem_props = props;
         // ---- explore area -----
         const mem_t_count = props.memory_type_count;
@@ -419,7 +338,7 @@ pub const GraphicsContext = struct {
         test_buffer.deinit(self);
     }
 
-    fn propsExplore(self: *const Self) !void {
+    fn exploreLimits(self: *const Self) !void {
         var mv_props: vk.PhysicalDeviceMultiviewProperties = .{
             .max_multiview_instance_index = undefined,
             .max_multiview_view_count = undefined,
@@ -430,7 +349,7 @@ pub const GraphicsContext = struct {
             .p_next = &mv_props,
         };
 
-        self.instance_prox.getPhysicalDeviceProperties2(self.phy_dev, &phys_pros);
+        self.inst_api.getPhysicalDeviceProperties2(self.phy_dev, &phys_pros);
         const lim = phys_pros.properties.limits;
         std.debug.print("------------------------ \n", .{});
         defer std.debug.print("------------------------ \n", .{});

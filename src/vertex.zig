@@ -408,7 +408,7 @@ pub const VertRepo = struct {
     }
 };
 
-pub fn repoSpawn(alloc: std.mem.Allocator, pic: *const gm.PoolInCtx) !VertRepo {
+pub fn repoSpawn(alloc: std.mem.Allocator, pic: *const gm.CmdsCtx) !VertRepo {
     var arean: std.heap.ArenaAllocator = .init(alloc);
     defer arean.deinit();
 
