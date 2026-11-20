@@ -439,7 +439,7 @@ fn theDeepest(access: EasyAcces) !void {
     const text_sz_base: fonts.TextSz = .{};
     var text_stack: [1024 + 512]u8 = undefined;
     var layer_select_window: bool = true;
-    var slider_val: c_int = 0;
+    var slider_val: c_int = 15;
     while (!window.shoudClose()) {
         errdefer std.debug.print("!?! problem in main loop\n", .{});
         var fba: std.heap.FixedBufferAllocator = .init(text_stack[0..]);

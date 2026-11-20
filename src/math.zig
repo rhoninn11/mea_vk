@@ -231,6 +231,10 @@ pub fn matXmat(m_a: mat4, m_b: mat4) mat4u {
     };
 }
 
+pub fn matXmat16(mA: mat4, mB: mat4) [16]f32 {
+    return @bitCast(matXmat(mA, mB));
+}
+
 test "|mat_mul_mat" {
     const a: vec3 = .{ 1, 3, 5 };
     const b: vec3 = .{ -2, 12, -5 };
