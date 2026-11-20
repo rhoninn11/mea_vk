@@ -27,3 +27,12 @@ pub fn gridAspect(grid: sht.GridSize) f32 {
 pub fn printGrid(g: *const sht.GridSize, prefix: []const u8) void {
     std.debug.print("{s} w({d}) h({d}) total({d})\n", .{ prefix, g.w, g.h, g.total });
 }
+
+pub fn asScaledIvec2(grid: sht.GridSize, scale: m.vec2) m.ivec2 {
+    const f_grid = m.vec2{ m.floaty(grid.w), m.floaty(grid.h) };
+    const scaled = scale * f_grid;
+    return m.ivec2{
+        @intCast(m.uinty(scaled[0])),
+        @intCast(m.uinty(scaled[1])),
+    };
+}

@@ -415,22 +415,6 @@ pub const GlassPan = struct {
         };
     }
 
-    fn applyDeltaToGlass(self: *GlassPan, delta: m.ivec2) void {
-        const move_delta: [xy]i16 = delta - self.delta;
-        defer self.delta = delta;
-
-        for (0..xy) |ax| {
-            const ax_delta = move_delta[ax];
-            var movemnt: motion.Axis = .none;
-            if (ax_delta > 0) movemnt = .positive;
-            if (ax_delta < 0) movemnt = .negative;
-
-            movemnt = movemnt.invese(); //for panning
-            for (0..@abs(ax_delta)) |_|
-                _ = self.glass.sliders[ax].drive(movemnt);
-        }
-    }
-
     pub fn update(self: *GlassPan, axes: *const input.HoldAxis, scann_pos: m.ivec2) void {
         const activation = axes.value();
         var input_active = false;
@@ -447,6 +431,22 @@ pub const GlassPan = struct {
         }
 
         self.applyDeltaToGlass(pan.delta);
+    }
+
+    fn applyDeltaToGlass(self: *GlassPan, delta: m.ivec2) void {
+        const move_delta: [xy]i16 = delta - self.delta;
+        defer self.delta = delta;
+
+        for (0..xy) |ax| {
+            const ax_delta = move_delta[ax];
+            var movemnt: motion.Axis = .none;
+            if (ax_delta > 0) movemnt = .positive;
+            if (ax_delta < 0) movemnt = .negative;
+
+            movemnt = movemnt.invese(); //for panning
+            for (0..@abs(ax_delta)) |_|
+                _ = self.glass.sliders[ax].drive(movemnt);
+        }
     }
 };
 
