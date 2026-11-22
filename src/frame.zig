@@ -231,6 +231,11 @@ pub fn recordFrame(
                 hl_cmds.nuggedBy(&scan_push);
                 hl_cmds.drawInsances(.quad, 1); // scann shaded
 
+                scan_push.tex_base = 6;
+                scan_push.mode = 5; // sdf mode
+                hl_cmds.nuggedBy(&scan_push);
+                hl_cmds.drawInsances(.quad, 1); // scann shaded
+
                 scan_push.tex_base = 3;
                 scan_push.mode = 2; //sprite mode
                 hl_cmds.nuggedBy(&scan_push);
