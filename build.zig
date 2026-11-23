@@ -206,9 +206,9 @@ const renderers = cimgui.Renderer;
 
 pub fn build(b: *std.Build) !void {
     const o = Options.read(b);
-    //zig to spirv is not finished IMO -> TODO: remove this option
-    // TODO: EEE yooo, in 0.17 bedą dostępne samplery, co prawda, użyteczność może tak być oganiczona
-    // ale, ale na przykład do np. prostych compute shaderów wystarczająca:)
+    //zig to spirv is not finished IMO
+    // TODO: EEE yooo, update, in 0.17 bedą dostępne samplery, co prawda, użyteczność może tak być oganiczona
+    // ale, ale do na przykład prostych compute shaderów wystarczająca, i guess:)
     const use_zig_shaders = b.option(
         bool,
         "zig-shader",

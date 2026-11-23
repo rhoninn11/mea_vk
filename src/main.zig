@@ -92,21 +92,6 @@ pub fn main(init: std.process.Init) !void {
 const OK_SWEEP: u8 = 128;
 const OK_TEX_BASE: u8 = 32;
 
-var navig = a.Navig.default;
-
-var state: frame.FrameState = .{
-    .model_idx = 0,
-    .persp = .graphView,
-    .alt_shader = false,
-    .ok_tex_base = oklab.OK_TEX_BASE,
-    .ok_group = .{ .base = map.instablo.get(.okg).beg, .num = oklab.OK_SWEEP },
-    .char_group = .{ .base = map.instablo.get(.text).beg, .num = 0 },
-    .layer_group = .{ .base = map.instablo.get(.layer).beg, .num = 0 },
-    .grig_group = .{ .base = map.instablo.get(.cubes).beg, .num = 0 },
-    .nav = &navig,
-    .img_draw_data = null,
-};
-
 pub fn gpCommandQueue(gc: *const gm.GraphicsContext) !vk.CommandPool {
     const pool_cinfo: vk.CommandPoolCreateInfo = .{
         .queue_family_index = gc.graphics_queue.family,
@@ -172,6 +157,7 @@ fn theDeepest(access: EasyAcces) !void {
     defer looking_vol.deinit(access.gpa);
     var looking_lyr = try glass.sampleLayers(access.gpa);
     defer looking_lyr.deinit(access.gpa);
+    var navig = a.Navig.default;
 
     navig.scann_sz = looking_vol.size;
     navig.scann_aspect = navig.aspectScale();
@@ -279,7 +265,21 @@ fn theDeepest(access: EasyAcces) !void {
 
     var repo = try vertex.repoSpawn(gpa, &pic);
     defer repo.deinit(gc);
-    std.debug.print("+++ total verts {d}\n", .{repo.total});
+    std.debug.print("+++ Verts on gpu: {d}\n", .{repo.total});
+
+    var state: frame.FrameState = .{
+        .model_idx = 0,
+        .persp = .graphView,
+        .alt_shader = false,
+        .ok_tex_base = oklab.OK_TEX_BASE,
+        .ok_group = .{ .base = map.instablo.get(.okg).beg, .num = oklab.OK_SWEEP },
+        .char_group = .{ .base = map.instablo.get(.text).beg, .num = 0 },
+        .layer_group = .{ .base = map.instablo.get(.layer).beg, .num = 0 },
+        .grig_group = .{ .base = map.instablo.get(.cubes).beg, .num = 0 },
+        .nav = &navig,
+        .img_draw_data = null,
+    };
+
     state.grig_group.num = grid.total;
 
     const draw_instanced_attempt: gm.DrawInfo = .{
