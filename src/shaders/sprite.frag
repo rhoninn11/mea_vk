@@ -43,8 +43,13 @@ void main() {
         vec2 grad_uv = vec2(base, 0);
         vec4 grad_color = sample_bindles(GRAD_TEX, grad_uv);
         f_color = vec4(grad_color.rgb, 1);
-    }
-    else { // crop ok space slices
+    } else if (_pc.data.mode == 5) {
+        bool no_markser = tex_color.r == 0;
+        if (no_markser) {
+            discard;
+        }
+        f_color = vec4(1, 0, 1, 1);
+    } else { // crop ok space slices
         if (tex_color.a < 0.99) {
             discard;
         }

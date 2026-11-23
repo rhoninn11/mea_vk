@@ -84,7 +84,11 @@ void main() {
         v_uv = (a_color.xy*m_inst.new_usage.zw) + m_inst.new_usage.xy;
         v_tex_idx = _pc.data.tex_base;
 
-    }else if (_pc.data.mode == 2 || _pc.data.mode == 4) {
+    }else if (
+        _pc.data.mode == 2 || //sprites
+        _pc.data.mode == 4 || //raw as sdf
+        _pc.data.mode == 5 // layer markers
+        ) {
         vec4 base = vec4(a_pos, 1);
         mat4 model = _pc.data.model;
         // vv_limit = model[3][0];

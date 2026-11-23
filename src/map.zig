@@ -28,5 +28,6 @@ pub const instablo: std.enums.EnumArray(Group, Range) = .init(.{
 // 0 - 3 few, mostly test textures
 // 4 for atlas
 // 5 scan data
+// 6 layers
 // 32 default gradient
 // 33 - 159 ok slices

@@ -302,9 +302,14 @@ fn theDeepest(access: EasyAcces) !void {
     var all_imgs: imgs.ManyImages = try .init(access.gpa, access.imga);
     defer all_imgs.deinit();
 
+    const imga = access.imga;
     const tex_info = imgs.TexInfo{
         .pic = &pic,
-        .imga = access.imga,
+        .imga = imga,
+        .staga = access.staga,
+    };
+    const tex_prepers: imgs.PrepBy = .{
+        .pic = &pic,
         .staga = access.staga,
     };
     {
@@ -323,31 +328,38 @@ fn theDeepest(access: EasyAcces) !void {
         }
         // NOT EVEN USED?
     }
-    const imga = access.imga;
-    const tex_prepers: imgs.PrepBy = .{
-        .pic = &pic,
-        .staga = access.staga,
-    };
     // TEXMAP: 4 for atlas
-    // TEXMAP: 5 scan data
     const atlas_sz = fonts.font_g;
     var vki_glyph_atlas = try imgs.U8Image.init(access.gm, imga, atlas_sz);
     errdefer vki_glyph_atlas.deinit(imga);
-
-    var mono = try imgs.U16Image.init(access.gm, imga, glass.img_sz);
-    errdefer mono.deinit(imga);
-
     try vki_glyph_atlas.imgCompleate(pic.gc, .font);
-    try mono.imgCompleate(pic.gc, .nearest);
-
-    try all_imgs.append(&vki_glyph_atlas);
-    try all_imgs.append(&mono);
-
     lazy_shady.omnitex.updateTexture(0, &vki_glyph_atlas, 4);
-    lazy_shady.omnitex.updateTexture(0, &mono, 5);
-
     try vki_glyph_atlas.texPrep(tex_prepers, atlas_sz, abc.char_atlas);
-    try mono.texPrep(tex_prepers, glass.img_sz, glass.scan_raw.pixels);
+    try all_imgs.append(&vki_glyph_atlas);
+
+    // TEXMAP: 5 scan raw data
+    // TEXMAP: 6 scan raw data
+    var to_update: [2]imgs.VkImage = blk: {
+        const glass_g = glass.img_sz;
+        var mono = try imgs.U16Image.init(access.gm, imga, glass_g);
+        errdefer mono.deinit(imga);
+        var borders = try imgs.U8Image.init(access.gm, imga, glass_g);
+        errdefer borders.deinit(imga);
+
+        try mono.imgCompleate(pic.gc, .nearest);
+        try borders.imgCompleate(pic.gc, .nearest);
+
+        try all_imgs.append(&mono);
+        try all_imgs.append(&borders);
+
+        lazy_shady.omnitex.updateTexture(0, &mono, 5);
+        lazy_shady.omnitex.updateTexture(0, &borders, 6);
+
+        try mono.texPrep(tex_prepers, glass_g, glass.scan_raw.pixels);
+        try borders.texPrep(tex_prepers, glass_g, glass.scan_lyr.pixels);
+
+        break :blk [2]imgs.VkImage{ mono, borders };
+    };
     // ----------
 
     const ok_snake = try oklab.OkUnderstanding.init(
@@ -436,13 +448,30 @@ fn theDeepest(access: EasyAcces) !void {
     const screen_info_size = 2048;
     var text_stack: [screen_info_size]u8 = undefined;
     var layer_select_window: bool = true;
-    var slider_val: c_int = 0;
+    var slider_val: c_int = 15;
+
+    const FrameConsole = struct {
+        const Self = @This();
+        const char_len = 2048;
+        textal: std.mem.Allocator,
+        buffer: std.ArrayList(u8),
+
+        fn init(src: std.mem.Allocator) !Self {
+            var self: Self = undefined;
+            self.textal = src;
+            self.buffer = try .initCapacity(self.textal, char_len);
+            return self;
+        }
+        fn print(self: *Self, comptime fmt: []const u8, args: anytype) !void {
+            try self.buffer.print(self.textal, fmt, args); //young blit space
+        }
+    };
+
     while (!window.shoudClose()) {
         errdefer std.debug.print("!?! problem in main loop\n", .{});
         var fba: std.heap.FixedBufferAllocator = .init(text_stack[0..]);
-        const textal = fba.allocator();
-        var console: std.ArrayList(u8) = try .initCapacity(textal, screen_info_size);
-        try console.print(textal, "\n\n", .{}); //young blit space
+        var console: FrameConsole = try .init(fba.allocator());
+        try console.print("\n\n", .{}); //young blit space
 
         access.host.pollEvents();
         const win_size = try access.host.winExtent();
@@ -465,8 +494,13 @@ fn theDeepest(access: EasyAcces) !void {
             break :blk glass.selectionRefresh(@intCast(slider_val));
         };
         if (tex_to_update) {
-            const pix = glass.scan_raw.pixels;
-            try mono.texPrep(tex_prepers, glass.img_sz, pix);
+            const glass_g = glass.img_sz;
+
+            const monopix = glass.scan_raw.pixels;
+            const borderpix = glass.scan_lyr.pixels;
+
+            try to_update[0].texPrep(tex_prepers, glass_g, monopix);
+            try to_update[1].texPrep(tex_prepers, glass_g, borderpix);
         }
 
         const win_f2 = m.vkextAsV2(win_size);
@@ -504,7 +538,7 @@ fn theDeepest(access: EasyAcces) !void {
                 const refresh_cond = glass.update(&input.glass_input, td);
                 if (refresh_cond) state.alt_shader = false;
                 panner.update(&input.pan_input, last_mouse_pos);
-                try console.print(textal, "+++ mouse x {d}, mouse y {d}\n", .{ last_mouse_pos[0], last_mouse_pos[1] });
+                try console.print("+++ mouse x {d}, mouse y {d}\n", .{ last_mouse_pos[0], last_mouse_pos[1] });
             },
             .omni => {
                 freefly.update(td, &input.glass_input);
@@ -535,9 +569,9 @@ fn theDeepest(access: EasyAcces) !void {
             };
         };
 
-        try console.print(textal, "mult: {d:.2} {d:.2}\n", //
+        try console.print("mult: {d:.2} {d:.2}\n", //
             .{ navig.uv_map.mult[0], navig.uv_map.mult[1] });
-        try console.print(textal, "off : {d:.2} {d:.2}\n", //
+        try console.print("off : {d:.2} {d:.2}\n", //
             .{ navig.uv_map.offset[0], navig.uv_map.offset[1] });
 
         const dbg_data = d.DbgMonitor.DbgVals{
@@ -578,7 +612,7 @@ fn theDeepest(access: EasyAcces) !void {
         }
 
         const px, const py = glass.pos;
-        try console.print(textal, "looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
+        try console.print("looking_glass pos x:{d:>6}|y:{d:>6}\n", .{ px, py });
         // try dyn_text.print(txta, "blit info x:{d:>6.2}|y:{d:>6.2}\n", .{ blit_x.w, blit_x.h });
 
         {
@@ -588,7 +622,7 @@ fn theDeepest(access: EasyAcces) !void {
             var writer = std.Io.Writer.fixed(&line);
             try mdbg.basicV3(ppos, &writer);
             try writer.flush();
-            try console.print(textal, "{s}\n", .{writer.buffered()});
+            try console.print("{s}\n", .{writer.buffered()});
         }
 
         const hit = coords.hit();
@@ -598,7 +632,7 @@ fn theDeepest(access: EasyAcces) !void {
             last_mouse_pos = shu.asScaledIvec2(glass.img_sz, scale_frac);
 
             const pd = panner.delta;
-            try console.print(textal, "{s:<16} | x:{d:>6} y:{d:>6}\n", .{ "pan delta", pd[0], pd[1] });
+            try console.print("{s:<16} | x:{d:>6} y:{d:>6}\n", .{ "pan delta", pd[0], pd[1] });
             // try dyn_text.print(txta, "{s:<16} | x:{d:>6.2} y:{d:>6.2}\n", .{ "cursor at", x, y });
         } else {
             _ = input.sample_tirg.fired();
@@ -637,7 +671,7 @@ fn theDeepest(access: EasyAcces) !void {
             // text content selection
             const dyna_dyna_text = switch (dbgmonit.enabled) {
                 true => dbg_write.buffered(),
-                false => console.items,
+                false => console.buffer.items,
             };
             try fonts.TextBlitter //
                 .init(&abc, &state, text_sz_base)

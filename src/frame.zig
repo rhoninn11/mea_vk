@@ -48,7 +48,7 @@ const CmdHelper = struct {
     command: vk.CommandBuffer,
     models: *const v.VertRepo,
 
-    pub fn push(self: *const CmdHelper, push_blob: *const gm.PushConstant.PCBlob) void {
+    pub fn nuggedBy(self: *const CmdHelper, push_blob: *const gm.PushConstant.Blob) void {
         self.gc.dev_api.cmdPushConstants(
             self.command,
             self.draw.pipeline_layout,
@@ -171,32 +171,32 @@ pub fn recordFrame(
             hl_cmds.use(.triangle);
             {
                 const selectable: v.EMesh = std.enums.fromInt(v.EMesh, state.model_idx) orelse v.EMesh.cube;
-                const gridpush = gm.PushConstant.PCBlob{
+                const gridpush = gm.PushConstant.Blob{
                     .inst_base = state.grig_group.base,
                 };
-                hl_cmds.push(&gridpush);
+                hl_cmds.nuggedBy(&gridpush);
                 hl_cmds.drawInsances(selectable, state.grig_group.num); // grid
 
                 if (state.layer_group.num > 0) {
-                    const layerpush = gm.PushConstant.PCBlob{
+                    const layerpush = gm.PushConstant.Blob{
                         .model = @bitCast(m.matTrans(.{ 0, 0, 0 })),
                         .inst_base = state.layer_group.base,
                         .mode = 1, // triangle mode
                     };
-                    hl_cmds.push(&layerpush);
+                    hl_cmds.nuggedBy(&layerpush);
                     hl_cmds.drawInsances(.cube, state.layer_group.num); // layers
                 }
             }
 
             {
                 hl_cmds.use(.dsprite);
-                const okpush = gm.PushConstant.PCBlob{
+                const okpush = gm.PushConstant.Blob{
                     .model = @bitCast(m.matTrans(.{ 0, -6, 0 })),
                     .inst_base = state.ok_group.base,
                     .tex_base = state.ok_tex_base,
                     // triangle mode ???
                 };
-                hl_cmds.push(&okpush);
+                hl_cmds.nuggedBy(&okpush);
                 hl_cmds.drawInsances(.hexy, state.ok_group.num); // ok slices
             }
 
@@ -204,7 +204,7 @@ pub fn recordFrame(
             {
                 hl_cmds.use(.triangle);
                 const cursor = state.nav.cursor;
-                const guipush = gm.PushConstant.PCBlob{
+                const guipush = gm.PushConstant.Blob{
                     .model = @bitCast(m.matXmat(
                         m.matTrans(.{ cursor[m.X], cursor[m.Y], 0 }),
                         m.matScale(.{ 25, 25, 1 }),
@@ -213,54 +213,46 @@ pub fn recordFrame(
                     .tex_base = state.nav.cursor_tex,
                     .mode = 3, //triangle mode
                 };
-                hl_cmds.push(&guipush);
+                hl_cmds.nuggedBy(&guipush);
                 hl_cmds.drawInsances(.hexy, 1); // cursor
             }
 
-            if (state.persp == .graphView) {
-                hl_cmds.use(.sprite);
+            if (state.persp == .graphView) { // scann rendering
+                hl_cmds.use(.sprite); // no depth
                 const scann_mat = state.nav.scanPlacement();
-                var scan_push = gm.PushConstant.PCBlob{
+                var scan_push = gm.PushConstant.Blob{
                     .model = @bitCast(scann_mat),
-                    .tex_base = 2,
-                    .mode = 2, //sprite mode
                     .scale2D = state.nav.uv_map.mult,
                     .point2D = state.nav.uv_map.offset,
                 };
-                hl_cmds.push(&scan_push);
-                hl_cmds.drawInsances(.quad, 1); // scann color map
 
-                var closer = m.matTrans(.{ 0, 0, -0.1 });
-                _ = &closer;
-                scan_push.model = @bitCast(m.matXmat(closer, scann_mat));
-                scan_push.tex_base = 3;
-                hl_cmds.push(&scan_push);
-                hl_cmds.drawInsances(.quad, 1); // scann layers
-
-                closer = m.matTrans(.{ 0, 0, -0.05 });
-                const delta_store = m.matXmat(closer, scann_mat);
-                // delta_store[0][3] = 0.5;
-                var scan_push_sdf = gm.PushConstant.PCBlob{
-                    .model = @bitCast(delta_store),
-                    .tex_base = 5,
-                    .mode = 4, // sprite mode
-                    .scale2D = state.nav.uv_map.mult,
-                    .point2D = state.nav.uv_map.offset,
-                };
-                hl_cmds.push(&scan_push_sdf);
+                scan_push.tex_base = 5;
+                scan_push.mode = 4; // sdf mode
+                hl_cmds.nuggedBy(&scan_push);
                 hl_cmds.drawInsances(.quad, 1); // scann shaded
+
+                scan_push.tex_base = 6;
+                scan_push.mode = 5; // sdf mode
+                hl_cmds.nuggedBy(&scan_push);
+                hl_cmds.drawInsances(.quad, 1); // scann shaded
+
+                scan_push.tex_base = 3;
+                scan_push.mode = 2; //sprite mode
+                hl_cmds.nuggedBy(&scan_push);
+                hl_cmds.drawInsances(.quad, 1); // scann layers
             }
 
             {
                 hl_cmds.use(.fontsdf);
-                const letter_push = gm.PushConstant.PCBlob{
+                const char_blob = gm.PushConstant.Blob{
                     .model = @bitCast(m.matTrans(.{ 0, -32, 0 })),
                     .inst_base = state.char_group.base,
                     .tex_base = 4,
                     .mode = 1, //sdf mode
                     .scale2D = m.splat2d(0.5),
+                    //point2D not used by shader
                 };
-                hl_cmds.push(&letter_push);
+                hl_cmds.nuggedBy(&char_blob);
                 hl_cmds.drawInsances(.quad, state.char_group.num); // text
             }
             if (state.img_draw_data) |devui_draw_data| {
