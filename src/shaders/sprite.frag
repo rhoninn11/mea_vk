@@ -34,7 +34,8 @@ void main() {
     float treshold_val = 0.5 + vv_limit;
     float treshold_scale = 1.0/(1.0-treshold_val);
 
-    if (_pc.data.mode == 4) { // mono value tresholding
+    if (_pc.data.mode == 4) { 
+        // tresholding on raw data
         if (tex_color.r < treshold_val) {
             discard;
         }
@@ -44,11 +45,18 @@ void main() {
         vec4 grad_color = sample_bindles(GRAD_TEX, grad_uv);
         f_color = vec4(grad_color.rgb, 1);
     } else if (_pc.data.mode == 5) {
-        bool no_markser = tex_color.r == 0;
-        if (no_markser) {
+        // layer markers
+        int marker = int(tex_color.r * 255);
+        if (marker == 0) {
             discard;
         }
-        f_color = vec4(1, 0, 1, 1);
+        vec3 layer_color_0 = vec3(0,1,0.1);
+        vec3 layer_color_1 = vec3(0.1,0,1);
+        vec3 choosen = layer_color_1;
+        if (marker == 1) {
+            choosen = layer_color_0;
+        }
+        f_color = vec4(choosen, 1);
     } else { // crop ok space slices
         if (tex_color.a < 0.99) {
             discard;

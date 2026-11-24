@@ -55,7 +55,7 @@ const input = @import("input.zig");
 const host = @import("host.zig");
 const EasyAcces = host.EasyAcces;
 
-const proto = @import("proto.zig");
+const proto = @import("proto/proto.zig");
 const fonts = @import("fonts.zig");
 
 pub fn main(init: std.process.Init) !void {
@@ -146,12 +146,6 @@ fn theDeepest(access: EasyAcces) !void {
     std.debug.print("+++ are we here\n", .{});
     var glass = proto.LookingGlass.init2(&many, grid, 0);
     std.debug.print("+++ are we here\n", .{});
-
-    // var dual_img = try proto.serdesLoadWithFallback(access.io, pages, prefix);
-    // defer dual_img.deinit(pages);
-
-    // const grid = sht.GridSize.g64;
-    // var glass = proto.LookingGlass.init(&dual_img, grid);
 
     var looking_vol = try glass.sampleVolData(access.gpa);
     defer looking_vol.deinit(access.gpa);

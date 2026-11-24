@@ -6,7 +6,7 @@ const t = @import("types.zig");
 const sht = @import("shaders/types.zig");
 const addons = @import("addons.zig");
 const dset = @import("dset.zig");
-const proto = @import("proto.zig");
+const proto = @import("proto/proto.zig");
 
 pub fn unifomRefil(
     uniforms: [*]sht.GroupData,

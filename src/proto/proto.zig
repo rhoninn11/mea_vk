@@ -1,24 +1,24 @@
 const std = @import("std");
-const utils = @import("utils.zig");
-const meagen = @import("gen/meagen.pb.zig");
-const addon = @import("addons.zig");
-const dset = @import("dset.zig");
-const motion = @import("motion.zig");
-const sht = @import("shaders/types.zig");
-const shu = @import("shaders/utils.zig");
+const utils = @import("../utils.zig");
+const meagen = @import("../gen/meagen.pb.zig");
+const addon = @import("../addons.zig");
+const dset = @import("../dset.zig");
+const motion = @import("../motion.zig");
+const sht = @import("../shaders/types.zig");
+const shu = @import("../shaders/utils.zig");
 
-const f = @import("frame.zig");
-const m = @import("math.zig");
-const input = @import("input.zig");
-const files = @import("files.zig");
-const oklab = @import("oklab.zig");
-const img = @import("imgs/imgs.zig");
+const f = @import("../frame.zig");
+const m = @import("../math.zig");
+const input = @import("../input.zig");
+const files = @import("../files.zig");
+const oklab = @import("../oklab.zig");
+const img = @import("../imgs/imgs.zig");
 
 const Errorset = error{
     constrained,
 };
 
-inline fn info(g: sht.GridSize, t: meagen.ImgType) meagen.ImgInfo {
+pub inline fn info(g: sht.GridSize, t: meagen.ImgType) meagen.ImgInfo {
     return meagen.ImgInfo{
         .width = g.w,
         .height = g.h,
@@ -43,124 +43,10 @@ pub fn spawnMonoImg(alloc: std.mem.Allocator, g: sht.GridSize) !meagen.Image {
     };
 }
 
-const uHdr = extern union {
+pub const uHdr = extern union {
     byte: [2]u8,
     hdr: u16,
 };
-
-const synth = @import("synth.zig");
-
-const ridge_freq = 0.2;
-pub fn ridgesHdr(alloc: std.mem.Allocator, g: sht.GridSize, frac: f32) !meagen.Image {
-    var pixels = try alloc.alloc(u8, g.total * @sizeOf(u16));
-    const freq: f32 = ridge_freq;
-
-    const y_span = g.h;
-    const x_span = g.w;
-
-    const scaledown = 16.0;
-    const offset = 8;
-    const max = 3;
-
-    for (0..y_span) |yy| {
-        const yf = m.floaty(yy) / scaledown;
-        for (0..x_span) |x| {
-            const xf = m.floaty(x) / scaledown;
-
-            const calc_point = m.vec2{ yf, xf };
-
-            const phase = calc_point[0] * m.tau * freq;
-            const y_loc = synth.wave(phase, frac) + offset;
-
-            const pnt_ridge = m.vec2{ calc_point[0], y_loc };
-
-            const distance = m.len2(calc_point - pnt_ridge);
-            const norm = (max - @min(max, distance)) / max;
-
-            const hdrval: uHdr = .{ .hdr = @as(u16, @intFromFloat(norm * norm * 60000)) };
-            const gdx = shu.gridI(g, x, yy);
-
-            pixels[gdx * 2] = hdrval.byte[0];
-            pixels[gdx * 2 + 1] = hdrval.byte[1];
-        }
-    }
-
-    return meagen.Image{
-        .info = info(g, meagen.ImgType.HDR),
-        .pixels = pixels,
-    };
-}
-
-pub fn ridgesMono(alloc: std.mem.Allocator, g: sht.GridSize, frac: f32) !meagen.Image {
-    var pixels = try alloc.alloc(u8, g.total * @sizeOf(u8));
-    const freq: f32 = ridge_freq;
-
-    const y_span = g.h;
-    const x_span = g.w;
-
-    const scaledown = 16.0;
-    const offset = 8;
-    const max: f32 = 3;
-
-    for (0..y_span) |yy| {
-        const yf = m.floaty(yy) / scaledown;
-        for (0..x_span) |x| {
-            const xf = m.floaty(x) / scaledown;
-
-            const calc_point = m.vec2{ yf, xf };
-
-            const phase = calc_point[0] * m.tau * freq;
-            const y_loc = synth.wave(phase, frac) + offset;
-
-            const pnt_ridge = m.vec2{ calc_point[0], y_loc };
-
-            const distance = m.len2(calc_point - pnt_ridge);
-            const norm = (max - @min(max, distance)) / max;
-            const to_mark: u8 = if (norm > 0.98) 1 else 0;
-
-            const gdx = shu.gridI(g, x, yy);
-            pixels[gdx] = to_mark;
-        }
-    }
-
-    return meagen.Image{
-        .info = info(g, meagen.ImgType.MONO),
-        .pixels = pixels,
-    };
-}
-
-pub fn xyTrygHdr(alloc: std.mem.Allocator, g: sht.GridSize, f_mult: f32) !meagen.Image {
-    var pixels = try alloc.alloc(u8, g.total * @sizeOf(u16));
-    const fy: f32 = 0.6;
-    const f1y: f32 = 0.12;
-    const fx: f32 = 0.34;
-    for (0..g.h) |yy| {
-        const y_phase = m.floaty(yy) / 16; // give him some samples per cycle
-        const y_sin = @sin(y_phase * std.math.tau * fy);
-        const y_ufit = m.tryg2u16f(y_sin);
-
-        const yl = m.trygZero1(@sin(y_phase * std.math.tau * f1y));
-        // _ = yl_sin;
-
-        for (0..g.w) |x| {
-            const x_phase = m.floaty(x) * f_mult / 16;
-            const x_sin = @sin(x_phase * std.math.tau * fx);
-            const x_ufit = m.tryg2u16f(x_sin);
-
-            const combined = x_ufit * 0.5 + y_ufit * 0.5 * yl;
-            const hdrval: uHdr = .{ .hdr = @as(u16, @intFromFloat(combined)) };
-
-            const gdx = shu.gridI(g, x, yy);
-            pixels[gdx * 2] = hdrval.byte[0];
-            pixels[gdx * 2 + 1] = hdrval.byte[1];
-        }
-    }
-
-    return meagen.Image{
-        .info = info(g, meagen.ImgType.HDR),
-        .pixels = pixels,
-    };
-}
 
 pub fn monoZeroLike(gpa: std.mem.Allocator, like: *const meagen.Image) !meagen.Image {
     var header = like.info.?;
@@ -185,12 +71,12 @@ pub const DualImageData = struct {
     layer_data: meagen.Image,
 
     pub fn initDummy(gpa: std.mem.Allocator) !DualImageData {
-        var raw_synth = try xyTrygHdr(gpa, shu.xyGrid(256, 880), 1);
+        var raw_synth = try synth.xyTrygHdr(gpa, shu.xyGrid(256, 880), 1);
         errdefer raw_synth.deinit(gpa);
 
         return .{
             .raw_data = raw_synth,
-            .layer_data = try genLayers(gpa, &raw_synth.info.?),
+            .layer_data = try synth.genLayers(gpa, &raw_synth.info.?),
         };
     }
 
@@ -222,54 +108,7 @@ pub const DualImageData = struct {
         return fresh;
     }
 
-    fn genLayers(gpa: std.mem.Allocator, _info: *const meagen.ImgInfo) !meagen.Image {
-        const y_dim = _info.height;
-        const x_dim = _info.width;
-        var l_info = _info.*;
-        l_info.img_type = .MONO;
-
-        const fresh_data = try gpa.alloc(u8, x_dim * y_dim);
-        @memset(fresh_data, 0);
-
-        const slope: u32 = s: {
-            var up: u32 = 0;
-            if (y_dim % x_dim != 0) up = 1;
-            break :s y_dim / x_dim + up;
-        };
-
-        for (0..y_dim) |yy| {
-            const idx = yy * x_dim + (yy / slope);
-            const cell = fresh_data[idx];
-            fresh_data[idx] = cell | 1;
-        }
-
-        const width = 35.0;
-        const cycles = 4.0;
-
-        const y_scale = m.floaty(y_dim) / (cycles * m.tau);
-        const mid = m.floaty(x_dim) / 2;
-        for (0..y_dim) |yy| {
-            var placed = false;
-            const sin = @sin(m.floaty(yy) / y_scale);
-            for (0..x_dim) |x| {
-                const pos = m.floaty(x);
-                const pixval = (mid - pos) / width;
-
-                const delta = @abs(sin - pixval);
-                if (delta < 0.05 and !placed) {
-                    const idx = yy * x_dim + x;
-                    const cell = fresh_data[idx];
-                    fresh_data[idx] = cell | 2;
-                    placed = true;
-                }
-            }
-        }
-
-        return meagen.Image{
-            .info = l_info,
-            .pixels = fresh_data,
-        };
-    }
+    //
 
     pub fn deinit(self: *DualImageData, gpa: std.mem.Allocator) void {
         self.raw_data.deinit(gpa);
@@ -328,6 +167,7 @@ fn imgToFile(io: std.Io, gpa: std.mem.Allocator, _img: meagen.Image, path: []con
 pub const cases = error{
     justRestart,
 };
+const synth = @import("synth.zig");
 
 pub fn LoadMany(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !ManyLayers {
     var for_strings: [512]u8 = undefined;
@@ -356,9 +196,9 @@ pub fn LoadMany(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !ManyLay
             const mono_path = try std.fmt.allocPrint(fba, "{s}{s}", .{ hdr_path, ".mono" });
 
             // const hdr_img = try ridgesHdr(gpa, frame_size, 1);
-            const hdr_img = try ridgesHdr(gpa, frame_size, prog);
+            const hdr_img = try synth.ridgesHdr(gpa, frame_size, prog);
             // const mono_img = try ridgesMono(gpa, frame_size, 0);
-            const mono_img = try ridgesMono(gpa, frame_size, prog);
+            const mono_img = try synth.ridgesMono(gpa, frame_size, prog);
 
             try imgToFile(io, gpa, hdr_img, hdr_path);
             try imgToFile(io, gpa, mono_img, mono_path);
@@ -374,21 +214,6 @@ pub fn LoadMany(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !ManyLay
     errdefer unzip.deinit(gpa);
     return try ManyLayers.init(io, gpa, unzip);
 }
-
-// --------------------------------
-pub fn serdesLoadWithFallback(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !DualImageData {
-    const raw_img = serdesLoad(io, gpa, prefix) catch |err| {
-        std.debug.print("+++ dummy synthesis | {s}\n", .{@errorName(err)});
-        return DualImageData.initDummy(gpa);
-    };
-    return raw_img;
-}
-pub fn serdesLoad(io: std.Io, gpa: std.mem.Allocator, prefix: []const u8) !DualImageData {
-    var zip = try files.zipSearch(io, gpa, prefix, &.{ ".serdes", ".serdes.mono" });
-    defer zip.deinit(gpa);
-    return try DualImageData.initProto(io, gpa, zip.file_sets[0]);
-}
-// --------- propably to remove ^---
 
 //write could have its own version also
 pub fn protoImgRead(io: std.Io, gpa: std.mem.Allocator, filepath: []const u8) !meagen.Image {
@@ -731,21 +556,25 @@ pub const LookingGlass = struct {
         return layer_color;
     }
 
+    inline fn isBitLIt(byte: u8, bit: usize) bool {
+        return ((byte >> @intCast(bit)) & 1) == 1;
+    }
+
     pub fn sampleLayers(self: *const LookingGlass, gpa: std.mem.Allocator) !LookingOk {
-        const isz = self.img_sz;
+        const gsz = self.img_sz;
         const layer_num = 8;
 
-        var depths = try gpa.alloc(u16, layer_num * isz.h);
+        var depths = try gpa.alloc(u16, layer_num * gsz.h);
         defer gpa.free(depths);
         @memset(depths, 60000);
 
-        for (0..isz.h) |yy| {
-            for (0..isz.w) |x| {
-                const pix_idx = yy * isz.w + x;
-                const markers = self.stdval(pix_idx);
+        for (0..gsz.h) |yy| {
+            for (0..gsz.w) |x| {
+                const pix_idx = yy * gsz.w + x;
+                const phase_marker = self.stdval(pix_idx);
 
                 for (0..8) |i| {
-                    const marked = ((markers >> @intCast(i)) & 1) == 1;
+                    const marked = isBitLIt(phase_marker, i);
                     if (marked) {
                         depths[yy * 8 + i] = @intCast(x);
                     }
@@ -754,16 +583,16 @@ pub const LookingGlass = struct {
         }
 
         var sample = LookingOk{
-            .grid = isz,
-            .size = .{ m.floaty(isz.w), m.floaty(isz.h) },
-            .pix = try gpa.alloc(u8, isz.total * @sizeOf(u32)),
+            .grid = gsz,
+            .size = .{ m.floaty(gsz.w), m.floaty(gsz.h) },
+            .pix = try gpa.alloc(u8, gsz.total * @sizeOf(u32)),
         };
         errdefer sample.deinit(sample);
 
-        const line_depth = 4;
-        for (0..isz.h) |yy| {
-            for (0..isz.w) |x| {
-                const pix_idx = yy * isz.w + x;
+        const line_depth = 1;
+        for (0..gsz.h) |yy| {
+            for (0..gsz.w) |x| {
+                const pix_idx = yy * gsz.w + x;
                 const pix_mem = pix_idx * 4;
                 const write_slot = sample.pix[pix_mem .. pix_mem + 4];
 
