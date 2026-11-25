@@ -1,19 +1,16 @@
 const std = @import("std");
-const gm = @import("graphics_context.zig");
-const vk = @import("vulkan-zig");
-const sht = @import("shaders/types.zig");
-const vtx = @import("vertex.zig");
-const m = @import("math.zig");
-const v = @import("vertex.zig");
-const addons = @import("addons.zig");
-const pipe = @import("pipe.zig");
-const a = @import("addons.zig");
-const devui = @import("devui.zig");
+const gm = @import("../graphics_context.zig");
+const sht = @import("../shaders/types.zig");
+const vtx = @import("../vertex.zig");
+const m = @import("../math.zig");
+const v = @import("../vertex.zig");
+const addons = @import("../addons.zig");
+const pipe = @import("../pipe.zig");
+const a = @import("../addons.zig");
+const devui = @import("../devui.zig");
+const types = @import("../types.zig");
 
-pub const InstGroup = struct {
-    base: u16,
-    num: u16,
-};
+const vk = @import("vk_bits.zig").vk;
 
 pub const PerspE = enum(u8) {
     graphView = 0,
@@ -21,6 +18,7 @@ pub const PerspE = enum(u8) {
 };
 
 pub const FrameState = struct {
+    const InstGroup = types.InstGroup;
     persp: PerspE,
     alt_shader: bool,
     model_idx: u8,

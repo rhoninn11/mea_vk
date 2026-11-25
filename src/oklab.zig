@@ -5,8 +5,9 @@ const m = @import("math.zig");
 const dset = @import("dset.zig");
 const sht = @import("shaders/types.zig");
 const addons = @import("addons.zig");
-const frame = @import("frame.zig");
 const imgs = @import("imgs/imgs.zig");
+
+const types = @import("types.zig");
 
 pub fn srgb_to_oklab(srgb: m.vec3) m.vec3 {
     const lms_conv: [3]m.vec3 = .{
@@ -82,11 +83,12 @@ pub const OkUnderstanding = struct {
         };
         return .{ p0, p1 };
     }
-    pub fn display(self: *const Self, instances: [*]sht.PerInstance, group: frame.InstGroup, phi: f32) !void {
+    const InstGroup = types.InstGroup;
+    pub fn display(self: *const Self, instances: [*]sht.PerInstance, group: InstGroup, phi: f32) !void {
         _ = self;
         return Self.labSpliced(instances, group, phi);
     }
-    pub fn labSpliced(instances: [*]sht.PerInstance, group: frame.InstGroup, phi: f32) !void {
+    pub fn labSpliced(instances: [*]sht.PerInstance, group: InstGroup, phi: f32) !void {
         const lim_num = 8096;
         const stack_size = lim_num * @sizeOf(sht.PerInstance);
         var stack_mem: [stack_size]u8 = undefined;

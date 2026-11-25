@@ -4,12 +4,13 @@ const tt = @import("stbtt");
 const hmm = @import("oct");
 
 const files = @import("files.zig");
-const sht = @import("shaders/types.zig");
-const shu = @import("shaders/utils.zig");
 const dset = @import("dset.zig");
 const m = @import("math.zig");
+
+const frame = @import("main/frame.zig");
+const sht = @import("shaders/types.zig");
+const shu = @import("shaders/utils.zig");
 const meagen = @import("gen/meagen.pb.zig");
-const frame = @import("frame.zig");
 
 // TODO: ok, now i know what is this sizing for, so i can name it better
 // tylko jaką nazwę tutaj dać?
@@ -389,10 +390,11 @@ pub const Alphabet = struct {
         return m.vec2{ screan[0] - blit.w, -screan[1] + blit.h };
     }
 
+    const types = @import("types.zig");
     pub fn BlitText(
         self: *const Alphabet,
         instances: [*]sht.PerInstance,
-        inst_group: *frame.InstGroup,
+        inst_group: *types.InstGroup,
         info: TextInfo,
         text: []const u8,
         screan: m.vec2,

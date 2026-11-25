@@ -51,3 +51,8 @@ pub const FreeflyPlayer = struct {
     head: m.vec3,
     dof: m.vec2 = .{ 0, 0 },
 };
+
+pub const InstGroup = struct {
+    base: u16,
+    num: u16,
+};

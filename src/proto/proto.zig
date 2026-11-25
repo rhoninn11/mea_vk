@@ -7,7 +7,7 @@ const motion = @import("../motion.zig");
 const sht = @import("../shaders/types.zig");
 const shu = @import("../shaders/utils.zig");
 
-const f = @import("../frame.zig");
+const types = @import("../types.zig");
 const m = @import("../math.zig");
 const input = @import("../input.zig");
 const files = @import("../files.zig");
@@ -449,7 +449,7 @@ pub const LookingGlass = struct {
     pub fn bakePeaks(
         self: *LookingGlass,
         instances: [*]sht.PerInstance,
-        group: *f.InstGroup,
+        group: *types.InstGroup,
     ) !void {
         const total_cells = self.win_sz.total;
         const layer_inst_total = self.win_sz.total / 2;
