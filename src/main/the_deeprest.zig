@@ -17,6 +17,8 @@ const oklab = @import("../oklab.zig");
 const map = @import("../map.zig");
 const refils = @import("../refills.zig");
 const devui = @import("../devui.zig");
+const input = @import("../input.zig");
+const types = @import("../types.zig");
 
 const imgs = @import("../imgs/imgs.zig");
 const proto = @import("../proto/proto.zig");
@@ -35,45 +37,58 @@ const OK_SWEEP: u8 = 128;
 const OK_TEX_BASE: u8 = 32;
 
 pub var time_glob: ?*addons.Timeline = null;
+const Io = std.Io;
+const Allocator = std.mem.Allocator;
 
-pub fn theDeepest(access: host.EasyAcces) !void {
-    const pages = std.heap.page_allocator;
-    // font
-    var a_font: fonts.FontRendering = try fonts.FontRendering.init(access.io, pages, "fs/opensans.ttf");
-    defer a_font.deinit(pages);
+//&&&
 
-    var abc = try fonts.Alphabet.init(
-        access.io,
-        access.gpa,
-        &a_font,
-        "fs/opensans.serdes",
-    );
-    defer abc.deinit(access.gpa);
-
-    // vol data
-
-    const prefix = "fs/serdes";
-    try files.ensureExists(access.io, prefix);
+fn loadManyForm(access: host.EasyAcces, prefix: []const u8) !proto.ManyLayers {
+    const io = access.io;
+    const gpa = access.gpa;
+    try files.ensureExists(io, prefix);
 
     if (access.opts.clear) {
-        try std.Io.Dir.cwd().deleteTree(access.io, prefix);
-        try files.ensureExists(access.io, prefix);
+        try std.Io.Dir.cwd().deleteTree(io, prefix);
+        try files.ensureExists(io, prefix);
     }
 
-    var many = proto.LoadMany(access.io, access.gpa, prefix) catch |err| blk: {
+    return proto.LoadMany(io, gpa, prefix) catch |err| blk: {
         if (err == proto.cases.justRestart) {
-            break :blk try proto.LoadMany(access.io, access.gpa, prefix);
+            break :blk try proto.LoadMany(io, gpa, prefix);
         }
         return error.manyLayersFailed;
     };
-    defer many.deinit(access.gpa);
+}
 
-    // ^ co z tym?
-    const sht = types_s;
-    const grid = sht.GridSize.g64;
+fn getAlphabet(easy: host.EasyAcces, cache_loc: []const u8) !fonts.Alphabet {
+    const io = easy.io;
+    const gpa = easy.gpa;
+    // font
+    var font: fonts.FontRendering = try fonts.FontRendering.init(io, gpa, "fs/opensans.ttf");
+    defer font.deinit(gpa);
+
+    return fonts.Alphabet.init(
+        io,
+        gpa,
+        &font,
+        cache_loc,
+    );
+}
+
+pub fn theDeepest(access: host.EasyAcces) !void {
+    const store_font_there = "fs/opensans.serdes";
+    const load_layer_from = "fs/serdes";
+
+    var abc = try getAlphabet(access, store_font_there);
+    defer abc.deinit(access.gpa);
+
+    var manyBsl = try loadManyForm(access, load_layer_from);
+    defer manyBsl.deinit(access.gpa);
+
+    const grid = types_s.GridSize.g64;
     // var glass = proto.LookingGlass.init(&many.layers[0], grid);
     std.debug.print("+++ are we here\n", .{});
-    var glass = proto.LookingGlass.init2(&many, grid, 0);
+    var glass = proto.LookingGlass.init2(&manyBsl, grid, 0);
 
     var looking_vol = try glass.sampleVolData(access.gpa);
     defer looking_vol.deinit(access.gpa);
@@ -82,8 +97,9 @@ pub fn theDeepest(access: host.EasyAcces) !void {
 
     // ^ without addons
     const a = addons;
-    var navig = a.Navig.default;
+    const sht = types_s;
 
+    var navig = a.Navig.default;
     navig.scann_sz = looking_vol.size;
     navig.scann_aspect = navig.aspectScale();
 
@@ -92,7 +108,7 @@ pub fn theDeepest(access: host.EasyAcces) !void {
 
     const gpa = access.gpa;
     const gc = access.gm;
-    var window = access.host;
+    var window = access.sdlh;
 
     var resolution_extent = try window.winExtent();
 
@@ -330,7 +346,7 @@ pub fn theDeepest(access: host.EasyAcces) !void {
     defer for (0..slot) |i| gc.dev_api.destroyCommandPool(pools[i], null);
 
     try devui.integrate(
-        &access.host.ctx.window.?,
+        &access.sdlh.ctx.window.?,
         access.gm,
         inflight_num,
         render_pass,
@@ -383,7 +399,7 @@ pub fn theDeepest(access: host.EasyAcces) !void {
     // main loop
     const text_sz_base: fonts.TextSz = .{};
     const screen_info_size = 2048;
-    var text_stack: [screen_info_size]u8 = undefined;
+    var text_scratch: [screen_info_size]u8 = undefined;
     var layer_select_window: bool = true;
     var slider_val: c_int = 15;
 
@@ -406,53 +422,46 @@ pub fn theDeepest(access: host.EasyAcces) !void {
 
     while (!window.shoudClose()) {
         errdefer std.debug.print("!?! problem in main loop\n", .{});
-        var fba: std.heap.FixedBufferAllocator = .init(text_stack[0..]);
-        var console: FrameConsole = try .init(fba.allocator());
+        var fca: std.heap.FixedBufferAllocator = .init(text_scratch[0..]);
+        var console: FrameConsole = try .init(fca.allocator());
         try console.print("\n\n", .{}); //young blit space
 
-        access.host.pollEvents();
-        const win_size = try access.host.winExtent();
+        access.sdlh.pollEvents();
+        const win_sz = try access.sdlh.winExtent();
+        const win_sz_v2 = m.vec2{ m.floaty(win_sz.width), m.floaty(win_sz.height) };
 
-        if (!a.visible(win_size)) {
+        if (!a.visible(win_sz)) {
             // while minimalized.
             try access.io.sleep(.fromMilliseconds(50), .real);
             continue;
         }
 
-        const tex_to_update = blk: {
-            devui.newFrame();
-
+        devui.newFrame();
+        blk: {
             _ = devui.beginWindow("layer selection window", &layer_select_window, 0);
             devui.text("Scan slices selection:");
             _ = devui.intSlider("slide", &slider_val, 0, proto.ManyLayers.TEST_LIMIT - 1);
             devui.endWindow();
-            state.img_draw_data = devui.finalizeFrame();
 
-            break :blk glass.selectionRefresh(@intCast(slider_val));
-        };
-        if (tex_to_update) {
+            const in_sync = glass.selectionRefresh(@intCast(slider_val));
+            if (in_sync) break :blk;
+
             const glass_g = glass.img_sz;
-
             const monopix = glass.scan_raw.pixels;
             const borderpix = glass.scan_lyr.pixels;
-
             try to_update[0].texPrep(tex_prepers, glass_g, monopix);
             try to_update[1].texPrep(tex_prepers, glass_g, borderpix);
         }
+        state.img_draw_data = devui.finalizeFrame();
 
-        const win_f2 = m.vkextAsV2(win_size);
-        const cursor_f2 = sdlh.peekPointer();
-        navig.cursor = cursor_f2;
+        var coords: a.Coords = .init(win_sz_v2);
+        const ptr_loc = sdlh.peekPointer();
+        coords.update(ptr_loc);
+
+        navig.screan = win_sz_v2;
+        navig.cursor = ptr_loc;
         navig.cursor_tex = OK_TEX_BASE + ok_slider.curr;
 
-        var coords: a.Coords = .init(win_size);
-        coords.update(cursor_f2);
-
-        navig.screan = win_f2;
-
-        const img_idx = swapchain.image_index;
-
-        const input = @import("../input.zig");
         input.updateAxes();
 
         perf_stats.messure(access.io);
@@ -468,7 +477,7 @@ pub fn theDeepest(access: host.EasyAcces) !void {
         font_x_phi += td1 * 0.67;
 
         if (input.exit_trig.fired()) window.closeWindow();
-        if (input.time_stop_trig.fired()) timeline1.passageToggle();
+        if (input.time_trig.fired()) timeline1.passageToggle();
 
         if (input.shader_reset_trigger.fired()) state.alt_shader = true;
         switch (state.persp) {
@@ -516,7 +525,7 @@ pub fn theDeepest(access: host.EasyAcces) !void {
             .phi = orbital.p.phi,
             .inst_num = state.layer_group.num,
             .observer_pos = orbital.pos(),
-            .win_size = win_size,
+            .win_size = win_sz,
         };
 
         const debug_on_console = false;
@@ -577,24 +586,23 @@ pub fn theDeepest(access: host.EasyAcces) !void {
         }
 
         try swapchain.waitCurrentFrame();
+        const img_idx = swapchain.image_index;
         const storage_mapping = lazy_shady.storage.buff_arr.items[img_idx].?.mapping.?;
         const uniform_mapping = lazy_shady.uniforms.buff_arr.items[img_idx].?.mapping.?;
         const instances: [*]sht.PerInstance = @ptrCast(@alignCast(storage_mapping));
         const uniforms: [*]sht.GroupData = @ptrCast(@alignCast(uniform_mapping));
 
-        const types = @import("../types.zig");
-        const t = types;
-        const virt_ray: t.Ray = switch (state.persp) {
+        const virt_ray: types.Ray = switch (state.persp) {
             .omni => freefly.viewRay(),
             .graphView => a.graphView(tracker_phi),
         };
 
-        {
+        { // instance data manip
             try refils.unifomRefil(
                 uniforms,
                 timeline1.total_s,
                 size,
-                win_size,
+                win_sz,
                 virt_ray,
             );
             _ = map.instablo;
@@ -615,7 +623,7 @@ pub fn theDeepest(access: host.EasyAcces) !void {
             };
             try fonts.TextBlitter //
                 .init(&abc, &state, text_sz_base)
-                .contentBlit(instances, win_f2, dyna_dyna_text);
+                .contentBlit(instances, win_sz_v2, dyna_dyna_text);
         }
 
         try frame.recordFrame(
@@ -626,16 +634,16 @@ pub fn theDeepest(access: host.EasyAcces) !void {
             &draw_instanced_attempt,
             &state,
         );
-        if (vk_state == .suboptimal or a.extentDiffer(resolution_extent, win_size)) {
-            resolution_extent = win_size;
+        if (vk_state == .suboptimal or a.extentDiffer(resolution_extent, win_sz)) {
+            resolution_extent = win_sz;
             try gc.dev_api.deviceWaitIdle();
             swapchain.recreate(resolution_extent) catch |err| {
                 std.debug.print("!!! hit error at recreate |> {s}\n", .{@errorName(err)});
-                std.debug.print("!!! prev win_size w:{d} h:{d}\n", .{ win_size.width, win_size.height });
+                std.debug.print("!!! prev win_size w:{d} h:{d}\n", .{ win_sz.width, win_sz.height });
                 try access.io.sleep(std.Io.Duration.fromMilliseconds(2000), .real);
 
-                access.host.pollEvents();
-                const new_win_size = try access.host.winExtent();
+                access.sdlh.pollEvents();
+                const new_win_size = try access.sdlh.winExtent();
                 std.debug.print("!!! new win_size w:{d} h:{d}\n", .{ new_win_size.width, new_win_size.height });
                 return;
             };

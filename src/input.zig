@@ -6,7 +6,7 @@ const sdl = @import("sdl3");
 const motion = @import("motion.zig");
 const Trigger = motion.Trigger;
 
-pub var time_stop_trig: Trigger = .{};
+pub var time_trig: Trigger = .{};
 
 pub const HoldAxis = motion.msdl.HoldAxis;
 
@@ -72,7 +72,7 @@ const sdl_inputs: []const Tied = &.{
 
     .{ .key = sdl.keycode.Keycode.one, .trig = &gamepad_trig },
     .{ .key = sdl.keycode.Keycode.two, .trig = &dbg_trig },
-    .{ .key = sdl.keycode.Keycode.three, .trig = &time_stop_trig },
+    .{ .key = sdl.keycode.Keycode.three, .trig = &time_trig },
     .{ .key = sdl.keycode.Keycode.four, .trig = &inverse_tirg },
 
     .{ .key = sdl.keycode.Keycode.tab, .trig = &persp_switch },

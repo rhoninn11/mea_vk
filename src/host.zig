@@ -18,7 +18,7 @@ pub const Opts = struct {
 pub const EasyAcces = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
-    host: SdlHost,
+    sdlh: SdlHost,
     gm: *const gc.GraphicsContext,
     imga: *imgs.ImgaAllocator,
     staga: *memory.StagerAllocator,
@@ -35,7 +35,7 @@ const DeeperClient = *const fn (acces: EasyAcces) OnHostErrors!void;
 pub const SdlHost = struct {
     ctx: *sdlh.SdlContext,
 
-    pub fn winExtent(self: SdlHost) !vk.Extent2D {
+    pub inline fn winExtent(self: SdlHost) !vk.Extent2D {
         const w, const h = try self.ctx.window.?.getSize();
         return vk.Extent2D{ .width = @intCast(w), .height = @intCast(h) };
     }
@@ -91,7 +91,7 @@ pub fn sdlHost(init: std.process.Init, ex_opts: Opts, passenger: DeeperClient) !
 
     std.log.debug("Using device: {s}", .{gm.deviceName()});
     const access = EasyAcces{
-        .host = .{ .ctx = &sdl_ctx },
+        .sdlh = .{ .ctx = &sdl_ctx },
         .gm = &gm,
         .gpa = init.gpa,
         .io = init.io,

@@ -130,15 +130,15 @@ pub const Coords = struct {
         const def = HitResult{ .at = m.zero(2), .hit = false };
     };
 
-    sz_scr: m.vec2,
-    sz_area: m.vec2,
+    scrn_sz: m.vec2,
+    area_sz: m.vec2,
     offset: m.vec2,
     result: HitResult,
 
-    pub fn init(screan: vk.Extent2D) Coords {
+    pub fn init(screan: m.vec2) Coords {
         var base: Self = .{
-            .sz_scr = m.vkextAsV2(screan),
-            .sz_area = undefined,
+            .scrn_sz = screan,
+            .area_sz = undefined,
             .offset = undefined,
             .result = .def,
         };
@@ -147,10 +147,10 @@ pub const Coords = struct {
     }
 
     fn calcArea(self: *Coords, fill: f32) void {
-        const scr: [2]f32 = self.sz_scr;
+        const scr: [2]f32 = self.scrn_sz;
         const smin = @min(scr[0], scr[1]);
         const padding = smin * (1 - fill) / 2;
-        self.sz_area = .{ smin * fill, smin * fill };
+        self.area_sz = .{ smin * fill, smin * fill };
         self.offset = .{ padding, padding };
     }
 
@@ -161,7 +161,7 @@ pub const Coords = struct {
         var r: [axnum]f32 = .{ 0, 0 };
         const c: [axnum]f32 = cursor;
         const o: [axnum]f32 = self.offset;
-        const a: [axnum]f32 = self.sz_area;
+        const a: [axnum]f32 = self.area_sz;
         for (axes) |ax| {
             const pos = @abs(c[ax]) - o[ax];
             if (pos >= 0 and pos <= a[ax]) {

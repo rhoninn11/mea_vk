@@ -244,7 +244,7 @@ pub const Alphabet = struct {
         self.font_hash = font.content_sh1;
         const hit = try self.cacheCheck(io, gpa, path_cache);
         if (hit) {
-            std.debug.print("+++ sdf font atlas cache hit !!!\n", .{});
+            std.debug.print("+++ SDF Alphabet cache hit\n", .{});
             return self;
         }
 
